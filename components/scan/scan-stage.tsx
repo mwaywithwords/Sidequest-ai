@@ -17,6 +17,7 @@ import {
   MAX_IMAGE_MB,
   validateImageFile,
 } from "@/lib/image-capture";
+import { uploadQuestImage } from "@/lib/quest-upload";
 import type { Grade, Skill } from "@/lib/types";
 
 type Stage = "idle" | "preview" | "processing";
@@ -26,10 +27,29 @@ const STEP_MS = 750;
 
 const STEPS = copy.scan.processingSteps;
 
-function rejectionBody(rejection: ImageRejection): string {
-  return rejection === "tooLarge"
-    ? copy.scan.rejected.tooLarge(MAX_IMAGE_MB)
-    : copy.scan.rejected[rejection];
+/**
+ * The heading and body to show when something went wrong, or null when the
+ * screen should read as normal. Keeps the branching out of the markup.
+ */
+function problemNotice(rejection: ImageRejection | null, uploadFailed: boolean) {
+  if (rejection) {
+    return {
+      heading: copy.scan.rejectedHeading,
+      body:
+        rejection === "tooLarge"
+          ? copy.scan.rejected.tooLarge(MAX_IMAGE_MB)
+          : copy.scan.rejected[rejection],
+    };
+  }
+
+  if (uploadFailed) {
+    return {
+      heading: copy.scan.uploadFailedHeading,
+      body: copy.scan.uploadFailedBody,
+    };
+  }
+
+  return null;
 }
 
 export function ScanStage({
@@ -46,58 +66,93 @@ export function ScanStage({
   const libraryInput = useRef<HTMLInputElement>(null);
 
   const [stage, setStage] = useState<Stage>("idle");
+  // The file is held, not just its preview URL, so a failed upload can resend
+  // the same bytes without making the student photograph anything again.
+  const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejection, setRejection] = useState<ImageRejection | null>(null);
+  const [uploadFailed, setUploadFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
-  const clearPreview = useCallback(() => {
+  const clearPicked = useCallback(() => {
+    setFile(null);
     setPreviewUrl((current) => {
       if (current) URL.revokeObjectURL(current);
       return null;
     });
   }, []);
 
-  useEffect(() => clearPreview, [clearPreview]);
+  useEffect(() => clearPicked, [clearPicked]);
 
   const reject = useCallback(
     (reason: ImageRejection) => {
-      clearPreview();
+      clearPicked();
       setRejection(reason);
+      setUploadFailed(false);
       setStage("idle");
     },
-    [clearPreview],
+    [clearPicked],
   );
 
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const picked = event.target.files?.[0];
     // Allow re-picking the same file, which otherwise fires no change event.
     event.target.value = "";
 
     // Dismissing the picker is a change of mind, not a mistake to report.
-    if (!file) return;
+    if (!picked) return;
 
-    // Stands in for the real preparation step, which will also convert HEIC,
-    // fix EXIF rotation, and downscale before anything is uploaded.
-    const problem = validateImageFile(file);
+    // Checks the file as it sits on the device, so a full-size camera photo
+    // passes here and gets normalised on the way out. The server re-checks the
+    // prepared upload against its own, much smaller, budget.
+    const problem = validateImageFile(picked);
     if (problem) {
       reject(problem);
       return;
     }
 
-    clearPreview();
+    clearPicked();
     setRejection(null);
-    setPreviewUrl(URL.createObjectURL(file));
+    setUploadFailed(false);
+    setFile(picked);
+    setPreviewUrl(URL.createObjectURL(picked));
     setStage("preview");
   }
 
-  function analyze() {
-    if (!previewUrl) {
+  async function findTheMath() {
+    if (!file) {
       reject("missing");
       return;
     }
 
+    setRejection(null);
+    setUploadFailed(false);
     setStepIndex(0);
     setStage("processing");
+
+    // Hold the overlay for a full run of the messages even when the upload
+    // beats them, so the wait reads as work rather than a flicker. A slower
+    // upload just rests on the last message until it finishes.
+    const [outcome] = await Promise.all([
+      uploadQuestImage(file, grade, skill.id),
+      new Promise((resolve) => setTimeout(resolve, STEP_MS * STEPS.length)),
+    ]);
+
+    if (outcome.status === "ok") {
+      router.push(
+        `/quest/${questId}?grade=${grade}&skill=${skill.id}&quest=${outcome.questId}`,
+      );
+      return;
+    }
+
+    if (outcome.status === "rejected") {
+      reject(outcome.reason);
+      return;
+    }
+
+    // Nothing was persisted, so go back to the photo with a retry offered.
+    setUploadFailed(true);
+    setStage("preview");
   }
 
   useEffect(() => {
@@ -107,15 +162,10 @@ export function ScanStage({
       setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
     }, STEP_MS);
 
-    const done = setTimeout(() => {
-      router.push(`/quest/${questId}?grade=${grade}&skill=${skill.id}`);
-    }, STEP_MS * STEPS.length);
+    return () => clearInterval(ticker);
+  }, [stage]);
 
-    return () => {
-      clearInterval(ticker);
-      clearTimeout(done);
-    };
-  }, [stage, router, questId, grade, skill.id]);
+  const notice = problemNotice(rejection, uploadFailed);
 
   return (
     <div className="flex flex-col gap-6">
@@ -124,14 +174,14 @@ export function ScanStage({
           Grade {grade} · {skill.label}
         </SectionLabel>
         <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          {rejection ? copy.scan.rejectedHeading : copy.scan.heading}
+          {notice ? notice.heading : copy.scan.heading}
         </h1>
         <p
-          role={rejection ? "alert" : undefined}
+          role={notice ? "alert" : undefined}
           className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base"
         >
-          {rejection ? (
-            rejectionBody(rejection)
+          {notice ? (
+            notice.body
           ) : (
             <>
               {copy.scan.lookForLead(skill.label.toLowerCase())}
@@ -195,9 +245,18 @@ export function ScanStage({
 
       {stage === "preview" ? (
         <div className="flex flex-col gap-3">
-          <Button size="lg" onClick={analyze} className="w-full">
-            Find the math
-            <ArrowRightIcon className="size-5" />
+          <Button size="lg" onClick={findTheMath} className="w-full">
+            {uploadFailed ? (
+              <>
+                Try again
+                <RetryIcon className="size-5" />
+              </>
+            ) : (
+              <>
+                Find the math
+                <ArrowRightIcon className="size-5" />
+              </>
+            )}
           </Button>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button

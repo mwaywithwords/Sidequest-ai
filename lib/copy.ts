@@ -69,6 +69,10 @@ export const copy = {
       tooLarge: (limitMb: number) =>
         `That photo is larger than ${limitMb} MB, which is too big to work with. Try taking a new one with your camera.`,
     },
+    /** Shown when the photo itself was fine but sending it did not finish. */
+    uploadFailedHeading: "That photo didn't make it",
+    uploadFailedBody:
+      "Something went wrong sending your photo, so nothing was saved. It's still here — you can send it again.",
     processingSteps: [
       "Looking closely…",
       "Finding the math hiding in your photo…",
