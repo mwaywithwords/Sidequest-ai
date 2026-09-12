@@ -31,7 +31,11 @@ const STEPS = copy.scan.processingSteps;
  * The heading and body to show when something went wrong, or null when the
  * screen should read as normal. Keeps the branching out of the markup.
  */
-function problemNotice(rejection: ImageRejection | null, uploadFailed: boolean) {
+function problemNotice(
+  rejection: ImageRejection | null,
+  safetyMessage: string | null,
+  uploadFailed: boolean,
+) {
   if (rejection) {
     return {
       heading: copy.scan.rejectedHeading,
@@ -40,6 +44,12 @@ function problemNotice(rejection: ImageRejection | null, uploadFailed: boolean) 
           ? copy.scan.rejected.tooLarge(MAX_IMAGE_MB)
           : copy.scan.rejected[rejection],
     };
+  }
+
+  // Written by the server, which is the only side that knows why. It reads as
+  // one more "try a different photo" here, because that is all it should.
+  if (safetyMessage) {
+    return { heading: copy.scan.rejectedHeading, body: safetyMessage };
   }
 
   if (uploadFailed) {
@@ -71,6 +81,9 @@ export function ScanStage({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejection, setRejection] = useState<ImageRejection | null>(null);
+  // Only the sentence the server sent. The reason behind it is not held here,
+  // and neither is anything about what the photo contained.
+  const [safetyMessage, setSafetyMessage] = useState<string | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
@@ -88,6 +101,22 @@ export function ScanStage({
     (reason: ImageRejection) => {
       clearPicked();
       setRejection(reason);
+      setSafetyMessage(null);
+      setUploadFailed(false);
+      setStage("idle");
+    },
+    [clearPicked],
+  );
+
+  /**
+   * The photo is dropped as well as reported. Unlike a failed upload there is
+   * nothing to resend: the same bytes would be refused the same way.
+   */
+  const refuse = useCallback(
+    (message: string) => {
+      clearPicked();
+      setRejection(null);
+      setSafetyMessage(message);
       setUploadFailed(false);
       setStage("idle");
     },
@@ -113,6 +142,7 @@ export function ScanStage({
 
     clearPicked();
     setRejection(null);
+    setSafetyMessage(null);
     setUploadFailed(false);
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
@@ -126,6 +156,7 @@ export function ScanStage({
     }
 
     setRejection(null);
+    setSafetyMessage(null);
     setUploadFailed(false);
     setStepIndex(0);
     setStage("processing");
@@ -150,6 +181,11 @@ export function ScanStage({
       return;
     }
 
+    if (outcome.status === "unsafe") {
+      refuse(outcome.message);
+      return;
+    }
+
     // Nothing was persisted, so go back to the photo with a retry offered.
     setUploadFailed(true);
     setStage("preview");
@@ -165,7 +201,7 @@ export function ScanStage({
     return () => clearInterval(ticker);
   }, [stage]);
 
-  const notice = problemNotice(rejection, uploadFailed);
+  const notice = problemNotice(rejection, safetyMessage, uploadFailed);
 
   return (
     <div className="flex flex-col gap-6">
@@ -217,7 +253,9 @@ export function ScanStage({
           <div className="px-8 text-center">
             <CameraIcon className="mx-auto size-9 text-faint" />
             <p className="mt-4 text-sm text-faint">
-              {rejection ? copy.scan.rejectedPreview : copy.scan.emptyPreview}
+              {rejection || safetyMessage
+                ? copy.scan.rejectedPreview
+                : copy.scan.emptyPreview}
             </p>
           </div>
         )}

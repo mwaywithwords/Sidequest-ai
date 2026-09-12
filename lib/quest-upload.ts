@@ -1,3 +1,4 @@
+import { copy } from "@/lib/copy";
 import type { ImageRejection } from "@/lib/image-capture";
 import { prepareImageForUpload } from "@/lib/image-prepare";
 import type { Grade, SkillId } from "@/lib/types";
@@ -8,12 +9,15 @@ import type { Grade, SkillId } from "@/lib/types";
  * The split matters for what the student is told. "rejected" is the server
  * disagreeing with the file itself, which deserves the same specific wording
  * the browser check already uses, and retrying the same bytes would only fail
- * again. "failed" is everything else — offline, storage, database — where
- * nothing was persisted and the same photo is worth resending.
+ * again. "unsafe" is the safety gate turning the photo away, which arrives with
+ * its own sentence already written. "failed" is everything else — offline,
+ * storage, database, or screening that could not finish — where nothing was
+ * persisted and the same photo is worth resending.
  */
 export type UploadOutcome =
   | { status: "ok"; questId: string }
   | { status: "rejected"; reason: ImageRejection }
+  | { status: "unsafe"; message: string }
   | { status: "failed" };
 
 function isRejection(value: unknown): value is ImageRejection {
@@ -73,6 +77,22 @@ export async function uploadQuestImage(
   }
 
   const reason = field("error");
+
+  if (reason === "unsafe") {
+    const message = field("message");
+
+    // The response also carries the gate's normalised reason. It stops here: the
+    // screen needs the sentence, and nothing in the UI should branch on why a
+    // photo was refused. The fallback covers a truncated response — the student
+    // still gets a next step rather than a retry that would be refused again.
+    return {
+      status: "unsafe",
+      message:
+        typeof message === "string" && message.length > 0
+          ? message
+          : copy.safety.unsuitable,
+    };
+  }
 
   // 'badMission' also lands here: the grade or skill in the URL was not one we
   // recognise, which is not something retrying the photo can fix, but it is

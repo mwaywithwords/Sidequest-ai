@@ -81,6 +81,26 @@ export const copy = {
     ],
   },
 
+  /**
+   * What the safety gate says when it turns a photo away.
+   *
+   * Vague on purpose. The gate's own reasons — and the moderation categories
+   * behind them — are server-side detail, and a child needs a next step rather
+   * than a verdict on what they photographed. Three sentences cover it: the
+   * photo was unreadable, the photo was of a person, or the photo cannot be
+   * used. Nothing here names a category.
+   */
+  safety: {
+    /** Never seen: the flow moves on. Present because a verdict always carries a sentence. */
+    allowed: "That photo works. Let's find the math in it.",
+    unusable:
+      "That photo came out too blurry or too dark to read. Try another one, a little closer, holding still.",
+    person:
+      "Sidequests are built from objects, not people. Point the camera at something near you instead — a bottle, a book, a bike wheel.",
+    unsuitable:
+      "That photo can't be used for a Sidequest. Try taking a picture of an everyday object around you.",
+  },
+
   quest: {
     objectFoundLabel: "Object found",
     discoverLabel: "Discover",

@@ -22,3 +22,14 @@ import { requireEnv } from "@/lib/env";
 export function supabaseSecretKey(): string {
   return requireEnv("SUPABASE_SECRET_KEY", process.env.SUPABASE_SECRET_KEY);
 }
+
+/**
+ * The OpenAI key, read only by lib/ai/openai.ts.
+ *
+ * Every model call belongs behind a server boundary anyway — the key is
+ * billable and the calls are not something a browser should be able to aim —
+ * so this is read here for the same reason as the Supabase secret above.
+ */
+export function openaiApiKey(): string {
+  return requireEnv("OPENAI_API_KEY", process.env.OPENAI_API_KEY);
+}
