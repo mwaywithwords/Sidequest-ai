@@ -33,7 +33,7 @@ const STEPS = copy.scan.processingSteps;
  */
 function problemNotice(
   rejection: ImageRejection | null,
-  safetyMessage: string | null,
+  refusalMessage: string | null,
   uploadFailed: boolean,
 ) {
   if (rejection) {
@@ -48,8 +48,8 @@ function problemNotice(
 
   // Written by the server, which is the only side that knows why. It reads as
   // one more "try a different photo" here, because that is all it should.
-  if (safetyMessage) {
-    return { heading: copy.scan.rejectedHeading, body: safetyMessage };
+  if (refusalMessage) {
+    return { heading: copy.scan.rejectedHeading, body: refusalMessage };
   }
 
   if (uploadFailed) {
@@ -81,9 +81,9 @@ export function ScanStage({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejection, setRejection] = useState<ImageRejection | null>(null);
-  // Only the sentence the server sent. The reason behind it is not held here,
-  // and neither is anything about what the photo contained.
-  const [safetyMessage, setSafetyMessage] = useState<string | null>(null);
+  // Only the sentence the server sent. Which stage turned the photo away, and
+  // anything it worked out about the photo, is not held here.
+  const [refusalMessage, setRefusalMessage] = useState<string | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
@@ -101,7 +101,7 @@ export function ScanStage({
     (reason: ImageRejection) => {
       clearPicked();
       setRejection(reason);
-      setSafetyMessage(null);
+      setRefusalMessage(null);
       setUploadFailed(false);
       setStage("idle");
     },
@@ -116,7 +116,7 @@ export function ScanStage({
     (message: string) => {
       clearPicked();
       setRejection(null);
-      setSafetyMessage(message);
+      setRefusalMessage(message);
       setUploadFailed(false);
       setStage("idle");
     },
@@ -142,7 +142,7 @@ export function ScanStage({
 
     clearPicked();
     setRejection(null);
-    setSafetyMessage(null);
+    setRefusalMessage(null);
     setUploadFailed(false);
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
@@ -156,7 +156,7 @@ export function ScanStage({
     }
 
     setRejection(null);
-    setSafetyMessage(null);
+    setRefusalMessage(null);
     setUploadFailed(false);
     setStepIndex(0);
     setStage("processing");
@@ -181,7 +181,7 @@ export function ScanStage({
       return;
     }
 
-    if (outcome.status === "unsafe") {
+    if (outcome.status === "refused") {
       refuse(outcome.message);
       return;
     }
@@ -201,7 +201,7 @@ export function ScanStage({
     return () => clearInterval(ticker);
   }, [stage]);
 
-  const notice = problemNotice(rejection, safetyMessage, uploadFailed);
+  const notice = problemNotice(rejection, refusalMessage, uploadFailed);
 
   return (
     <div className="flex flex-col gap-6">
@@ -253,7 +253,7 @@ export function ScanStage({
           <div className="px-8 text-center">
             <CameraIcon className="mx-auto size-9 text-faint" />
             <p className="mt-4 text-sm text-faint">
-              {rejection || safetyMessage
+              {rejection || refusalMessage
                 ? copy.scan.rejectedPreview
                 : copy.scan.emptyPreview}
             </p>

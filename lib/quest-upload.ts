@@ -9,15 +9,15 @@ import type { Grade, SkillId } from "@/lib/types";
  * The split matters for what the student is told. "rejected" is the server
  * disagreeing with the file itself, which deserves the same specific wording
  * the browser check already uses, and retrying the same bytes would only fail
- * again. "unsafe" is the safety gate turning the photo away, which arrives with
- * its own sentence already written. "failed" is everything else — offline,
- * storage, database, or screening that could not finish — where nothing was
- * persisted and the same photo is worth resending.
+ * again. "refused" is a stage of the pipeline turning the photo away — unsafe,
+ * unsuitable, or unreadable — which arrives with its own sentence already
+ * written. "failed" is everything else — offline, storage, database, or a stage
+ * that could not finish — where the same photo is worth resending.
  */
 export type UploadOutcome =
   | { status: "ok"; questId: string }
   | { status: "rejected"; reason: ImageRejection }
-  | { status: "unsafe"; message: string }
+  | { status: "refused"; message: string }
   | { status: "failed" };
 
 function isRejection(value: unknown): value is ImageRejection {
@@ -78,15 +78,16 @@ export async function uploadQuestImage(
 
   const reason = field("error");
 
-  if (reason === "unsafe") {
+  if (reason === "refused") {
     const message = field("message");
 
-    // The response also carries the gate's normalised reason. It stops here: the
-    // screen needs the sentence, and nothing in the UI should branch on why a
-    // photo was refused. The fallback covers a truncated response — the student
-    // still gets a next step rather than a retry that would be refused again.
+    // The response also carries the stage's normalised reason. It stops here:
+    // the screen needs the sentence, and nothing in the UI should branch on why
+    // a photo was refused. The fallback covers a truncated response — the
+    // student still gets a next step rather than a retry that would be refused
+    // the same way.
     return {
-      status: "unsafe",
+      status: "refused",
       message:
         typeof message === "string" && message.length > 0
           ? message

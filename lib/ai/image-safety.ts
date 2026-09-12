@@ -1,5 +1,6 @@
 import "server-only";
 
+import { imageDataUrl } from "@/lib/ai/image-input";
 import { checkImageSuitability } from "@/lib/ai/image-suitability";
 import { moderateImage } from "@/lib/ai/moderation";
 import {
@@ -46,7 +47,9 @@ export const MODEL_READABLE_IMAGE_TYPES: readonly string[] = [
  * stop, not as a pass.
  */
 export async function screenImage(file: File): Promise<ImageSafetyAnalysis> {
-  const image = await toDataUrl(file);
+  // Screening happens before the photo is stored, which is the point: a refused
+  // image leaves no bytes in the bucket and no URL for anything to fetch.
+  const image = await imageDataUrl(file);
 
   // Moderation runs first because it is the cheaper call and the graver
   // question. Harmful content is also the one thing that should not be handed
@@ -90,18 +93,4 @@ function studentMessage(reason: ImageSafetyReason): string {
     default:
       return copy.safety.unsuitable;
   }
-}
-
-/**
- * Sends the bytes inline rather than by link.
- *
- * At this point in the flow the photograph has not been stored, which is the
- * point: a refused image leaves nothing behind in the bucket and no URL for
- * anything to fetch. Base64 adds a third to the size, which the upload budget
- * in lib/image-capture.ts already leaves room for.
- */
-async function toDataUrl(file: File): Promise<string> {
-  const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-
-  return `data:${file.type};base64,${base64}`;
 }
