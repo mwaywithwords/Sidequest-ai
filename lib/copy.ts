@@ -101,6 +101,22 @@ export const copy = {
       "That photo can't be used for a Sidequest. Try taking a picture of an everyday object around you.",
   },
 
+  /**
+   * What the vision stage says when it cannot get a reading it trusts.
+   *
+   * Same discipline as the safety copy: one next step, no internals. The
+   * difference between these three is what the student should do differently —
+   * find another object, take a better photo of this one, or simply try again.
+   */
+  analysis: {
+    unknownObject:
+      "I couldn't work out what that object is. Try something with a clearer shape or a label on it — a can, a book, a box of something.",
+    insufficientInformation:
+      "I can see it, but there's nothing on it to build math from. Get a little closer, or find something with numbers, parts, or clear edges.",
+    failure:
+      "Something went wrong reading that photo, so no Sidequest came out of it. Take another one and try again.",
+  },
+
   quest: {
     objectFoundLabel: "Object found",
     discoverLabel: "Discover",

@@ -9,32 +9,32 @@ import {
   validateImageFile,
 } from "@/lib/image-capture";
 import { getOrCreateProfileId } from "@/lib/profile";
+import { analyzeQuestObject } from "@/lib/quest-analysis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Two model calls now sit inside this request, so it needs longer than a
- * platform's default ten seconds. A hung call is bounded by the client timeout
- * in lib/ai/openai.ts well before this.
+ * Three model calls now sit inside this request, one of them reading small
+ * print, so it needs longer than a platform's default ten seconds. Each call is
+ * bounded by the client timeout in lib/ai/openai.ts well before this.
  */
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /**
- * Creates a quest from a photograph: screens the image, stores it in the
- * private bucket, and records the row that points at it.
+ * Creates a quest from a photograph, in the order the pipeline requires:
+ * validate the file, screen it for safety and suitability, store it in the
+ * private bucket, record the row that points at it, then read the object in it.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
  * path. Everything it does send is validated again here, because a request can
  * reach this handler without having gone through the UI at all.
  *
- * The safety gate runs here for the same reason: it is the first point every
- * photo must pass through, and the last point before the photo becomes
- * something the product keeps.
- *
- * Nothing is analysed yet — a screened photo's row lands as 'pending' and the
- * AI pipeline picks it up later.
+ * The stages run here for the same reason: this is the one point every photo
+ * must pass through, and each stage is a gate the next one depends on. Nothing
+ * is generated yet — a quest with a reading stays 'pending' until skill fit and
+ * challenge generation exist to finish it.
  */
 export async function POST(request: Request) {
   let form: FormData;
@@ -86,14 +86,7 @@ export async function POST(request: Request) {
       // categories and scores behind it stayed inside lib/ai.
       console.warn("[POST /api/quests] image refused", safety.reason);
 
-      return NextResponse.json(
-        {
-          error: "unsafe",
-          reason: safety.reason,
-          message: safety.messageForStudent,
-        },
-        { status: 422 },
-      );
+      return refused(safety.reason, safety.messageForStudent);
     }
 
     const supabase = createAdminClient();
@@ -145,6 +138,19 @@ export async function POST(request: Request) {
       throw new Error(`Quest insert failed: ${insertError.message}`);
     }
 
+    // Last, because it needs both halves of what came before: a photo that
+    // passed the gate, and a row to hang the reading on.
+    const reading = await analyzeQuestObject(questId);
+
+    if (reading.status === "failed") {
+      // The quest row stays, marked with what happened. The student gets the
+      // sentence and a new photo to take; nothing downstream can pick this
+      // quest up as something to teach from.
+      console.warn("[POST /api/quests] no reading", reading.failure.reason);
+
+      return refused(reading.failure.reason, reading.failure.studentMessage);
+    }
+
     return NextResponse.json({ questId }, { status: 201 });
   } catch (error) {
     // Logged in full, reported vaguely: the student gets something retryable
@@ -153,4 +159,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
+}
+
+/**
+ * The one shape a stage uses to turn a photo away.
+ *
+ * Both gates answer the same way — a normalised reason and a sentence written
+ * for a child — because from the browser's side they are one thing: this photo
+ * will not become a Sidequest, and here is what to say about it. Everything
+ * behind the reason, from moderation categories to a failed schema parse, stayed
+ * on the server.
+ */
+function refused(reason: string, message: string) {
+  return NextResponse.json({ error: "refused", reason, message }, { status: 422 });
 }
