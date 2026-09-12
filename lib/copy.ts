@@ -59,13 +59,20 @@ export const copy = {
     emptyPreview: "Your photo will appear here",
     previewAlt: "The object you photographed",
     rejectedHeading: "Let's try a different photo",
-    rejectedBody:
-      "That file didn't come through as a photo I can read. Take a new one, or choose a different picture.",
     rejectedPreview: "No photo loaded",
-    processingSteps: (skill: string) => [
-      "Looking at your object…",
-      "Reading labels, edges, and counts…",
-      `Checking it works for ${skill}…`,
+    /** Keyed to `ImageRejection`, so every rejection has something to say. */
+    rejected: {
+      missing:
+        "There's no photo yet. Take one with your camera, or choose a picture you already have.",
+      unsupported:
+        "That file didn't come through as a photo I can read. Take a new one, or choose a different picture.",
+      tooLarge: (limitMb: number) =>
+        `That photo is larger than ${limitMb} MB, which is too big to work with. Try taking a new one with your camera.`,
+    },
+    processingSteps: [
+      "Looking closely…",
+      "Finding the math hiding in your photo…",
+      "Checking your Sidequest…",
       "Building your challenge…",
     ],
   },

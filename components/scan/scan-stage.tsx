@@ -12,12 +12,25 @@ import {
   RetryIcon,
 } from "@/components/ui/icons";
 import { copy } from "@/lib/copy";
+import {
+  type ImageRejection,
+  MAX_IMAGE_MB,
+  validateImageFile,
+} from "@/lib/image-capture";
 import type { Grade, Skill } from "@/lib/types";
 
-type Stage = "idle" | "preview" | "processing" | "rejected";
+type Stage = "idle" | "preview" | "processing";
 
 /** Roughly the cadence the real two-stage pipeline will run at. */
 const STEP_MS = 750;
+
+const STEPS = copy.scan.processingSteps;
+
+function rejectionBody(rejection: ImageRejection): string {
+  return rejection === "tooLarge"
+    ? copy.scan.rejected.tooLarge(MAX_IMAGE_MB)
+    : copy.scan.rejected[rejection];
+}
 
 export function ScanStage({
   grade,
@@ -34,9 +47,8 @@ export function ScanStage({
 
   const [stage, setStage] = useState<Stage>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [rejection, setRejection] = useState<ImageRejection | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
-
-  const steps = copy.scan.processingSteps(skill.label.toLowerCase());
 
   const clearPreview = useCallback(() => {
     setPreviewUrl((current) => {
@@ -47,26 +59,43 @@ export function ScanStage({
 
   useEffect(() => clearPreview, [clearPreview]);
 
+  const reject = useCallback(
+    (reason: ImageRejection) => {
+      clearPreview();
+      setRejection(reason);
+      setStage("idle");
+    },
+    [clearPreview],
+  );
+
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     // Allow re-picking the same file, which otherwise fires no change event.
     event.target.value = "";
-    if (!file) return;
 
-    clearPreview();
+    // Dismissing the picker is a change of mind, not a mistake to report.
+    if (!file) return;
 
     // Stands in for the real preparation step, which will also convert HEIC,
     // fix EXIF rotation, and downscale before anything is uploaded.
-    if (!file.type.startsWith("image/") || file.size === 0) {
-      setStage("rejected");
+    const problem = validateImageFile(file);
+    if (problem) {
+      reject(problem);
       return;
     }
 
+    clearPreview();
+    setRejection(null);
     setPreviewUrl(URL.createObjectURL(file));
     setStage("preview");
   }
 
   function analyze() {
+    if (!previewUrl) {
+      reject("missing");
+      return;
+    }
+
     setStepIndex(0);
     setStage("processing");
   }
@@ -75,18 +104,18 @@ export function ScanStage({
     if (stage !== "processing") return;
 
     const ticker = setInterval(() => {
-      setStepIndex((index) => Math.min(index + 1, steps.length - 1));
+      setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
     }, STEP_MS);
 
     const done = setTimeout(() => {
-      router.push(`/quest/${questId}?grade=${grade}`);
-    }, STEP_MS * steps.length);
+      router.push(`/quest/${questId}?grade=${grade}&skill=${skill.id}`);
+    }, STEP_MS * STEPS.length);
 
     return () => {
       clearInterval(ticker);
       clearTimeout(done);
     };
-  }, [stage, router, questId, grade, steps.length]);
+  }, [stage, router, questId, grade, skill.id]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,11 +124,14 @@ export function ScanStage({
           Grade {grade} · {skill.label}
         </SectionLabel>
         <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          {stage === "rejected" ? copy.scan.rejectedHeading : copy.scan.heading}
+          {rejection ? copy.scan.rejectedHeading : copy.scan.heading}
         </h1>
-        <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
-          {stage === "rejected" ? (
-            copy.scan.rejectedBody
+        <p
+          role={rejection ? "alert" : undefined}
+          className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base"
+        >
+          {rejection ? (
+            rejectionBody(rejection)
           ) : (
             <>
               {copy.scan.lookForLead(skill.label.toLowerCase())}
@@ -110,13 +142,15 @@ export function ScanStage({
       </div>
 
       <div className="viewfinder relative flex min-h-[19rem] items-center justify-center overflow-hidden rounded-tile bg-void/60 ring-1 ring-hair sm:min-h-[24rem]">
-        {previewUrl && stage !== "rejected" ? (
+        {previewUrl ? (
           <>
             {/* A blob URL from the local camera: nothing for next/image to optimise. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
               alt={copy.scan.previewAlt}
+              // Catches formats the browser accepted but cannot actually decode.
+              onError={() => reject("unsupported")}
               className="max-h-[24rem] w-full object-contain"
             />
             {stage === "processing" ? (
@@ -133,15 +167,13 @@ export function ScanStage({
           <div className="px-8 text-center">
             <CameraIcon className="mx-auto size-9 text-faint" />
             <p className="mt-4 text-sm text-faint">
-              {stage === "rejected"
-                ? copy.scan.rejectedPreview
-                : copy.scan.emptyPreview}
+              {rejection ? copy.scan.rejectedPreview : copy.scan.emptyPreview}
             </p>
           </div>
         )}
 
         {stage === "processing" ? (
-          <ProcessingOverlay message={steps[stepIndex]} accent={skill.accent} />
+          <ProcessingOverlay message={STEPS[stepIndex]} accent={skill.accent} />
         ) : null}
       </div>
 
@@ -162,23 +194,31 @@ export function ScanStage({
       />
 
       {stage === "preview" ? (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button size="lg" onClick={analyze} className="w-full sm:flex-1">
+        <div className="flex flex-col gap-3">
+          <Button size="lg" onClick={analyze} className="w-full">
             Find the math
             <ArrowRightIcon className="size-5" />
           </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => {
-              clearPreview();
-              setStage("idle");
-            }}
-            className="w-full sm:w-auto"
-          >
-            <RetryIcon className="size-5" />
-            Retake
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => cameraInput.current?.click()}
+              className="w-full sm:flex-1"
+            >
+              <RetryIcon className="size-5" />
+              Retake
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => libraryInput.current?.click()}
+              className="w-full sm:flex-1"
+            >
+              <ImageIcon className="size-5" />
+              Choose another
+            </Button>
+          </div>
         </div>
       ) : stage === "processing" ? null : (
         <div className="flex flex-col gap-3 sm:flex-row">
