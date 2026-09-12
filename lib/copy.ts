@@ -117,6 +117,28 @@ export const copy = {
       "Something went wrong reading that photo, so no Sidequest came out of it. Take another one and try again.",
   },
 
+  /**
+   * What the skill-fit stage says when the object and the mission do not meet.
+   *
+   * Assembled a sentence at a time: what could not be found, what to look for
+   * instead, and — only when the object genuinely suits one — which other
+   * mission would work. The "look for" phrase comes from the skill catalogue, so
+   * a student is pointed at the same thing the scan screen already described.
+   *
+   * Nothing here treats a poor fit as a mistake. It is not one, and the object
+   * is not the problem: the pair is.
+   */
+  fit: {
+    noChallenge: (skill: string) =>
+      `This is a cool find, but I can't find a strong ${skill} challenge in it.`,
+    tryInstead: (lookFor: string) => `Try finding ${lookFor}.`,
+    /** The student still chooses; nothing switches their mission for them. */
+    alternative: (skill: string) =>
+      `It would make a good ${skill} sidequest, though.`,
+    failure:
+      "Something went wrong working out the math in that photo, so no Sidequest came out of it. Take another one and try again.",
+  },
+
   quest: {
     objectFoundLabel: "Object found",
     discoverLabel: "Discover",

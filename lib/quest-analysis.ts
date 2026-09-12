@@ -5,6 +5,7 @@ import {
   analyzeObject,
   type ObjectAnalysisResult,
 } from "@/lib/ai/object-analysis";
+import { setQuestStatus } from "@/lib/quest-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET } from "@/lib/supabase/storage";
 
@@ -61,12 +62,10 @@ export async function analyzeQuestObject(
   const result = await analyzeObject(await imageDataUrl(image));
 
   if (result.status === "failed") {
-    // 'rejected' is a photo we read and found nothing usable in, which is the
-    // student's cue to try something else; 'failed' is this pipeline not
-    // working. The distinction is the one the schema was built around, and it
-    // is what stops a later stage picking either of them up as ready to teach
-    // from.
-    await setStatus(
+    // An unreadable object is 'rejected' — a photo we read and found nothing
+    // usable in — while a stage that misbehaved is 'failed'. See
+    // lib/quest-status.ts for why the two are worth keeping apart.
+    await setQuestStatus(
       questId,
       result.failure.reason === "generation_failure" ? "failed" : "rejected",
     );
@@ -92,20 +91,4 @@ export async function analyzeQuestObject(
   }
 
   return result;
-}
-
-/**
- * Best-effort: the status is how the failure is remembered, but the typed
- * failure is what the student is actually answered with, so a write that does
- * not land must not turn into a different outcome.
- */
-async function setStatus(questId: string, status: "rejected" | "failed") {
-  const { error } = await createAdminClient()
-    .from("quests")
-    .update({ status })
-    .eq("id", questId);
-
-  if (error) {
-    console.error(`[quest-analysis] could not mark ${questId} ${status}`, error);
-  }
 }

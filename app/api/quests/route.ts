@@ -10,21 +10,23 @@ import {
 } from "@/lib/image-capture";
 import { getOrCreateProfileId } from "@/lib/profile";
 import { analyzeQuestObject } from "@/lib/quest-analysis";
+import { assessQuestSkillFit } from "@/lib/quest-fit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Three model calls now sit inside this request, one of them reading small
- * print, so it needs longer than a platform's default ten seconds. Each call is
- * bounded by the client timeout in lib/ai/openai.ts well before this.
+ * Four model calls now sit inside this request, one of them reading small print,
+ * so it needs longer than a platform's default ten seconds. Each call is bounded
+ * by the client timeout in lib/ai/openai.ts well before this.
  */
 export const maxDuration = 60;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
  * validate the file, screen it for safety and suitability, store it in the
- * private bucket, record the row that points at it, then read the object in it.
+ * private bucket, record the row that points at it, read the object in it, then
+ * judge whether that object suits the mission the student chose.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
@@ -33,8 +35,8 @@ export const maxDuration = 60;
  *
  * The stages run here for the same reason: this is the one point every photo
  * must pass through, and each stage is a gate the next one depends on. Nothing
- * is generated yet — a quest with a reading stays 'pending' until skill fit and
- * challenge generation exist to finish it.
+ * is generated yet — a quest that gets this far stays 'pending' until challenge
+ * generation exists to finish it.
  */
 export async function POST(request: Request) {
   let form: FormData;
@@ -94,9 +96,12 @@ export async function POST(request: Request) {
     // Ordered so the cheap failures happen before the expensive upload.
     const profileId = await getOrCreateProfileId(grade);
 
+    // `description` is the grade's own wording for the skill, which the seed
+    // migration keeps as prompt material: it is what tells the skill-fit stage
+    // how much a grade-3 division problem is allowed to ask for.
     const { data: skill, error: skillError } = await supabase
       .from("skills")
-      .select("id")
+      .select("id, description")
       .eq("grade_level", grade)
       .eq("skill_code", skillId)
       .single();
@@ -149,6 +154,27 @@ export async function POST(request: Request) {
       console.warn("[POST /api/quests] no reading", reading.failure.reason);
 
       return refused(reading.failure.reason, reading.failure.studentMessage);
+    }
+
+    // Then whether that reading supports the mission the student picked. The
+    // analysis is passed straight through: it has already been validated in this
+    // request, and this stage is not allowed to learn anything new about the
+    // object.
+    const fit = await assessQuestSkillFit({
+      questId,
+      analysis: reading.analysis,
+      grade,
+      skillId,
+      skillDescription: skill.description,
+    });
+
+    if (fit.status !== "ok") {
+      // A poor fit and a broken stage are both refusals here, and both leave the
+      // quest marked so nothing downstream treats it as teachable. Which of the
+      // two it was is in the reason, and in the row.
+      console.warn("[POST /api/quests] no challenge", fit.failure.reason);
+
+      return refused(fit.failure.reason, fit.failure.studentMessage);
     }
 
     return NextResponse.json({ questId }, { status: 201 });
