@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CompassIcon } from "@/components/ui/icons";
 import { Wordmark } from "@/components/brand/wordmark";
+import { copy } from "@/lib/copy";
 import Link from "next/link";
 
 /**
@@ -38,7 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <footer className="border-t border-hair px-5 py-8 sm:px-8">
         <p className="mx-auto max-w-5xl text-xs text-faint">
-          SIDEQUEST — turn your world into your classroom.
+          {copy.brand.footer}
         </p>
       </footer>
     </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, SectionLabel } from "@/components/ui/card";
 import { ArrowRightIcon, CheckIcon, RetryIcon } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
 import { isAnswerCorrect } from "@/lib/mock-grade";
 import type { Challenge, Grade, Skill } from "@/lib/types";
 
@@ -39,7 +40,9 @@ export function AnswerForm({
 
   return (
     <Card accent={skill.accent} className="p-5 sm:p-7">
-      <SectionLabel accent={skill.accent}>Your challenge</SectionLabel>
+      <SectionLabel accent={skill.accent}>
+        {copy.quest.challengeLabel}
+      </SectionLabel>
       <p className="mt-3 text-lg leading-relaxed text-cream sm:text-xl">
         {challenge.prompt}
       </p>
@@ -52,12 +55,15 @@ export function AnswerForm({
           >
             <CheckIcon className="size-5" style={{ color: skill.accent }} />
             <p className="font-display text-lg font-bold tracking-tight text-cream">
-              That&apos;s it. {challenge.expectedAnswer} {challenge.answerUnit}.
+              {copy.quest.correct(
+                challenge.expectedAnswer,
+                challenge.answerUnit,
+              )}
             </p>
           </div>
 
           <div className="mt-5">
-            <SectionLabel>How it works out</SectionLabel>
+            <SectionLabel>{copy.quest.solutionLabel}</SectionLabel>
             <ol className="mt-3 space-y-2">
               {challenge.solutionSteps.map((step, index) => (
                 <li key={step} className="flex gap-3 text-sm text-muted">
@@ -127,7 +133,7 @@ export function AnswerForm({
               <div className="flex items-center gap-2">
                 <RetryIcon className="size-4 text-coral" />
                 <p className="text-sm font-medium text-cream">
-                  Not quite. Have another go.
+                  {copy.quest.incorrect}
                 </p>
               </div>
               {misses >= 1 ? (

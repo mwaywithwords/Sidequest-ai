@@ -3,22 +3,8 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, SectionLabel } from "@/components/ui/card";
 import { Pill } from "@/components/ui/chip";
 import { ArrowRightIcon, SparkIcon } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
 import { SKILLS } from "@/lib/skills";
-
-const HOW_IT_WORKS = [
-  {
-    title: "Point at something real",
-    body: "A can, a window, a carton of eggs. Anything nearby with numbers or shapes hiding in it.",
-  },
-  {
-    title: "See what's hiding inside",
-    body: "SIDEQUEST names the object, tells you something surprising about it, and finds the math it carries.",
-  },
-  {
-    title: "Solve your own challenge",
-    body: "You get a problem built from that exact object. Take it apart, and the next one adapts to you.",
-  },
-];
 
 export default function LandingPage() {
   return (
@@ -27,21 +13,19 @@ export default function LandingPage() {
         <div className="animate-rise">
           <Pill accent="#c8ff4d">
             <SparkIcon className="size-3.5" />
-            Math that starts with your camera
+            {copy.landing.eyebrow}
           </Pill>
 
           <h1 className="mt-6 font-display text-[2.6rem] font-extrabold leading-[0.98] tracking-tight text-cream sm:text-6xl lg:text-[4.1rem]">
-            Find the math
+            {copy.landing.heroLineOne}
             <br />
-            hiding in your
+            {copy.landing.heroLineTwo}
             <br />
-            <span className="text-lime">world.</span>
+            <span className="text-lime">{copy.landing.heroAccent}</span>
           </h1>
 
           <p className="mt-6 max-w-md text-base leading-relaxed text-muted sm:text-lg">
-            Take a photo of something around you. SIDEQUEST finds the real
-            numbers inside it and turns them into a challenge made only for that
-            object.
+            {copy.landing.heroBody}
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -66,9 +50,9 @@ export default function LandingPage() {
       </section>
 
       <section>
-        <SectionLabel>How a sidequest works</SectionLabel>
+        <SectionLabel>{copy.landing.howItWorksLabel}</SectionLabel>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {HOW_IT_WORKS.map((step, index) => (
+          {copy.landing.howItWorks.map((step, index) => (
             <Card key={step.title} className="p-5 sm:p-6">
               <span className="font-mono text-xs tracking-[0.18em] text-lime">
                 {String(index + 1).padStart(2, "0")}
@@ -85,7 +69,7 @@ export default function LandingPage() {
       </section>
 
       <section>
-        <SectionLabel>Seven skills, grades 3 to 5</SectionLabel>
+        <SectionLabel>{copy.landing.skillsLabel}</SectionLabel>
         <div className="mt-6 flex flex-wrap gap-2.5">
           {SKILLS.map((skill) => (
             <Pill key={skill.id} className="px-4 py-2.5 text-sm">
@@ -104,12 +88,11 @@ export default function LandingPage() {
 
       <section className="relative overflow-hidden rounded-card bg-raised/60 px-6 py-12 text-center ring-1 ring-hair sm:px-12 sm:py-16">
         <h2 className="font-display text-3xl font-extrabold leading-tight tracking-tight text-cream sm:text-4xl">
-          Turn your world into
-          <br className="hidden sm:block" /> your classroom.
+          {copy.landing.closingLineOne}
+          <br className="hidden sm:block" /> {copy.landing.closingLineTwo}
         </h2>
         <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-muted sm:text-base">
-          No worksheets. Just whatever you can find, and the math already inside
-          it.
+          {copy.landing.closingBody}
         </p>
         <ButtonLink href="/setup" size="lg" className="mt-8">
           Pick your mission

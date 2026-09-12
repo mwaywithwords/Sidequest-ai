@@ -1,6 +1,7 @@
 import { Card, SectionLabel } from "@/components/ui/card";
 import { MeasurementChip } from "@/components/ui/chip";
 import { SparkIcon } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
 import { getSkill } from "@/lib/skills";
 import type { Grade, Quest } from "@/lib/types";
 
@@ -19,7 +20,7 @@ export function QuestCard({ quest, grade }: { quest: Quest; grade: Grade }) {
             Grade {grade} · {skill.label}
           </SectionLabel>
           <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
-            Object found
+            {copy.quest.objectFoundLabel}
           </span>
         </div>
 
@@ -44,13 +45,13 @@ export function QuestCard({ quest, grade }: { quest: Quest; grade: Grade }) {
       <Card className="p-5 sm:p-7">
         <div className="flex items-center gap-2">
           <SparkIcon className="size-4 text-amber" />
-          <SectionLabel>Discover</SectionLabel>
+          <SectionLabel>{copy.quest.discoverLabel}</SectionLabel>
         </div>
         <p className="mt-3 leading-relaxed text-cream/90">{quest.discovery}</p>
       </Card>
 
       <Card className="p-5 sm:p-7">
-        <SectionLabel>The connection</SectionLabel>
+        <SectionLabel>{copy.quest.connectionLabel}</SectionLabel>
         <p className="mt-3 leading-relaxed text-cream/90">{quest.connection}</p>
       </Card>
     </div>

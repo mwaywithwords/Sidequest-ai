@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/layout/app-shell";
+import { copy } from "@/lib/copy";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({
@@ -21,11 +22,10 @@ const mono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SIDEQUEST — Find the math hiding in your world",
+    default: copy.brand.metaTitle,
     template: "%s · SIDEQUEST",
   },
-  description:
-    "Photograph something real and SIDEQUEST turns the math hiding inside it into a challenge built just for you.",
+  description: copy.brand.metaDescription,
 };
 
 export const viewport: Viewport = {

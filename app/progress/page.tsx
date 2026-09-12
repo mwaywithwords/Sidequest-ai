@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, SectionLabel } from "@/components/ui/card";
 import { Pill } from "@/components/ui/chip";
 import { ArrowRightIcon, CheckIcon } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
 import { MOCK_PROGRESS } from "@/lib/mock-progress";
 import { getSkill } from "@/lib/skills";
 
@@ -20,24 +21,35 @@ export default function ProgressPage() {
   return (
     <div className="flex flex-col gap-10">
       <div>
-        <SectionLabel>Your explorer log</SectionLabel>
+        <SectionLabel>{copy.progress.eyebrow}</SectionLabel>
         <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          What you&apos;ve found so far
+          {copy.progress.heading}
         </h1>
         <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
-          Every object you photograph teaches SIDEQUEST a little more about which
-          challenges to hand you next.
+          {copy.progress.body}
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <StatTile value={questsSolved} label="Sidequests solved" accent="#c8ff4d" />
-        <StatTile value={objectsScanned} label="Objects scanned" accent="#57e2ff" />
-        <StatTile value={dayStreak} label="Day streak" accent="#ffc94d" />
+        <StatTile
+          value={questsSolved}
+          label={copy.progress.solvedStat}
+          accent="#c8ff4d"
+        />
+        <StatTile
+          value={objectsScanned}
+          label={copy.progress.scannedStat}
+          accent="#57e2ff"
+        />
+        <StatTile
+          value={dayStreak}
+          label={copy.progress.streakStat}
+          accent="#ffc94d"
+        />
       </div>
 
       <section>
-        <SectionLabel>Skill by skill</SectionLabel>
+        <SectionLabel>{copy.progress.skillsLabel}</SectionLabel>
         <Card className="mt-4 divide-y divide-hair px-5 py-2 sm:px-7">
           {skills.map((progress) => (
             <SkillRow key={progress.skillId} progress={progress} />
@@ -46,7 +58,7 @@ export default function ProgressPage() {
       </section>
 
       <section>
-        <SectionLabel>Recent sidequests</SectionLabel>
+        <SectionLabel>{copy.progress.recentLabel}</SectionLabel>
         <div className="mt-4 flex flex-col gap-2.5">
           {recent.map((entry) => {
             const skill = getSkill(entry.skillId);
@@ -89,11 +101,9 @@ export default function ProgressPage() {
       </section>
 
       <Card className="p-5 sm:p-7">
-        <SectionLabel>Coming next</SectionLabel>
+        <SectionLabel>{copy.progress.comingNextLabel}</SectionLabel>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          These numbers are a preview. Once your attempts are being saved,
-          SIDEQUEST will use them to nudge each new challenge easier or harder
-          without you having to ask.
+          {copy.progress.comingNextBody}
         </p>
         <ButtonLink href="/setup" size="lg" className="mt-6">
           Start a sidequest

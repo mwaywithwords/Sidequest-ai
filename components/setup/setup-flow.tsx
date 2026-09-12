@@ -6,6 +6,7 @@ import { OptionTile } from "@/components/setup/option-tile";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/card";
 import { ArrowRightIcon } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
 import { GRADE_BLURBS, SKILLS, getSkill } from "@/lib/skills";
 import { GRADES, type Grade, type SkillId } from "@/lib/types";
 
@@ -24,9 +25,9 @@ export function SetupFlow() {
   return (
     <div className="flex flex-col gap-10">
       <section>
-        <SectionLabel>Step one · Your grade</SectionLabel>
+        <SectionLabel>{copy.setup.gradeLabel}</SectionLabel>
         <h2 className="mt-3 font-display text-2xl font-bold tracking-tight text-cream sm:text-3xl">
-          Which grade are you in?
+          {copy.setup.gradeHeading}
         </h2>
         <div className="mt-5 grid grid-cols-3 gap-3">
           {GRADES.map((option) => (
@@ -45,13 +46,13 @@ export function SetupFlow() {
 
       {grade === null ? (
         <p className="rounded-tile bg-raised/50 px-4 py-6 text-center text-sm text-faint ring-1 ring-hair">
-          Pick a grade to unlock your skills.
+          {copy.setup.skillsLocked}
         </p>
       ) : (
         <section className="animate-rise">
-          <SectionLabel>Step two · Your mission</SectionLabel>
+          <SectionLabel>{copy.setup.skillLabel}</SectionLabel>
           <h2 className="mt-3 font-display text-2xl font-bold tracking-tight text-cream sm:text-3xl">
-            What are you working on?
+            {copy.setup.skillHeading}
           </h2>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {SKILLS.map((skill) => (
@@ -80,7 +81,7 @@ export function SetupFlow() {
                 </span>
               </>
             ) : (
-              "Choose a grade and a skill to begin."
+              copy.setup.nothingChosen
             )}
           </p>
           <Button

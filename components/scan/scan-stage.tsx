@@ -11,6 +11,7 @@ import {
   ImageIcon,
   RetryIcon,
 } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
 import type { Grade, Skill } from "@/lib/types";
 
 type Stage = "idle" | "preview" | "processing" | "rejected";
@@ -35,12 +36,7 @@ export function ScanStage({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
 
-  const steps = [
-    "Looking at your object…",
-    "Reading labels, edges, and counts…",
-    `Checking it works for ${skill.label.toLowerCase()}…`,
-    "Building your challenge…",
-  ];
+  const steps = copy.scan.processingSteps(skill.label.toLowerCase());
 
   const clearPreview = useCallback(() => {
     setPreviewUrl((current) => {
@@ -99,16 +95,14 @@ export function ScanStage({
           Grade {grade} · {skill.label}
         </SectionLabel>
         <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          {stage === "rejected"
-            ? "Let's try a different photo"
-            : "Point at something real"}
+          {stage === "rejected" ? copy.scan.rejectedHeading : copy.scan.heading}
         </h1>
         <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
           {stage === "rejected" ? (
-            "That file didn't come through as a photo I can read. Take a new one, or choose a different picture."
+            copy.scan.rejectedBody
           ) : (
             <>
-              For {skill.label.toLowerCase()}, look for{" "}
+              {copy.scan.lookForLead(skill.label.toLowerCase())}
               <span className="text-cream">{skill.lookFor}</span>.
             </>
           )}
@@ -122,7 +116,7 @@ export function ScanStage({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
-              alt="The object you photographed"
+              alt={copy.scan.previewAlt}
               className="max-h-[24rem] w-full object-contain"
             />
             {stage === "processing" ? (
@@ -140,8 +134,8 @@ export function ScanStage({
             <CameraIcon className="mx-auto size-9 text-faint" />
             <p className="mt-4 text-sm text-faint">
               {stage === "rejected"
-                ? "No photo loaded"
-                : "Your photo will appear here"}
+                ? copy.scan.rejectedPreview
+                : copy.scan.emptyPreview}
             </p>
           </div>
         )}
