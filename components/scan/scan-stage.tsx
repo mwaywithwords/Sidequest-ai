@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DetourPanel } from "@/components/scan/detour-panel";
 import { ProcessingOverlay } from "@/components/scan/processing-overlay";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/card";
@@ -12,6 +13,10 @@ import {
   RetryIcon,
 } from "@/components/ui/icons";
 import { copy } from "@/lib/copy";
+import {
+  type DetourRequest,
+  presentDetour,
+} from "@/lib/detour";
 import {
   type ImageRejection,
   MAX_IMAGE_MB,
@@ -33,7 +38,6 @@ const STEPS = copy.scan.processingSteps;
  */
 function problemNotice(
   rejection: ImageRejection | null,
-  refusalMessage: string | null,
   uploadFailed: boolean,
 ) {
   if (rejection) {
@@ -44,12 +48,6 @@ function problemNotice(
           ? copy.scan.rejected.tooLarge(MAX_IMAGE_MB)
           : copy.scan.rejected[rejection],
     };
-  }
-
-  // Written by the server, which is the only side that knows why. It reads as
-  // one more "try a different photo" here, because that is all it should.
-  if (refusalMessage) {
-    return { heading: copy.scan.rejectedHeading, body: refusalMessage };
   }
 
   if (uploadFailed) {
@@ -81,9 +79,8 @@ export function ScanStage({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejection, setRejection] = useState<ImageRejection | null>(null);
-  // Only the sentence the server sent. Which stage turned the photo away, and
-  // anything it worked out about the photo, is not held here.
-  const [refusalMessage, setRefusalMessage] = useState<string | null>(null);
+  // Student-safe presentation data only. The pipeline reason never lands here.
+  const [detour, setDetour] = useState<DetourRequest | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
@@ -101,7 +98,7 @@ export function ScanStage({
     (reason: ImageRejection) => {
       clearPicked();
       setRejection(reason);
-      setRefusalMessage(null);
+      setDetour(null);
       setUploadFailed(false);
       setStage("idle");
     },
@@ -109,19 +106,24 @@ export function ScanStage({
   );
 
   /**
-   * The photo is dropped as well as reported. Unlike a failed upload there is
-   * nothing to resend: the same bytes would be refused the same way.
+   * A validation refusal is a detour, not a discarded photo. The file and its
+   * preview stay so the student can still see what they pointed at; they are
+   * cleared only when the student starts over.
    */
-  const refuse = useCallback(
-    (message: string) => {
-      clearPicked();
-      setRejection(null);
-      setRefusalMessage(message);
-      setUploadFailed(false);
-      setStage("idle");
-    },
-    [clearPicked],
-  );
+  const refuse = useCallback((request: DetourRequest) => {
+    setRejection(null);
+    setDetour(request);
+    setUploadFailed(false);
+    setStage("preview");
+  }, []);
+
+  const dismissDetour = useCallback(() => {
+    clearPicked();
+    setDetour(null);
+    setRejection(null);
+    setUploadFailed(false);
+    setStage("idle");
+  }, [clearPicked]);
 
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
     const picked = event.target.files?.[0];
@@ -142,7 +144,7 @@ export function ScanStage({
 
     clearPicked();
     setRejection(null);
-    setRefusalMessage(null);
+    setDetour(null);
     setUploadFailed(false);
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
@@ -156,7 +158,7 @@ export function ScanStage({
     }
 
     setRejection(null);
-    setRefusalMessage(null);
+    setDetour(null);
     setUploadFailed(false);
     setStepIndex(0);
     setStage("processing");
@@ -182,7 +184,7 @@ export function ScanStage({
     }
 
     if (outcome.status === "refused") {
-      refuse(outcome.message);
+      refuse(outcome.detour);
       return;
     }
 
@@ -201,31 +203,51 @@ export function ScanStage({
     return () => clearInterval(ticker);
   }, [stage]);
 
-  const notice = problemNotice(rejection, refusalMessage, uploadFailed);
+  const notice = problemNotice(rejection, uploadFailed);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <SectionLabel accent={skill.accent}>
-          Grade {grade} · {skill.label}
-        </SectionLabel>
-        <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          {notice ? notice.heading : copy.scan.heading}
-        </h1>
-        <p
-          role={notice ? "alert" : undefined}
-          className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base"
-        >
-          {notice ? (
-            notice.body
-          ) : (
-            <>
-              {copy.scan.lookForLead(skill.label.toLowerCase())}
-              <span className="text-cream">{skill.lookFor}</span>.
-            </>
-          )}
-        </p>
-      </div>
+      {detour ? (
+        <DetourPanel
+          presentation={presentDetour(detour, skill)}
+          accent={skill.accent}
+          primary={{
+            label: "Find Another Object",
+            onClick: dismissDetour,
+          }}
+          secondary={
+            detour.offerSkillChange
+              ? {
+                  label: "Try Another Math Skill",
+                  href: `/setup?grade=${grade}`,
+                  onClick: dismissDetour,
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <div>
+          <SectionLabel accent={skill.accent}>
+            Grade {grade} · {skill.label}
+          </SectionLabel>
+          <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
+            {notice ? notice.heading : copy.scan.heading}
+          </h1>
+          <p
+            role={notice ? "alert" : undefined}
+            className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base"
+          >
+            {notice ? (
+              notice.body
+            ) : (
+              <>
+                {copy.scan.lookForLead(skill.label.toLowerCase())}
+                <span className="text-cream">{skill.lookFor}</span>.
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       <div className="viewfinder relative flex min-h-[19rem] items-center justify-center overflow-hidden rounded-tile bg-void/60 ring-1 ring-hair sm:min-h-[24rem]">
         {previewUrl ? (
@@ -253,9 +275,7 @@ export function ScanStage({
           <div className="px-8 text-center">
             <CameraIcon className="mx-auto size-9 text-faint" />
             <p className="mt-4 text-sm text-faint">
-              {rejection || refusalMessage
-                ? copy.scan.rejectedPreview
-                : copy.scan.emptyPreview}
+              {rejection ? copy.scan.rejectedPreview : copy.scan.emptyPreview}
             </p>
           </div>
         )}
@@ -281,7 +301,28 @@ export function ScanStage({
         className="hidden"
       />
 
-      {stage === "preview" ? (
+      {detour ? (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => cameraInput.current?.click()}
+            className="w-full sm:flex-1"
+          >
+            <RetryIcon className="size-5" />
+            Retake
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => libraryInput.current?.click()}
+            className="w-full sm:flex-1"
+          >
+            <ImageIcon className="size-5" />
+            Choose another
+          </Button>
+        </div>
+      ) : stage === "preview" ? (
         <div className="flex flex-col gap-3">
           <Button size="lg" onClick={findTheMath} className="w-full">
             {uploadFailed ? (

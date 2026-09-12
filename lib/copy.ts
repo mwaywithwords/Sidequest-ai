@@ -139,6 +139,86 @@ export const copy = {
       "Something went wrong working out the math in that photo, so no Sidequest came out of it. Take another one and try again.",
   },
 
+  /**
+   * What a student sees when a photograph does not become a Sidequest.
+   *
+   * These are not errors. A detour is the product saying "not this object,
+   * not this photo" and pointing at what to try next. The five situations
+   * below are the only ones the UI can present; internal reason codes and
+   * moderation categories never reach this copy.
+   */
+  detour: {
+    eyebrow: "SIDEQUEST DETOUR",
+    heading: "This trail took a turn.",
+    tryFinding: "Try finding something that:",
+    tryPhoto: "A stronger photo usually has:",
+    unsafe: {
+      message:
+        "That photo can't be used for a Sidequest. Try taking a picture of an everyday object around you.",
+      suggestions: [
+        "one everyday object you can hold or point at",
+        "a label, a shape, or parts you can count",
+        "nothing private — just something nearby",
+      ],
+    },
+    person: {
+      message:
+        "Sidequests are built from objects, not people. Point the camera at something near you instead.",
+      suggestions: [
+        "a bottle, a book, or a box",
+        "something with a label or clear edges",
+        "just one main object in the frame",
+      ],
+    },
+    unknown: {
+      message:
+        "I couldn't quite tell what that is. Let's try a clearer photo of one main object.",
+      suggestions: [
+        "one object filling most of the frame",
+        "enough light to see the edges",
+        "the camera held still",
+      ],
+    },
+    poorFit: {
+      message: (skill: string) =>
+        `This is a cool object, but I can't find a strong ${skill} challenge hiding in it.`,
+      fallbackSuggestions: [
+        "can be divided into equal pieces",
+        "has repeated sections",
+        "shows a measurement",
+      ],
+    },
+    retake: {
+      message:
+        "That photo came out a little too mysterious. A clearer shot will help me find the math.",
+      suggestions: [
+        "brighter lighting",
+        "the camera held still so it stays in focus",
+        "one main object",
+        "a little closer, or a step back if it's cut off",
+      ],
+    },
+    insufficient: {
+      message:
+        "I can see it, but I can't find enough math hiding in it yet.",
+      suggestions: [
+        "visible measurements",
+        "repeated parts",
+        "countable groups",
+        "clear shapes",
+        "labeled quantities",
+      ],
+    },
+    wandered: {
+      message:
+        "This sidequest took a wander. Let's pick a new object and try again.",
+      suggestions: [
+        "one everyday object",
+        "something with numbers, parts, or clear edges",
+      ],
+    },
+  },
+
   quest: {
     objectFoundLabel: "Object found",
     discoverLabel: "Discover",

@@ -1,4 +1,8 @@
-import { copy } from "@/lib/copy";
+import {
+  type DetourRequest,
+  isDetourKind,
+  sanitiseSuggestions,
+} from "@/lib/detour";
 import type { ImageRejection } from "@/lib/image-capture";
 import { prepareImageForUpload } from "@/lib/image-prepare";
 import type { Grade, SkillId } from "@/lib/types";
@@ -9,15 +13,15 @@ import type { Grade, SkillId } from "@/lib/types";
  * The split matters for what the student is told. "rejected" is the server
  * disagreeing with the file itself, which deserves the same specific wording
  * the browser check already uses, and retrying the same bytes would only fail
- * again. "refused" is a stage of the pipeline turning the photo away — unsafe,
- * unsuitable, or unreadable — which arrives with its own sentence already
- * written. "failed" is everything else — offline, storage, database, or a stage
- * that could not finish — where the same photo is worth resending.
+ * again. "refused" is a stage of the pipeline turning the photo away, already
+ * mapped to a student-safe detour. "failed" is everything else — offline,
+ * storage, database, or a stage that could not finish — where the same photo
+ * is worth resending.
  */
 export type UploadOutcome =
   | { status: "ok"; questId: string }
   | { status: "rejected"; reason: ImageRejection }
-  | { status: "refused"; message: string }
+  | { status: "refused"; detour: DetourRequest }
   | { status: "failed" };
 
 function isRejection(value: unknown): value is ImageRejection {
@@ -79,19 +83,19 @@ export async function uploadQuestImage(
   const reason = field("error");
 
   if (reason === "refused") {
-    const message = field("message");
+    // Kind is already student-safe. An unknown or missing kind becomes a
+    // generic "everyday object" detour rather than showing the student a
+    // code, so a truncated response still has a way out.
+    const rawKind = field("kind");
+    const kind = isDetourKind(rawKind) ? rawKind : "unsafe";
 
-    // The response also carries the stage's normalised reason. It stops here:
-    // the screen needs the sentence, and nothing in the UI should branch on why
-    // a photo was refused. The fallback covers a truncated response — the
-    // student still gets a next step rather than a retry that would be refused
-    // the same way.
     return {
       status: "refused",
-      message:
-        typeof message === "string" && message.length > 0
-          ? message
-          : copy.safety.unsuitable,
+      detour: {
+        kind,
+        suggestions: sanitiseSuggestions(field("suggestions")),
+        offerSkillChange: field("offerSkillChange") === true,
+      },
     };
   }
 
