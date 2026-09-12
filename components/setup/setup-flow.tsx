@@ -10,9 +10,14 @@ import { copy } from "@/lib/copy";
 import { GRADE_BLURBS, SKILLS, getSkill } from "@/lib/skills";
 import { GRADES, type Grade, type SkillId } from "@/lib/types";
 
-export function SetupFlow() {
+export function SetupFlow({
+  initialGrade = null,
+}: {
+  /** Carried from a detour so the student does not have to pick their grade again. */
+  initialGrade?: Grade | null;
+}) {
   const router = useRouter();
-  const [grade, setGrade] = useState<Grade | null>(null);
+  const [grade, setGrade] = useState<Grade | null>(initialGrade);
   const [skillId, setSkillId] = useState<SkillId | null>(null);
 
   const ready = grade !== null && skillId !== null;

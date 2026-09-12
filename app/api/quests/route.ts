@@ -13,6 +13,10 @@ import { analyzeQuestObject } from "@/lib/quest-analysis";
 import { assessQuestSkillFit } from "@/lib/quest-fit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
+import {
+  detourKindFromReason,
+  sanitiseSuggestions,
+} from "@/lib/detour";
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
@@ -88,7 +92,7 @@ export async function POST(request: Request) {
       // categories and scores behind it stayed inside lib/ai.
       console.warn("[POST /api/quests] image refused", safety.reason);
 
-      return refused(safety.reason, safety.messageForStudent);
+      return refused(safety.reason);
     }
 
     const supabase = createAdminClient();
@@ -153,7 +157,7 @@ export async function POST(request: Request) {
       // quest up as something to teach from.
       console.warn("[POST /api/quests] no reading", reading.failure.reason);
 
-      return refused(reading.failure.reason, reading.failure.studentMessage);
+      return refused(reading.failure.reason);
     }
 
     // Then whether that reading supports the mission the student picked. The
@@ -174,7 +178,14 @@ export async function POST(request: Request) {
       // two it was is in the reason, and in the row.
       console.warn("[POST /api/quests] no challenge", fit.failure.reason);
 
-      return refused(fit.failure.reason, fit.failure.studentMessage);
+      return refused(fit.failure.reason, {
+        suggestions:
+          fit.status === "poorFit"
+            ? fit.fit.suggestedObjectCharacteristics
+            : [],
+        offerSkillChange:
+          fit.status === "poorFit" && fit.fit.alternativeSkillCodes.length > 0,
+      });
     }
 
     return NextResponse.json({ questId }, { status: 201 });
@@ -190,12 +201,22 @@ export async function POST(request: Request) {
 /**
  * The one shape a stage uses to turn a photo away.
  *
- * Both gates answer the same way — a normalised reason and a sentence written
- * for a child — because from the browser's side they are one thing: this photo
- * will not become a Sidequest, and here is what to say about it. Everything
- * behind the reason, from moderation categories to a failed schema parse, stayed
- * on the server.
+ * The internal reason is mapped to a student-safe kind here, so the browser
+ * never sees a moderation category or a pipeline code. Suggestions and the
+ * skill-change offer are optional extras for poor fit; everything else the
+ * student reads is assembled from centralized copy on the client.
  */
-function refused(reason: string, message: string) {
-  return NextResponse.json({ error: "refused", reason, message }, { status: 422 });
+function refused(
+  reason: string,
+  extras?: { suggestions?: readonly string[]; offerSkillChange?: boolean },
+) {
+  return NextResponse.json(
+    {
+      error: "refused",
+      kind: detourKindFromReason(reason),
+      suggestions: sanitiseSuggestions(extras?.suggestions ?? []),
+      offerSkillChange: extras?.offerSkillChange === true,
+    },
+    { status: 422 },
+  );
 }
