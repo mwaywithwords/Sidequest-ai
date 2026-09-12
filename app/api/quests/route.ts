@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  MODEL_READABLE_IMAGE_TYPES,
+  screenImage,
+} from "@/lib/ai/image-safety";
+import {
   imageExtension,
   MAX_UPLOAD_BYTES,
   validateImageFile,
@@ -10,16 +14,27 @@ import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Creates a quest from a photograph: stores the image in the private bucket
- * and records the row that points at it.
+ * Two model calls now sit inside this request, so it needs longer than a
+ * platform's default ten seconds. A hung call is bounded by the client timeout
+ * in lib/ai/openai.ts well before this.
+ */
+export const maxDuration = 30;
+
+/**
+ * Creates a quest from a photograph: screens the image, stores it in the
+ * private bucket, and records the row that points at it.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
  * path. Everything it does send is validated again here, because a request can
  * reach this handler without having gone through the UI at all.
  *
- * Nothing is processed yet — the row lands as 'pending' and the AI pipeline
- * picks it up later.
+ * The safety gate runs here for the same reason: it is the first point every
+ * photo must pass through, and the last point before the photo becomes
+ * something the product keeps.
+ *
+ * Nothing is analysed yet — a screened photo's row lands as 'pending' and the
+ * AI pipeline picks it up later.
  */
 export async function POST(request: Request) {
   let form: FormData;
@@ -53,7 +68,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unsupported" }, { status: 400 });
   }
 
+  // A format the safety gate cannot read is a photo we cannot screen, so it
+  // gets the same answer as a file that was never a readable photo.
+  if (!MODEL_READABLE_IMAGE_TYPES.includes(file.type)) {
+    return NextResponse.json({ error: "unsupported" }, { status: 400 });
+  }
+
   try {
+    // Before the profile, the bucket, and the row: a photo that does not pass
+    // leaves nothing behind, and nothing downstream ever sees it. Screening
+    // throws if it could not reach a verdict, which lands in the catch below
+    // as a retryable failure rather than as permission to continue.
+    const safety = await screenImage(file);
+
+    if (!safety.allowed) {
+      // The normalised reason, for the log and for the client to carry; the
+      // categories and scores behind it stayed inside lib/ai.
+      console.warn("[POST /api/quests] image refused", safety.reason);
+
+      return NextResponse.json(
+        {
+          error: "unsafe",
+          reason: safety.reason,
+          message: safety.messageForStudent,
+        },
+        { status: 422 },
+      );
+    }
+
     const supabase = createAdminClient();
 
     // Ordered so the cheap failures happen before the expensive upload.
