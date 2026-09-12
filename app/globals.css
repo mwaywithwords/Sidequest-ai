@@ -1,26 +1,143 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Surfaces: deep, warm-shifted dark rather than neutral grey */
+  --color-void: #07060d;
+  --color-ink: #0e0c18;
+  --color-raised: #171426;
+  --color-hover: #1f1b31;
+
+  /* Type: warm cream reads friendlier than pure white */
+  --color-cream: #f5f2ea;
+  --color-muted: #a29db4;
+  --color-faint: #6f6a82;
+
+  --color-hair: rgba(245, 242, 234, 0.1);
+  --color-hair-strong: rgba(245, 242, 234, 0.18);
+
+  /* Accents, one per math skill plus a primary action colour */
+  --color-lime: #c8ff4d;
+  --color-aqua: #57e2ff;
+  --color-coral: #ff7a5a;
+  --color-amber: #ffc94d;
+  --color-lilac: #c79bff;
+  --color-mint: #6bf0c0;
+  --color-blossom: #ff8fd4;
+
+  --radius-tile: 1.25rem;
+  --radius-card: 1.75rem;
+
+  --animate-sweep: sweep 2.2s ease-in-out infinite;
+  --animate-slide: slide 1.4s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2s ease-out infinite;
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --font-display: var(--font-bricolage);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  color-scheme: dark;
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Ambient background: two coloured pools of light over a faint dot grid.
+   Pure CSS so there are no image assets to ship. */
+.ambient-glow {
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, rgba(199, 155, 255, 0.16), transparent 70%),
+    radial-gradient(50rem 34rem at 92% 6%, rgba(87, 226, 255, 0.12), transparent 68%),
+    radial-gradient(44rem 30rem at 50% 108%, rgba(200, 255, 77, 0.08), transparent 72%);
+}
+
+.dot-grid {
+  background-image: radial-gradient(rgba(245, 242, 234, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 100% 70% at 50% 0%, black, transparent 75%);
+}
+
+/* Viewfinder brackets: the recurring brand device, used on the scan frame,
+   the hero sample, and quest object cards. */
+.viewfinder::before,
+.viewfinder::after {
+  content: "";
+  position: absolute;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-color: var(--color-lime);
+  border-style: solid;
+  pointer-events: none;
+}
+
+.viewfinder::before {
+  top: 0.75rem;
+  left: 0.75rem;
+  border-width: 2px 0 0 2px;
+  border-top-left-radius: 0.5rem;
+}
+
+.viewfinder::after {
+  bottom: 0.75rem;
+  right: 0.75rem;
+  border-width: 0 2px 2px 0;
+  border-bottom-right-radius: 0.5rem;
+}
+
+/* Keeps iOS from zooming the page when a text field takes focus. */
+input,
+textarea,
+select {
+  font-size: max(16px, 1rem);
 }
