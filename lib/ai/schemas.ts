@@ -85,29 +85,125 @@ export const ObjectAnalysisSchema = z.strictObject({
 });
 
 // ---------------------------------------------------------------------------
-// Stage 3 — does the object support the skill the student chose?
+// Stage 3 — can this object support a legitimate investigation?
 // ---------------------------------------------------------------------------
 
-export const SkillFitAnalysisSchema = z
-  .strictObject({
-    selectedSkillCode: skillCode,
-    fitScore: z.number().min(0).max(1),
-    canGenerateChallenge: z.boolean(),
-    /** The subset of the object analysis a challenge for this skill could actually build on. */
-    usableProperties: z.array(text),
-    reason: text,
-    /** What to point the camera at instead, used verbatim in the retry copy. */
-    suggestedObjectCharacteristics: z.array(text),
-    /** Skills this object would suit better, for the "try this instead" offer. */
-    alternativeSkillCodes: z.array(skillCode),
-  })
-  .refine(
-    (fit) => !fit.canGenerateChallenge || fit.usableProperties.length > 0,
-    {
-      error: "canGenerateChallenge requires at least one usable property",
-      path: ["usableProperties"],
-    },
-  );
+/**
+ * Origins this investigation stage is allowed to persist.
+ *
+ * OBSERVED          a fact established by ObjectAnalysis.
+ * STUDENT_PROVIDED  something collected during a SIDEQUEST investigation.
+ *
+ * `given_in_problem` is not here. That origin belongs to Challenge Generation.
+ */
+export const INVESTIGATION_VALUE_ORIGINS = [
+  "observed",
+  "student_provided",
+] as const;
+
+/**
+ * The full set a future Challenge Generator may use. Includes the investigation
+ * origins plus GIVEN_IN_PROBLEM — a hypothetical the problem text may invent.
+ *
+ * Skill Fit must not emit this broader type. Investigation anchors stay on
+ * `INVESTIGATION_VALUE_ORIGINS` so a hypothetical cannot be stored as a fact.
+ */
+export const CHALLENGE_VALUE_ORIGINS = [
+  ...INVESTIGATION_VALUE_ORIGINS,
+  "given_in_problem",
+] as const;
+
+export const InvestigationAnchorSchema = z.strictObject({
+  property: text,
+  origin: z.enum(INVESTIGATION_VALUE_ORIGINS),
+});
+
+/**
+ * The four ways an investigation can conclude.
+ *
+ * `direct` and `grounded_scenario` are both ready for a future Challenge
+ * Generator. They differ in whether the photograph already holds enough, or
+ * whether the problem may introduce an extra hypothetical value. `needs_evidence`
+ * is still a live quest. `poor_fit` is the last resort.
+ */
+export const CHALLENGE_MODES = [
+  "direct",
+  "grounded_scenario",
+  "needs_evidence",
+  "poor_fit",
+] as const;
+
+export const EVIDENCE_REQUEST_TYPES = [
+  "second_photo",
+  "student_measurement",
+  "student_count",
+  "student_input",
+] as const;
+
+/** One small extra observation the student can make. Written for the student. */
+export const EvidenceRequestSchema = z.strictObject({
+  type: z.enum(EVIDENCE_REQUEST_TYPES),
+  prompt: text.max(200),
+  targetProperty: text.max(80),
+  reason: text.max(200),
+});
+
+const skillFitShared = {
+  selectedSkillCode: skillCode,
+  fitScore: z.number().min(0).max(1),
+  reason: text,
+  /** What a better object would have. Meaningful for poor_fit; unused otherwise. */
+  suggestedObjectCharacteristics: z.array(text),
+  alternativeSkillCodes: z.array(skillCode),
+  /**
+   * Observed facts and, for needs_evidence, one student_provided target.
+   * Structurally cannot hold `given_in_problem`.
+   */
+  anchors: z.array(InvestigationAnchorSchema),
+};
+
+const SkillFitDirectSchema = z.strictObject({
+  ...skillFitShared,
+  challengeMode: z.literal("direct"),
+  canGenerateChallenge: z.literal(true),
+  usableProperties: z.array(text).min(1),
+  evidenceRequest: z.null(),
+});
+
+const SkillFitGroundedSchema = z.strictObject({
+  ...skillFitShared,
+  challengeMode: z.literal("grounded_scenario"),
+  canGenerateChallenge: z.literal(true),
+  usableProperties: z.array(text).min(1),
+  evidenceRequest: z.null(),
+});
+
+const SkillFitNeedsEvidenceSchema = z.strictObject({
+  ...skillFitShared,
+  challengeMode: z.literal("needs_evidence"),
+  canGenerateChallenge: z.literal(false),
+  usableProperties: z.array(text),
+  evidenceRequest: EvidenceRequestSchema,
+});
+
+const SkillFitPoorFitSchema = z.strictObject({
+  ...skillFitShared,
+  challengeMode: z.literal("poor_fit"),
+  canGenerateChallenge: z.literal(false),
+  usableProperties: z.array(text),
+  evidenceRequest: z.null(),
+});
+
+/**
+ * Discriminated on `challengeMode` so the evidence-request invariant is
+ * structural: required for `needs_evidence`, null for every other mode.
+ */
+export const SkillFitAnalysisSchema = z.discriminatedUnion("challengeMode", [
+  SkillFitDirectSchema,
+  SkillFitGroundedSchema,
+  SkillFitNeedsEvidenceSchema,
+  SkillFitPoorFitSchema,
+]);
 
 // ---------------------------------------------------------------------------
 // Stage 4 — the quest itself
@@ -203,7 +299,26 @@ export type ImageSafetyReason = (typeof IMAGE_SAFETY_REASONS)[number];
 export type VisibleMeasurement = z.infer<typeof VisibleMeasurementSchema>;
 export type ObjectAnalysis = z.infer<typeof ObjectAnalysisSchema>;
 
+export type InvestigationValueOrigin =
+  (typeof INVESTIGATION_VALUE_ORIGINS)[number];
+export type ChallengeValueOrigin = (typeof CHALLENGE_VALUE_ORIGINS)[number];
+export type InvestigationAnchor = z.infer<typeof InvestigationAnchorSchema>;
+export type ChallengeMode = (typeof CHALLENGE_MODES)[number];
+export type EvidenceRequestType = (typeof EVIDENCE_REQUEST_TYPES)[number];
+export type EvidenceRequest = z.infer<typeof EvidenceRequestSchema>;
 export type SkillFitAnalysis = z.infer<typeof SkillFitAnalysisSchema>;
+export type ReadySkillFit = Extract<
+  SkillFitAnalysis,
+  { challengeMode: "direct" | "grounded_scenario" }
+>;
+export type NeedsEvidenceFit = Extract<
+  SkillFitAnalysis,
+  { challengeMode: "needs_evidence" }
+>;
+export type PoorFitAnalysis = Extract<
+  SkillFitAnalysis,
+  { challengeMode: "poor_fit" }
+>;
 
 export type Discovery = z.infer<typeof DiscoverySchema>;
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];

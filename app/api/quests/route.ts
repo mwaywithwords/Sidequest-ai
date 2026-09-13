@@ -30,7 +30,7 @@ export const maxDuration = 60;
  * Creates a quest from a photograph, in the order the pipeline requires:
  * validate the file, screen it for safety and suitability, store it in the
  * private bucket, record the row that points at it, read the object in it, then
- * judge whether that object suits the mission the student chose.
+ * investigate whether that object can support the mission the student chose.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
@@ -172,6 +172,21 @@ export async function POST(request: Request) {
       skillDescription: skill.description,
     });
 
+    if (fit.status === "needsEvidence") {
+      // Progress, not a refusal. The quest stays pending with the original
+      // image and reading intact. Challenge generation is not implemented yet,
+      // so this is the investigation hand-off to the client.
+      return NextResponse.json(
+        {
+          questId,
+          challengeMode: fit.fit.challengeMode,
+          objectName: reading.analysis.objectName,
+          evidenceRequest: fit.fit.evidenceRequest,
+        },
+        { status: 201 },
+      );
+    }
+
     if (fit.status !== "ok") {
       // A poor fit and a broken stage are both refusals here, and both leave the
       // quest marked so nothing downstream treats it as teachable. Which of the
@@ -188,7 +203,10 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ questId }, { status: 201 });
+    return NextResponse.json(
+      { questId, challengeMode: fit.fit.challengeMode },
+      { status: 201 },
+    );
   } catch (error) {
     // Logged in full, reported vaguely: the student gets something retryable
     // and the internals stay on the server.
