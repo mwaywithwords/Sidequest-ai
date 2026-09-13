@@ -27,6 +27,7 @@ import {
   type EvidenceRequest,
   type InspirationContext,
   type ObjectAnalysis,
+  type ReadySkillFit,
 } from "@/lib/ai/schemas";
 import { finalizeSkillFit } from "@/lib/ai/skill-fit-finalize";
 import { resolveSuitability } from "@/lib/ai/suitability-rules";
@@ -559,18 +560,36 @@ check(
 
 function readyFit(
   skill: SkillId,
+  mode: "object_math",
+  analysis: ObjectAnalysis,
+  extras?: {
+    properties?: string[];
+    inspiration?: InspirationContext | null;
+  },
+): Extract<ReadySkillFit, { challengeMode: "object_math" }>;
+function readyFit(
+  skill: SkillId,
+  mode: "inspired_math",
+  analysis: ObjectAnalysis,
+  extras?: {
+    properties?: string[];
+    inspiration?: InspirationContext | null;
+  },
+): Extract<ReadySkillFit, { challengeMode: "inspired_math" }>;
+function readyFit(
+  skill: SkillId,
   mode: "object_math" | "inspired_math",
   analysis: ObjectAnalysis,
   extras: {
     properties?: string[];
     inspiration?: InspirationContext | null;
   } = {},
-) {
+): ReadySkillFit {
+  void analysis;
   const properties = extras.properties ?? [];
-  return {
+  const shared = {
     selectedSkillCode: skill,
     fitScore: 0.74,
-    challengeMode: mode,
     canGenerateChallenge: true as const,
     usableProperties: properties,
     reason: "A ready path exists.",
@@ -581,7 +600,23 @@ function readyFit(
       origin: "observed" as const,
     })),
     evidenceRequest: null,
-    inspirationContext: extras.inspiration ?? null,
+  };
+
+  if (mode === "inspired_math") {
+    return {
+      ...shared,
+      challengeMode: "inspired_math",
+      inspirationContext: extras.inspiration ?? {
+        topic: "object context",
+        reason: "A real-world connection exists.",
+      },
+    };
+  }
+
+  return {
+    ...shared,
+    challengeMode: "object_math",
+    inspirationContext: null,
   };
 }
 
@@ -630,7 +665,7 @@ function baseWire(overrides: Partial<WireChallenge>): WireChallenge {
 function verifyNamed(
   name: string,
   analysis: ObjectAnalysis,
-  fit: ReturnType<typeof readyFit>,
+  fit: ReadySkillFit,
   wire: WireChallenge,
   grade: 3 | 4 | 5,
 ) {

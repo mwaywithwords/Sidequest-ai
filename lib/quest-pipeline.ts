@@ -25,7 +25,9 @@ export type QuestVerificationView =
  * The ordered quest-creation stages, with injectable I/O so the call
  * sequence can be tested without a network.
  *
- * Moderation always runs first. Vision never runs if moderation refuses.
+ * The selected skill is resolved first. That is application configuration,
+ * not a model judgement, and a missing row must not spend OpenAI work.
+ * Moderation runs next. Vision never runs if moderation refuses.
  * Generation never runs if vision is unsafe or the reading failed.
  * Verification never runs unless generation produced a candidate.
  * Only verification may mark a quest ready.
@@ -53,10 +55,15 @@ export type SkillRecord = {
 };
 
 export type QuestPipelinePersist = {
-  loadProfileAndSkill: (
+  /**
+   * Application configuration. Must run before any model call so a missing
+   * or unsupported mission cannot spend OpenAI work.
+   */
+  resolveSkill: (
     grade: Grade,
     skillId: SkillId,
-  ) => Promise<{ profileId: string; skill: SkillRecord }>;
+  ) => Promise<SkillRecord>;
+  loadProfile: (grade: Grade) => Promise<{ profileId: string }>;
   uploadAndInsert: (input: {
     file: File;
     profileId: string;
@@ -117,6 +124,10 @@ export async function runQuestPipeline(
   let insertedQuestId: string | null = null;
 
   try {
+    const skill = await timer.measureDb(() =>
+      deps.persist.resolveSkill(input.grade, input.skillId),
+    );
+
     const harmful = await timer.measure("moderation", () =>
       deps.moderateImage(input.image),
     );
@@ -135,8 +146,8 @@ export async function runQuestPipeline(
       return refused(vision.safety.reason);
     }
 
-    const { profileId, skill } = await timer.measureDb(() =>
-      deps.persist.loadProfileAndSkill(input.grade, input.skillId),
+    const { profileId } = await timer.measureDb(() =>
+      deps.persist.loadProfile(input.grade),
     );
 
     const { questId } = await timer.measureDb(() =>

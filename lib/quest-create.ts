@@ -13,9 +13,11 @@ import { persistQuestDiscovery } from "@/lib/quest-discovery";
 import { persistQuestSkillFit } from "@/lib/quest-fit";
 import {
   type QuestCreateResult,
+  type SkillRecord,
   runQuestPipeline,
 } from "@/lib/quest-pipeline";
 import { setQuestStatus } from "@/lib/quest-status";
+import { isJwtIssuedAtFutureError } from "@/lib/skill-catalogue";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
 import { verifyQuestChallenge } from "@/lib/quest-verify";
@@ -49,31 +51,11 @@ export async function createQuest({
       verifyQuest: verifyQuestChallenge,
       adaptiveProfile: getAdaptiveProfile,
       persist: {
-        async loadProfileAndSkill(nextGrade, nextSkillId) {
-          const supabase = createAdminClient();
-          const [profileId, skillResult] = await Promise.all([
-            getOrCreateProfileId(nextGrade),
-            supabase
-              .from("skills")
-              .select("id, description")
-              .eq("grade_level", nextGrade)
-              .eq("skill_code", nextSkillId)
-              .single(),
-          ]);
-
-          if (skillResult.error !== null || skillResult.data === null) {
-            throw new Error(
-              `No skill row for grade ${nextGrade} / ${nextSkillId}: ${skillResult.error?.message ?? "not found"}`,
-            );
-          }
-
-          return {
-            profileId,
-            skill: {
-              id: skillResult.data.id,
-              description: skillResult.data.description,
-            },
-          };
+        async resolveSkill(nextGrade, nextSkillId) {
+          return resolveSkillRow(nextGrade, nextSkillId);
+        },
+        async loadProfile(nextGrade) {
+          return { profileId: await getOrCreateProfileId(nextGrade) };
         },
         async uploadAndInsert({ file: upload, profileId, skillRowId }) {
           const supabase = createAdminClient();
@@ -116,5 +98,47 @@ export async function createQuest({
       },
     },
   );
+}
+
+/**
+ * Resolve the catalogue row for a parsed mission.
+ *
+ * `.maybeSingle()` keeps a missing row distinct from an auth or transport
+ * failure. A JWT issued-at-future error is a known Supabase gateway flake
+ * (PGRST303) and is retried once. It is not treated as a missing skill.
+ */
+async function resolveSkillRow(
+  grade: Grade,
+  skillId: SkillId,
+): Promise<SkillRecord> {
+  let result = await loadSkillRow(grade, skillId);
+
+  if (isJwtIssuedAtFutureError(result.error)) {
+    result = await loadSkillRow(grade, skillId);
+  }
+
+  if (result.error !== null) {
+    throw new Error(
+      `Skill lookup failed for grade ${grade} / ${skillId}: ${result.error.message}`,
+    );
+  }
+
+  if (result.data === null) {
+    throw new Error(`No skill row for grade ${grade} / ${skillId}`);
+  }
+
+  return {
+    id: result.data.id,
+    description: result.data.description,
+  };
+}
+
+async function loadSkillRow(grade: Grade, skillId: SkillId) {
+  return createAdminClient()
+    .from("skills")
+    .select("id, description")
+    .eq("grade_level", grade)
+    .eq("skill_code", skillId)
+    .maybeSingle();
 }
 

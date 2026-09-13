@@ -3,7 +3,7 @@ import { MODEL_READABLE_IMAGE_TYPES } from "@/lib/ai/image-safety";
 import { inspectUploadedImage } from "@/lib/image-capture";
 import { createQuest } from "@/lib/quest-create";
 import { toClientCreateBody } from "@/lib/quest-pipeline";
-import { parseGrade, parseSkillId } from "@/lib/types";
+import { parseMission } from "@/lib/skill-catalogue";
 
 /**
  * Up to four model calls now sit inside this request — moderation, combined
@@ -15,8 +15,9 @@ export const maxDuration = 300;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
- * validate the file, moderate it, run combined vision analysis, store it,
- * generate the educational quest, then verify the candidate deterministically.
+ * validate the mission, resolve the skill row, moderate the file, run
+ * combined vision analysis, store it, generate the educational quest, then
+ * verify the candidate deterministically.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
@@ -34,11 +35,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "missing" }, { status: 400 });
   }
 
-  const grade = parseGrade(form.get("grade"));
-  const skillId = parseSkillId(form.get("skill"));
-  if (grade === null || skillId === null) {
+  const mission = parseMission(form.get("grade"), form.get("skill"));
+  if (mission === null) {
     return NextResponse.json({ error: "badMission" }, { status: 400 });
   }
+  const { grade, skillCode: skillId } = mission;
 
   const image = form.get("image");
   const incoming = image instanceof File ? image : null;
