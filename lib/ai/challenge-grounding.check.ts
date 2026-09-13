@@ -758,14 +758,63 @@ check(
   ]),
 );
 
-check("targetDifficulty uses progress level when present", targetDifficulty(4, {
-  currentLevel: 5,
-  masteryScore: 0.8,
-  totalAttempts: 10,
-  correctAttempts: 8,
-}) === 5);
+check(
+  "targetDifficulty caps automatic generation at 4",
+  targetDifficulty(4, {
+    currentLevel: 5,
+    masteryScore: 0.8,
+    totalAttempts: 10,
+    correctAttempts: 8,
+  }) === 4,
+);
 check("targetDifficulty defaults grade 3 to 2", targetDifficulty(3, null) === 2);
 check("targetDifficulty defaults grade 5 to 3", targetDifficulty(5, null) === 3);
+check(
+  "targetDifficulty does not treat one success as advanced",
+  targetDifficulty(4, {
+    currentLevel: 1,
+    masteryScore: 1,
+    totalAttempts: 1,
+    correctAttempts: 1,
+  }) !== 4 &&
+    Math.abs(
+      targetDifficulty(4, {
+        currentLevel: 1,
+        masteryScore: 1,
+        totalAttempts: 1,
+        correctAttempts: 1,
+      }) - 3,
+    ) <= 1,
+);
+
+const inventedAtHighDifficulty = finalizeChallenge(
+  baseWire({
+    difficulty: 4,
+    question:
+      "The bottle in your photo contains 12 fluid ounces. If 4 fluid ounces are poured out, how many remain?",
+    valuesUsed: [
+      operand("printed bottle volume", 12, "observed", "fl oz"),
+      operand("amount poured out", 4, "given_in_problem", "fl oz"),
+    ],
+    computation: {
+      type: "arithmetic",
+      operation: "subtract",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("printed bottle volume", 12, "observed", "fl oz"),
+        operand("amount poured out", 4, "given_in_problem", "fl oz"),
+      ],
+    },
+  }),
+  context(bottle, bottleFit),
+);
+check(
+  "a higher target difficulty still cannot invent an observed value",
+  inventedAtHighDifficulty.status === "generation_failure",
+);
 
 if (bottleChallenge.status === "ok") {
   check(

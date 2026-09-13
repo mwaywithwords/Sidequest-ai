@@ -4,10 +4,8 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import {
   type ChallengeFinalization,
-  type SkillProgressInput,
   type StudentEvidenceValue,
   finalizeChallenge,
-  targetDifficulty,
   type WireChallenge,
 } from "@/lib/ai/challenge-grounding";
 import { openai } from "@/lib/ai/openai";
@@ -20,6 +18,11 @@ import {
   type ReadySkillFit,
 } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
+import {
+  adaptationGenerationGuidance,
+  getAdaptiveProfile,
+  type AdaptiveProfile,
+} from "@/lib/progress/adaptation";
 import { getSkill } from "@/lib/skills";
 import { SKILL_IDS, type Grade, type SkillId } from "@/lib/types";
 
@@ -124,7 +127,7 @@ You may introduce a standard unit fact only when it is necessary, written in the
 
 If you cannot produce a legitimate challenge for this skill from the reading without inventing an object fact, set "canGenerate" to false. Do not force a question.
 
-Write for the grade you are given. Aim for the difficulty you are given (1 to 5). Do not add artificial complexity to reach a higher difficulty. The operation must stay aligned with the selected skill.
+Write for the grade you are given. Aim for the target difficulty you are given (automatic targets are 1 to 4). Do not add artificial complexity to reach a higher difficulty. If the object's real properties only support a simple problem, write that simple grounded problem. Do not invent extra object properties to make the problem harder. Extra numbers must be given_in_problem. Grade rules still win: difficulty does not unlock decimals, conversions, fraction denominators, or geometry the grade does not allow. The operation must stay aligned with the selected skill.
 
 Answer with:
 - "canGenerate": false only when no honest challenge exists.
@@ -132,9 +135,9 @@ Answer with:
 - "skillCode": exactly the selected skill.
 - "correctAnswer": { "type": "number" | "fraction", "value": number or null, "numerator": number or null, "denominator": number or null, "unit": string or null }. For type "number", fill value and optional unit. For type "fraction", fill numerator and denominator.
 - "solution": a short age-appropriate explanation of the calculation. Not a lecture.
-- "hint1": a small conceptual nudge. Do not reveal the answer.
-- "hint2": stronger support that still leaves the student to do the operation.
-- "difficulty": integer 1 to 5.
+- "hint1": a conceptual nudge whose explicitness matches the hint support you are given. Do not reveal the answer.
+- "hint2": stronger support that still leaves the student to do the operation. Always include Hint 2.
+- "difficulty": integer 1 to 5, aiming for the target difficulty you are given.
 - "objectConnection": why THIS photographed object matters. Not "this problem is about your bottle." Example: "Your bottle shows 11 fl oz, so that real measurement becomes the starting amount in the subtraction problem."
 - "verificationStrategy": one short instruction a later verifier should follow, such as "subtract the poured-out amount from the printed volume".
 - "valuesUsed": every number in the challenge, each with label, value, optional unit, and origin. At least one origin must be observed or student_provided. Copy observed labels from the reading.
@@ -172,7 +175,7 @@ export async function generateChallenge({
   skillId,
   skillDescription,
   grade,
-  progress = null,
+  adaptation,
   studentEvidence = [],
   regeneration,
 }: {
@@ -181,12 +184,18 @@ export async function generateChallenge({
   skillId: SkillId;
   skillDescription: string | null;
   grade: Grade;
-  progress?: SkillProgressInput;
+  adaptation?: AdaptiveProfile;
   studentEvidence?: readonly StudentEvidenceValue[];
   regeneration?: RegenerationHint;
 }): Promise<ChallengeGenerationResult> {
   const skill = getSkill(skillId);
-  const difficulty = targetDifficulty(grade, progress);
+  const profile =
+    adaptation ??
+    getAdaptiveProfile({
+      grade,
+      progress: null,
+      recentOutcomes: [],
+    });
 
   let wire: z.infer<typeof WireChallengeSchema> | null = null;
 
@@ -205,10 +214,7 @@ export async function generateChallenge({
                 `Selected skill: ${skillId} (${skill.label})`,
                 `What that means in grade ${grade}: ${skillDescription ?? skill.blurb}`,
                 `Challenge mode: ${fit.challengeMode}`,
-                `Target difficulty: ${difficulty}`,
-                progress
-                  ? `Skill progress: level ${progress.currentLevel}, mastery ${progress.masteryScore}, ${progress.correctAttempts}/${progress.totalAttempts} correct`
-                  : "Skill progress: none recorded. Write an on-level challenge.",
+                adaptationGenerationGuidance(profile),
                 studentEvidence.length > 0
                   ? `Student-provided evidence:\n${JSON.stringify(studentEvidence, null, 2)}`
                   : "Student-provided evidence: none. Do not invent any.",

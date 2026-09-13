@@ -11,6 +11,7 @@ import {
   type UsedValue,
   UsedValueSchema,
 } from "@/lib/ai/schemas";
+import { getAdaptiveProfile } from "@/lib/progress/adaptation";
 import type { Grade, SkillId } from "@/lib/types";
 
 /**
@@ -233,25 +234,22 @@ export function finalizeChallenge(
 }
 
 /**
- * On-level difficulty when the student has no recorded progress.
+ * Target difficulty for automatic Challenge Generation.
  *
- * Grade 3 starts a little easier. Progress `current_level` wins when it is
- * already in the 1–5 range the challenge column uses.
+ * Delegates to the centralized adaptation policy. Recent outcomes are
+ * empty here so callers that only have a progress row still get a
+ * deterministic 1–4 target. Full generation passes recent outcomes
+ * through `getAdaptiveProfile` directly.
  */
 export function targetDifficulty(
   grade: Grade,
   progress: SkillProgressInput,
 ): number {
-  if (
-    progress &&
-    Number.isInteger(progress.currentLevel) &&
-    progress.currentLevel >= 1 &&
-    progress.currentLevel <= 5
-  ) {
-    return progress.currentLevel;
-  }
-
-  return grade === 3 ? 2 : 3;
+  return getAdaptiveProfile({
+    grade,
+    progress,
+    recentOutcomes: [],
+  }).targetDifficulty;
 }
 
 export function hasGroundedAnchor(values: readonly UsedValue[]): boolean {
