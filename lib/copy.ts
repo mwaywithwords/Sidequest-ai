@@ -177,6 +177,18 @@ export const copy = {
   },
 
   /**
+   * What Challenge Generation says when it cannot write a problem it trusts.
+   *
+   * The student is never shown the candidate question or the answer. A
+   * failure here is the same kind of dead end as the other pipeline stages:
+   * one next step, no internals.
+   */
+  challenge: {
+    failure:
+      "Something went wrong making a challenge from that photo, so no Sidequest came out of it. Take another one and try again.",
+  },
+
+  /**
    * What a student sees when a photograph does not become a Sidequest.
    *
    * These are not errors. A detour is the product saying "not this object,

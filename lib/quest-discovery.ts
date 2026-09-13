@@ -12,15 +12,14 @@ import type { Grade } from "@/lib/types";
 /**
  * The discovery stage, run against a stored quest.
  *
- * Sits after a ready skill-fit and before a challenge that does not exist
- * yet. The reading and the investigation arrive as arguments: both have
- * already been through their schemas in this request, and the photograph is
- * not touched again.
+ * Sits after a ready skill-fit and before challenge generation. The reading
+ * and the investigation arrive as arguments: both have already been through
+ * their schemas in this request, and the photograph is not touched again.
  *
  * On success it writes only `discovery`. `object_metadata`,
  * `validation_result`, `identified_object`, and `image_path` stay as they
- * are. Status stays `pending`: a quest is ready when a valid challenge
- * exists, and none does yet.
+ * are. Status stays `pending`: a quest is ready when verification accepts a
+ * challenge, and that stage does not exist yet.
  */
 export async function recordQuestDiscovery({
   questId,
