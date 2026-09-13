@@ -48,7 +48,7 @@ const ANALYSIS_MODEL = "gpt-5.4";
  * instead of absent, no string or number constraints — so the constraints that
  * matter stay where they belong: in the schema that validates the answer.
  */
-const WireAnalysisSchema = z.strictObject({
+export const WireAnalysisSchema = z.strictObject({
   identifiable: z.boolean(),
   objectName: z.string(),
   category: z.string(),
@@ -76,7 +76,7 @@ const WireAnalysisSchema = z.strictObject({
  * to keep that out of a challenge is to make the specific temptation explicit
  * and to make an empty array an obviously correct answer.
  */
-const INSTRUCTIONS = `You are the vision stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student has photographed an object near them, and a maths challenge will be built only from what you report. Report what the photograph shows, and nothing you merely know.
+export const OBJECT_ANALYSIS_INSTRUCTIONS = `You are the vision stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student has photographed an object near them, and a maths challenge will be built only from what you report. Report what the photograph shows, and nothing you merely know.
 
 Identify the object:
 
@@ -120,7 +120,7 @@ export type ObjectAnalysisResult =
 export async function analyzeObject(image: string): Promise<ObjectAnalysisResult> {
   const response = await openai().responses.parse({
     model: ANALYSIS_MODEL,
-    instructions: INSTRUCTIONS,
+    instructions: OBJECT_ANALYSIS_INSTRUCTIONS,
     input: [
       {
         role: "user",

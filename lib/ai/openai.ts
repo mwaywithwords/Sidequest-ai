@@ -18,10 +18,18 @@ import { openaiApiKey } from "@/lib/env.server";
  * answering has to become an error quickly. Timing out is a refusal to
  * continue, which is the behaviour we want anyway.
  *
- * Bounded with MAX_RETRIES so a 7-call pipeline cannot run away. Worst
+ * Bounded with MAX_RETRIES so a 4-call pipeline cannot run away. Worst
  * case still has to fit inside POST /api/quests maxDuration (300s).
  */
-const REQUEST_TIMEOUT_MS = 20_000;
+export const REQUEST_TIMEOUT_MS = 20_000;
+
+/**
+ * Combined vision and quest-generation do more work in one request than
+ * the old single-purpose calls. Still short enough that four attempts
+ * (two combined calls, each with one retry) plus moderation and one
+ * regeneration stay inside the route budget.
+ */
+export const COMBINED_REQUEST_TIMEOUT_MS = 35_000;
 
 /**
  * One retry, not the SDK's default of two. A student is waiting behind a

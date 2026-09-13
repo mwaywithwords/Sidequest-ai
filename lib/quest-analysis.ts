@@ -5,6 +5,7 @@ import {
   analyzeObject,
   type ObjectAnalysisResult,
 } from "@/lib/ai/object-analysis";
+import type { ObjectAnalysis } from "@/lib/ai/schemas";
 import { setQuestStatus } from "@/lib/quest-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET } from "@/lib/supabase/storage";
@@ -91,4 +92,26 @@ export async function analyzeQuestObject(
   }
 
   return result;
+}
+
+/**
+ * Persists a validated reading without fetching the photograph again.
+ */
+export async function storeQuestReading(
+  questId: string,
+  analysis: ObjectAnalysis,
+): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("quests")
+    .update({
+      object_metadata: analysis,
+      identified_object: analysis.objectName,
+    })
+    .eq("id", questId);
+
+  if (error) {
+    throw new Error(
+      `Could not store the reading for quest ${questId}: ${error.message}`,
+    );
+  }
 }

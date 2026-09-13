@@ -4,7 +4,7 @@ import {
   generateDiscovery,
   type DiscoveryResult,
 } from "@/lib/ai/discovery";
-import type { ObjectAnalysis, ReadySkillFit } from "@/lib/ai/schemas";
+import type { Discovery, ObjectAnalysis, ReadySkillFit } from "@/lib/ai/schemas";
 import { setQuestStatus } from "@/lib/quest-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Grade } from "@/lib/types";
@@ -52,4 +52,20 @@ export async function recordQuestDiscovery({
   }
 
   return result;
+}
+
+export async function persistQuestDiscovery(
+  questId: string,
+  discovery: Discovery,
+): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("quests")
+    .update({ discovery })
+    .eq("id", questId);
+
+  if (error) {
+    throw new Error(
+      `Could not store the discovery for quest ${questId}: ${error.message}`,
+    );
+  }
 }

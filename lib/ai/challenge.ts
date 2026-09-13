@@ -3,22 +3,22 @@ import "server-only";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import {
-  type ChallengeFinalization,
   type StudentEvidenceValue,
   finalizeChallenge,
   type WireChallenge,
 } from "@/lib/ai/challenge-grounding";
+import {
+  type ChallengeGenerationResult,
+  challengeFailed,
+  resultFromFinalization,
+} from "@/lib/ai/challenge-result";
 import { openai } from "@/lib/ai/openai";
 import {
   CHALLENGE_VALUE_ORIGINS,
   type ContextualPayload,
-  type GeneratedChallenge,
   type ObjectAnalysis,
-  type QuestGenerationFailure,
-  QuestGenerationFailureSchema,
   type ReadySkillFit,
 } from "@/lib/ai/schemas";
-import { copy } from "@/lib/copy";
 import {
   adaptationGenerationGuidance,
   getAdaptiveProfile,
@@ -53,7 +53,7 @@ const WireShapeSchema = z.strictObject({
   origin: z.enum(["observed", "student_provided"]),
 });
 
-const WireChallengeSchema = z.strictObject({
+export const WireChallengeSchema = z.strictObject({
   canGenerate: z.boolean(),
   question: z.string(),
   skillCode: z.enum(SKILL_IDS),
@@ -111,7 +111,7 @@ const SKILL_PATTERNS: Record<SkillId, string> = {
     "Prefer qualitative or structure geometry from visible shape: name a 2D shape or 3D form, or count faces/edges/vertices/sides of an identified form. Use perimeter or area only when those dimensions are already observed or student-provided. Do not invent a length, width, or angle measure merely to make a geometry question.",
 };
 
-const INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The vision stage has already read that object. The investigation stage has already decided this object can support the selected skill as "object_math". Your job is to write ONE mathematically meaningful, grade-appropriate, object-grounded maths challenge.
+export const CHALLENGE_INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The vision stage has already read that object. The investigation stage has already decided this object can support the selected skill as "object_math". Your job is to write ONE mathematically meaningful, grade-appropriate, object-grounded maths challenge.
 
 You do not see the photograph. Use only the reading and the investigation you are given.
 
@@ -173,7 +173,7 @@ If canGenerate is false, still fill every field with empty strings, empty arrays
 How to write each skill:
 {skills}`;
 
-const INSPIRED_INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The investigation stage chose "inspired_math": the object is a meaningful TOPIC ANCHOR, but it does not itself provide enough mathematical information for the selected skill.
+export const INSPIRED_CHALLENGE_INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The investigation stage chose "inspired_math": the object is a meaningful TOPIC ANCHOR, but it does not itself provide enough mathematical information for the selected skill.
 
 You do not see the photograph. You are given the object reading, the inspiration topic, and a contextual grounding payload of evergreen facts. Those contextual facts are NOT observations about this specific photograph.
 
@@ -221,10 +221,7 @@ If canGenerate is false, still fill every field with empty strings, empty arrays
 How to write each skill:
 {skills}`;
 
-export type ChallengeGenerationResult =
-  | { status: "ok"; challenge: GeneratedChallenge }
-  | { status: "poorFit"; failure: QuestGenerationFailure }
-  | { status: "failed"; failure: QuestGenerationFailure };
+export type { ChallengeGenerationResult };
 
 export type RegenerationHint = {
   reason: string;
@@ -266,8 +263,8 @@ export async function generateChallenge({
   try {
     const instructions =
       fit.challengeMode === "inspired_math"
-        ? INSPIRED_INSTRUCTIONS
-        : INSTRUCTIONS;
+        ? INSPIRED_CHALLENGE_INSTRUCTIONS
+        : CHALLENGE_INSTRUCTIONS;
 
     const response = await openai().responses.parse({
       model: CHALLENGE_MODEL,
@@ -333,13 +330,13 @@ export async function generateChallenge({
   } catch (error) {
     console.warn("[challenge] generation call failed", error);
 
-    return failed();
+    return challengeFailed();
   }
 
   if (!wire) {
     console.warn("[challenge] no parsed challenge");
 
-    return failed();
+    return challengeFailed();
   }
 
   const finalized = finalizeChallenge(wire as WireChallenge, {
@@ -354,45 +351,9 @@ export async function generateChallenge({
   return resultFromFinalization(finalized, skillId);
 }
 
-export function resultFromFinalization(
-  finalized: ChallengeFinalization,
-  skillId: SkillId,
-): ChallengeGenerationResult {
-  if (finalized.status === "ok") {
-    return { status: "ok", challenge: finalized.challenge };
-  }
+export { resultFromFinalization };
 
-  if (finalized.status === "poor_fit") {
-    return {
-      status: "poorFit",
-      failure: QuestGenerationFailureSchema.parse({
-        reason: "poor_skill_fit",
-        studentMessage: [
-          copy.fit.noChallenge(getSkill(skillId).label.toLowerCase()),
-          copy.fit.tryInstead(getSkill(skillId).lookFor),
-        ].join(" "),
-        recommendedNextAction: "find_different_object",
-      }),
-    };
-  }
-
-  console.warn("[challenge] challenge failed validation");
-
-  return failed();
-}
-
-function failed(): ChallengeGenerationResult {
-  return {
-    status: "failed",
-    failure: QuestGenerationFailureSchema.parse({
-      reason: "generation_failure",
-      studentMessage: copy.challenge.failure,
-      recommendedNextAction: "retry",
-    }),
-  };
-}
-
-function skillPatternList(): string {
+export function skillPatternList(): string {
   return (Object.keys(SKILL_PATTERNS) as SkillId[])
     .map((id) => `- ${id}: ${SKILL_PATTERNS[id]}`)
     .join("\n");

@@ -27,15 +27,16 @@ export async function loadAdaptationState(
   profileId: string,
   skillId: string,
 ): Promise<AdaptationState> {
-  const progress = await loadSkillProgress(profileId, skillId);
+  const [progress, recentOutcomes] = await Promise.all([
+    loadSkillProgress(profileId, skillId),
+    loadRecentOutcomes(profileId, skillId),
+  ]);
+
   if (progress === null) {
     return { progress: null, recentOutcomes: [] };
   }
 
-  return {
-    progress,
-    recentOutcomes: await loadRecentOutcomes(profileId, skillId),
-  };
+  return { progress, recentOutcomes };
 }
 
 async function loadSkillProgress(
