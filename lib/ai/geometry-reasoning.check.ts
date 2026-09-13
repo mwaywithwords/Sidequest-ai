@@ -311,6 +311,98 @@ check("box + geometry names a rectangular prism", boxSolid.status === "ok");
 check("box + geometry can count faces from the form catalog", boxFaces.status === "ok");
 check("clock + geometry names a circle without a diameter", clockFace.status === "ok");
 
+const wallet = reading("wallet", "personal accessory", [
+  "rectangular form",
+  "symmetry",
+]);
+
+const walletFace = identify(
+  wallet,
+  "plane",
+  "rectangle",
+  "plane",
+  "Which 2D shape is the front of your wallet most like?",
+  "Your wallet has a rectangular form, so that face is a rectangle.",
+  "The front is most like a rectangle.",
+);
+
+const walletAlias = identify(
+  wallet,
+  "plane",
+  "rectangular",
+  "plane",
+  "Which 2D shape is the front of your wallet most like?",
+  "Your wallet has a rectangular form, so that face is a rectangle.",
+  "The front is most like a rectangle.",
+);
+
+const walletPhrase = identify(
+  wallet,
+  "plane",
+  "rectangular form",
+  "plane",
+  "Which 2D shape is the front of your wallet most like?",
+  "Your wallet has a rectangular form you can see from this photo.",
+  "The front is most like a rectangle.",
+);
+
+const walletPrism = identify(
+  wallet,
+  "solid",
+  "rectangular prism",
+  "solid",
+  "What 3D shape is your wallet most like?",
+  "Your wallet has a rectangular form, so that solid is a rectangular prism.",
+  "The wallet is a rectangular prism.",
+);
+
+check(
+  "Grade 4 geometry + a wallet-like rectangle is qualitative object_math",
+  walletFace.status === "ok" &&
+    walletFace.challenge.computation.type === "shape_identify" &&
+    walletFace.challenge.correctAnswer.type === "choice" &&
+    walletFace.challenge.correctAnswer.value === "rectangle" &&
+    walletFace.challenge.valuesUsed.length === 0,
+);
+
+check(
+  "a valid shape_identify candidate uses visible form, not a measurement",
+  walletFace.status === "ok" &&
+    walletAlias.status === "ok" &&
+    walletPhrase.status === "ok" &&
+    walletPhrase.challenge.computation.type === "shape_identify" &&
+    walletPhrase.challenge.correctAnswer.type === "choice" &&
+    walletPhrase.challenge.correctAnswer.value === "rectangle",
+);
+
+check(
+  "rectangular form on a wallet does not become an ungrounded rectangular prism",
+  walletPrism.status === "generation_failure" &&
+    walletPrism.issue.code === "ungrounded_shape",
+);
+
+const malformedWallet = identify(
+  wallet,
+  "plane",
+  "triangle-ish",
+  "plane",
+  "Which 2D shape is the front of your wallet most like?",
+  "Your wallet has a rectangular form, so that face is a rectangle.",
+  "The front is most like a triangle.",
+);
+
+check(
+  "a malformed generated geometry candidate is rejected",
+  malformedWallet.status === "generation_failure" &&
+    malformedWallet.issue.path === "shapesUsed" &&
+    malformedWallet.issue.code === "unrecognized_geometry_label",
+);
+
+check(
+  "a malformed geometry candidate is generation_failure, not poor_fit",
+  malformedWallet.status === "generation_failure",
+);
+
 function verified(
   name: string,
   finalised: ReturnType<typeof finalizeChallenge>,
@@ -342,6 +434,7 @@ verified("shoe + geometry verifies", shoeSymmetry, shoe);
 verified("book + geometry verifies", bookFace, book);
 verified("box + geometry verifies", boxFaces, box);
 verified("clock + geometry verifies", clockFace, clock);
+verified("wallet + geometry verifies", walletPhrase, wallet);
 
 const inventedDiameter = finalizeChallenge(
   wire({

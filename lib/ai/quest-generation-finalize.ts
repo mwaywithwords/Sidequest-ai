@@ -123,6 +123,17 @@ export function finalizeQuestGeneration(
   const challenge = resultFromFinalization(finalized, skillId);
 
   if (challenge.status === "failed") {
+    if (finalized.status === "generation_failure") {
+      console.warn("[quest-generation] challenge failed validation", {
+        path: finalized.issue.path,
+        code: finalized.issue.code,
+        computationType: wire.challenge.computation.type,
+        answerType: wire.challenge.correctAnswer.type,
+        shapesUsedCount: wire.challenge.shapesUsed?.length ?? 0,
+        valuesUsedCount: wire.challenge.valuesUsed.length,
+        challengeMode: fit.challengeMode,
+      });
+    }
     return challenge;
   }
 

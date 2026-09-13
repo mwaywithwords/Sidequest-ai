@@ -193,9 +193,81 @@ export function aspectAllowsLabel(
   return labelsForChoiceSet(choiceSetForAspect(aspect)).includes(label);
 }
 
+/**
+ * Catalog adjectives the model often writes instead of the stored label.
+ * These are inflections of the schema words, not object-name guesses —
+ * "ball" does not become "sphere" here.
+ */
+const LABEL_INFLECTIONS: Readonly<Record<string, GeometryLabel>> = {
+  rectangular: "rectangle",
+  circular: "circle",
+  spherical: "sphere",
+  cylindrical: "cylinder",
+  triangular: "triangle",
+  conical: "cone",
+  cubic: "cube",
+};
+
+const GENERIC_FORM_TAILS = new Set([
+  "form",
+  "face",
+  "shape",
+  "body",
+  "top",
+  "outline",
+]);
+
 export function normaliseGeometryLabel(raw: string): GeometryLabel | null {
-  const folded = raw.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-  return isGeometryLabel(folded) ? folded : null;
+  const folded = foldGeometryToken(raw);
+  if (isGeometryLabel(folded)) return folded;
+
+  const inflection = LABEL_INFLECTIONS[folded];
+  if (inflection !== undefined) return inflection;
+
+  const words = folded.split(" ");
+  if (words.length === 2 && words[1] !== undefined && GENERIC_FORM_TAILS.has(words[1])) {
+    const head = words[0];
+    if (head !== undefined) {
+      if (isGeometryLabel(head)) return head;
+      const fromHead = LABEL_INFLECTIONS[head];
+      if (fromHead !== undefined) return fromHead;
+    }
+  }
+
+  return null;
+}
+
+export function normaliseGeometryAspect(raw: string): GeometryAspect | null {
+  const folded = foldGeometryToken(raw).replace(/ /g, "_");
+  return isGeometryAspect(folded) ? folded : null;
+}
+
+export function normaliseGeometryChoiceSet(
+  raw: string,
+): GeometryChoiceSet | null {
+  const folded = foldGeometryToken(raw).replace(/ /g, "_");
+  return isGeometryChoiceSet(folded) ? folded : null;
+}
+
+export function normaliseGeometryFeature(raw: string): GeometryFeature | null {
+  const folded = foldGeometryToken(raw).replace(/ /g, "_");
+  return isGeometryFeature(folded) ? folded : null;
+}
+
+/**
+ * Words that honestly cite this catalog label in student-facing text.
+ * Inflections of the schema word are included. Object-name guesses are
+ * not: this is for "rectangular form" citing rectangle, not for turning
+ * "ball" into an accepted answer label.
+ */
+export function geometryCitationTokens(
+  label: GeometryLabel,
+): readonly string[] {
+  return [label, ...FORM_TOKENS[label]];
+}
+
+function foldGeometryToken(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 
 export function structureCount(

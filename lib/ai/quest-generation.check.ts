@@ -346,6 +346,165 @@ check(
   inventedObserved.status === "failed",
 );
 
+const wallet: ObjectAnalysis = {
+  objectName: "wallet",
+  category: "personal accessory",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["rectangular form", "symmetry"],
+  observableProperties: ["card slots", "billfold"],
+};
+
+function geometryChallenge(
+  form: string,
+  label: string,
+): WireChallenge {
+  return {
+    canGenerate: true,
+    question: "Which 2D shape is the front of your wallet most like?",
+    skillCode: "geometry",
+    solution: "The front of the wallet is a rectangle.",
+    hint1: "Look at the outline.",
+    hint2: "Count the sides and corners you can see.",
+    difficulty: 2,
+    objectConnection:
+      "Your wallet has a rectangular form, so that face is a rectangle.",
+    verificationStrategy: "Match the observed form to the catalog label.",
+    valuesUsed: [],
+    shapesUsed: [
+      {
+        label: "wallet face",
+        form,
+        aspect: "plane",
+        origin: "observed",
+      },
+    ],
+    correctAnswer: {
+      type: "choice",
+      value: null,
+      numerator: null,
+      denominator: null,
+      unit: null,
+      label,
+      set: "plane",
+    },
+    computation: {
+      type: "shape_identify",
+      operation: "plane",
+      shape: form,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [],
+    },
+  };
+}
+
+const walletGeometry = finalizeQuestGeneration(
+  {
+    investigation: investigation({
+      challengeMode: "object_math",
+      usableProperties: ["rectangular form"],
+      reason: "Visible form can anchor geometry.",
+      inspirationContext: null,
+    }),
+    discovery: discovery({
+      title: "Made to carry cards",
+      text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      category: "design",
+    }),
+    challenge: geometryChallenge("rectangle", "rectangle"),
+  },
+  { analysis: wallet, skillId: "geometry", grade: 4 },
+);
+
+check(
+  "Grade 4 geometry + wallet-like rectangle is a ready object_math quest",
+  walletGeometry.status === "ok" &&
+    walletGeometry.fit.challengeMode === "object_math" &&
+    walletGeometry.challenge.computation.type === "shape_identify" &&
+    walletGeometry.challenge.correctAnswer.type === "choice",
+);
+
+const walletAlias = finalizeQuestGeneration(
+  {
+    investigation: investigation({
+      challengeMode: "object_math",
+      usableProperties: ["rectangular form"],
+      reason: "Visible form can anchor geometry.",
+      inspirationContext: null,
+    }),
+    discovery: discovery({
+      title: "Made to carry cards",
+      text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      category: "design",
+    }),
+    challenge: geometryChallenge("rectangular", "rectangular"),
+  },
+  { analysis: wallet, skillId: "geometry", grade: 4 },
+);
+
+const walletPhrase = finalizeQuestGeneration(
+  {
+    investigation: investigation({
+      challengeMode: "object_math",
+      usableProperties: ["rectangular form"],
+      reason: "Visible form can anchor geometry.",
+      inspirationContext: null,
+    }),
+    discovery: discovery({
+      title: "Made to carry cards",
+      text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      category: "design",
+    }),
+    challenge: geometryChallenge("rectangular form", "rectangular form"),
+  },
+  { analysis: wallet, skillId: "geometry", grade: 4 },
+);
+
+check(
+  "qualitative geometry accepts the catalog inflection rectangular",
+    walletAlias.status === "ok" &&
+    walletPhrase.status === "ok" &&
+    walletAlias.challenge.correctAnswer.type === "choice" &&
+    walletAlias.challenge.correctAnswer.value === "rectangle" &&
+    walletPhrase.challenge.correctAnswer.type === "choice" &&
+    walletPhrase.challenge.correctAnswer.value === "rectangle",
+);
+
+const malformedGeometry = finalizeQuestGeneration(
+  {
+    investigation: investigation({
+      challengeMode: "object_math",
+      usableProperties: ["rectangular form"],
+      reason: "Visible form can anchor geometry.",
+      inspirationContext: null,
+    }),
+    discovery: discovery({
+      title: "Made to carry cards",
+      text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      category: "design",
+    }),
+    challenge: geometryChallenge("triangle-ish", "triangle-ish"),
+  },
+  { analysis: wallet, skillId: "geometry", grade: 4 },
+);
+
+check(
+  "a generation schema failure is not poor_fit and does not blame the object",
+  malformedGeometry.status === "failed" &&
+    malformedGeometry.failure.reason === "generation_failure" &&
+    malformedGeometry.failure.recommendedNextAction === "retry" &&
+    !malformedGeometry.failure.studentMessage.toLowerCase().includes(
+      "find another object",
+    ) &&
+    !malformedGeometry.failure.studentMessage.toLowerCase().includes(
+      "cool find",
+    ),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} quest generation check(s) failed`);
   process.exit(1);

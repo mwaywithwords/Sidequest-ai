@@ -5,6 +5,7 @@
  */
 
 import {
+  geometryCitationTokens,
   normaliseGeometryLabel,
   shapeSupports,
   structureCount,
@@ -107,9 +108,44 @@ check(
 );
 
 check(
-  "only schema labels normalise; ball is not silently turned into sphere",
+  "only schema labels and catalog inflections normalise; ball is not a sphere",
   normaliseGeometryLabel(" Rectangular Prism ") === "rectangular prism" &&
+    normaliseGeometryLabel("rectangular") === "rectangle" &&
+    normaliseGeometryLabel("rectangular form") === "rectangle" &&
+    normaliseGeometryLabel("Rectangle") === "rectangle" &&
     normaliseGeometryLabel("ball") === null,
+);
+
+check(
+  "rectangle citations include rectangular form language",
+  geometryCitationTokens("rectangle").includes("rectangular") &&
+    !geometryCitationTokens("rectangle").includes("ball"),
+);
+
+check(
+  "a wallet-like rectangular form supports a plane rectangle, not a prism",
+  shapeSupports(
+    {
+      objectName: "wallet",
+      category: "personal accessory",
+      shapeProperties: ["rectangular form", "symmetry"],
+      observableProperties: ["card slots", "billfold"],
+      countableProperties: [],
+    },
+    "plane",
+    "rectangle",
+  ) &&
+    !shapeSupports(
+      {
+        objectName: "wallet",
+        category: "personal accessory",
+        shapeProperties: ["rectangular form", "symmetry"],
+        observableProperties: ["card slots", "billfold"],
+        countableProperties: [],
+      },
+      "solid",
+      "rectangular prism",
+    ),
 );
 
 if (failed > 0) {

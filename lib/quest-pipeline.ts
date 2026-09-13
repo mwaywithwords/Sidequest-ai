@@ -47,6 +47,7 @@ export type QuestCreateResult =
       suggestions: string[];
       offerSkillChange: boolean;
     }
+  | { kind: "generationFailed" }
   | { kind: "failed" };
 
 export type SkillRecord = {
@@ -197,7 +198,7 @@ export async function runQuestPipeline(
     if (generation.status === "failed") {
       await timer.measureDb(() => deps.persist.markFailed(questId));
       timer.log();
-      return refused(generation.failure.reason);
+      return { kind: "generationFailed" };
     }
 
     if (generation.status === "needsEvidence") {
@@ -286,6 +287,8 @@ export function toClientCreateBody(
         suggestions: sanitiseSuggestions(result.suggestions),
         offerSkillChange: result.offerSkillChange,
       };
+    case "generationFailed":
+      return { error: "generationFailed" };
     case "failed":
       return { error: "failed" };
   }
