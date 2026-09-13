@@ -53,9 +53,11 @@ const SuitabilityVerdictSchema = z.strictObject({
  * not match the schema. The gate treats that as a reason to stop, because an
  * unanswered question about a photo is not the same as a clean answer.
  *
- * A parsed `drug_content` verdict is not taken at face value: ordinary
- * grocery and nutrition products have already been misfiled here, so the
- * note is checked against the product rules before the reason is returned.
+ * A parsed prohibited verdict is not taken at face value: ordinary
+ * objects have already been misfiled here from speculative association,
+ * so the note is checked for asserted visual evidence before the reason
+ * is returned. The raw verdict, note, and normalised reason stay on the
+ * server log and never reach the student.
  */
 export async function checkImageSuitability(
   image: string,
@@ -85,12 +87,12 @@ export async function checkImageSuitability(
 
   const reason = resolveSuitability(parsed);
 
-  if (reason !== "appropriate") {
-    console.warn("[suitability] refused image", {
+  if (reason !== "appropriate" || parsed.verdict !== "usable") {
+    console.warn("[suitability] screened image", {
       verdict: parsed.verdict,
-      reason,
-      confidence: parsed.confidence,
       note: parsed.note,
+      normalized: reason,
+      confidence: parsed.confidence,
     });
   }
 
