@@ -9,10 +9,10 @@ import type { Grade, SkillId } from "@/lib/types";
 /**
  * The math-investigation stage, run against a stored quest.
  *
- * Sits between the reading and the challenge that does not exist yet. It
- * decides whether a challenge may later be attempted, whether the quest should
- * wait for one more observation, or whether this object honestly cannot support
- * the skill.
+ * Sits between the reading and discovery. It decides whether a challenge may
+ * later be attempted, whether the quest should wait for one more observation,
+ * or whether this object honestly cannot support the skill. Discovery only
+ * runs when this stage returns a ready path.
  *
  * The reading arrives as an argument rather than being re-read from the row: it
  * has already been through `ObjectAnalysisSchema` in this request, and the

@@ -10,6 +10,7 @@ import {
 } from "@/lib/image-capture";
 import { getOrCreateProfileId } from "@/lib/profile";
 import { analyzeQuestObject } from "@/lib/quest-analysis";
+import { recordQuestDiscovery } from "@/lib/quest-discovery";
 import { assessQuestSkillFit } from "@/lib/quest-fit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
@@ -20,17 +21,18 @@ import {
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Four model calls now sit inside this request, one of them reading small print,
+ * Five model calls now sit inside this request, one of them reading small print,
  * so it needs longer than a platform's default ten seconds. Each call is bounded
  * by the client timeout in lib/ai/openai.ts well before this.
  */
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
  * validate the file, screen it for safety and suitability, store it in the
- * private bucket, record the row that points at it, read the object in it, then
- * investigate whether that object can support the mission the student chose.
+ * private bucket, record the row that points at it, read the object in it,
+ * investigate whether that object can support the mission the student chose,
+ * then write one short discovery about it.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
@@ -38,9 +40,10 @@ export const maxDuration = 60;
  * reach this handler without having gone through the UI at all.
  *
  * The stages run here for the same reason: this is the one point every photo
- * must pass through, and each stage is a gate the next one depends on. Nothing
- * is generated yet — a quest that gets this far stays 'pending' until challenge
- * generation exists to finish it.
+ * must pass through, and each stage is a gate the next one depends on.
+ * Discovery is the first generated student-facing fact. A quest that gets
+ * this far still stays 'pending' until challenge generation exists to finish
+ * it.
  */
 export async function POST(request: Request) {
   let form: FormData;
@@ -174,8 +177,8 @@ export async function POST(request: Request) {
 
     if (fit.status === "needsEvidence") {
       // Progress, not a refusal. The quest stays pending with the original
-      // image and reading intact. Challenge generation is not implemented yet,
-      // so this is the investigation hand-off to the client.
+      // image and reading intact. Discovery waits until the investigation is
+      // ready; this is the hand-off to the client for one more observation.
       return NextResponse.json(
         {
           questId,
@@ -190,7 +193,7 @@ export async function POST(request: Request) {
     if (fit.status !== "ok") {
       // A poor fit and a broken stage are both refusals here, and both leave the
       // quest marked so nothing downstream treats it as teachable. Which of the
-      // two it was is in the reason, and in the row.
+      // two it was is in the reason, and in the row. Discovery does not run.
       console.warn("[POST /api/quests] no challenge", fit.failure.reason);
 
       return refused(fit.failure.reason, {
@@ -201,6 +204,23 @@ export async function POST(request: Request) {
         offerSkillChange:
           fit.status === "poorFit" && fit.fit.alternativeSkillCodes.length > 0,
       });
+    }
+
+    // Last generated fact for now: one short discovery from the reading and
+    // the investigation, with no second look at the photograph. Challenge
+    // generation is the next stage and does not exist yet, so a failure here
+    // stops the pipeline rather than being skipped.
+    const discovery = await recordQuestDiscovery({
+      questId,
+      analysis: reading.analysis,
+      fit: fit.fit,
+      grade,
+    });
+
+    if (discovery.status !== "ok") {
+      console.warn("[POST /api/quests] no discovery", discovery.failure.reason);
+
+      return refused(discovery.failure.reason);
     }
 
     return NextResponse.json(

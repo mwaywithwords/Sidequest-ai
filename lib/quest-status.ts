@@ -8,8 +8,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * The five values are the ones `quests_status_known` allows, and they mean:
  *
  * - 'pending'    work is still waiting to happen: the photo has not been
- *                learned from yet, or an investigation is waiting for one
- *                more observation from the student.
+ *                learned from yet, an investigation is waiting for one more
+ *                observation, or a discovery has been stored and a challenge
+ *                has not been generated yet.
  * - 'processing' picked up by a stage.
  * - 'ready'      a valid challenge exists. Only the stage that generates one may
  *                set this, which is why nothing in the pipeline sets it today.
