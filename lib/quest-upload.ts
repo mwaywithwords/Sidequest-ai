@@ -90,6 +90,9 @@ export async function uploadQuestImage(
       };
     }
 
+    // inspired_math is a stored path, not a playable challenge yet. The
+    // student is sent to the quest page, which stays in the working state
+    // until a later stage can generate from that context.
     return { status: "ok", questId };
   }
 

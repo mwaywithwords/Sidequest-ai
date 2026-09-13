@@ -88,13 +88,12 @@ const pizza: ObjectAnalysis = {
 
 function readyFit(
   skill: ReadySkillFit["selectedSkillCode"],
-  mode: ReadySkillFit["challengeMode"],
   property: string,
 ): ReadySkillFit {
   return {
     selectedSkillCode: skill,
     fitScore: 0.8,
-    challengeMode: mode,
+    challengeMode: "object_math",
     canGenerateChallenge: true,
     usableProperties: [property],
     reason: "A grounded path exists.",
@@ -102,6 +101,7 @@ function readyFit(
     alternativeSkillCodes: [],
     anchors: [{ property, origin: "observed" }],
     evidenceRequest: null,
+    inspirationContext: null,
   };
 }
 
@@ -170,16 +170,11 @@ function baseWire(overrides: Partial<WireChallenge> = {}): WireChallenge {
 
 const bottleFit = readyFit(
   "subtraction",
-  "grounded_scenario",
   "printed bottle volume: 11 fl oz",
 );
-const sneakerFit = readyFit(
-  "multiplication",
-  "grounded_scenario",
-  "8 visible eyelets",
-);
-const windowFit = readyFit("geometry", "direct", "pane width");
-const pizzaFit = readyFit("fractions", "grounded_scenario", "8 equal slices");
+const sneakerFit = readyFit("multiplication", "8 visible eyelets");
+const windowFit = readyFit("geometry", "pane width");
+const pizzaFit = readyFit("fractions", "8 equal slices");
 
 // --- schema contract -------------------------------------------------------
 
@@ -498,7 +493,7 @@ const pepsiGeneric = finalizeChallenge(
       unit: null,
     },
   }),
-  context(bottle, readyFit("addition", "grounded_scenario", "printed bottle volume: 11 fl oz")),
+  context(bottle, readyFit("addition", "printed bottle volume: 11 fl oz")),
 );
 check(
   "a worksheet problem with no observed anchor is poor_fit",
@@ -536,7 +531,7 @@ const unusedAnchor = finalizeChallenge(
       unit: null,
     },
   }),
-  context(bottle, readyFit("addition", "grounded_scenario", "printed bottle volume: 11 fl oz")),
+  context(bottle, readyFit("addition", "printed bottle volume: 11 fl oz")),
 );
 check(
   "mentioning an observed value that never enters the computation is poor_fit",

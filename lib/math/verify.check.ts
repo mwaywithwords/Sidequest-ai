@@ -92,7 +92,7 @@ function fit(
   return {
     selectedSkillCode: skill,
     fitScore: 0.8,
-    challengeMode: "grounded_scenario",
+    challengeMode: "object_math",
     canGenerateChallenge: true,
     usableProperties: [property],
     reason: "A grounded path exists.",
@@ -100,6 +100,7 @@ function fit(
     alternativeSkillCodes: [],
     anchors: [{ property, origin: "observed" }],
     evidenceRequest: null,
+    inspirationContext: null,
   };
 }
 

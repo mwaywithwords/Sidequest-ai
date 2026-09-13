@@ -10,7 +10,7 @@ import {
   ObjectAnalysisSchema,
   type ReadySkillFit,
   QuestGenerationFailureSchema,
-  SkillFitAnalysisSchema,
+  parseSkillFitAnalysis,
 } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
@@ -86,7 +86,7 @@ export async function generateQuestChallenge(
   }
 
   const analysis = ObjectAnalysisSchema.safeParse(quest.object_metadata);
-  const fitParsed = SkillFitAnalysisSchema.safeParse(quest.validation_result);
+  const fitParsed = parseSkillFitAnalysis(quest.validation_result);
 
   if (!analysis.success || !fitParsed.success) {
     await setQuestStatus(questId, "failed");
@@ -96,8 +96,7 @@ export async function generateQuestChallenge(
 
   const fit = fitParsed.data;
   if (
-    fit.challengeMode !== "direct" &&
-    fit.challengeMode !== "grounded_scenario"
+    fit.challengeMode !== "object_math"
   ) {
     console.warn("[quest-challenge] refused mode", fit.challengeMode);
 

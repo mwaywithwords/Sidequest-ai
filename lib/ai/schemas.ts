@@ -119,17 +119,19 @@ export const InvestigationAnchorSchema = z.strictObject({
 });
 
 /**
- * The four ways an investigation can conclude.
+ * The four investigation paths, in the order SIDEQUEST must try them.
  *
- * `direct` and `grounded_scenario` are both ready for Challenge Generation.
- * They differ in whether the photograph already holds enough, or whether
- * the problem may introduce an extra hypothetical value. `needs_evidence`
- * is still a live quest. `poor_fit` is the last resort.
+ * `object_math` uses properties already in the reading and is the only
+ * path this step may send to Challenge Generation.
+ * `investigation_math` keeps the quest alive for one more observation.
+ * `inspired_math` records a legitimate real-world context for a later
+ * stage; it does not generate a challenge here.
+ * `poor_fit` is last, after all three paths have been considered.
  */
 export const CHALLENGE_MODES = [
-  "direct",
-  "grounded_scenario",
-  "needs_evidence",
+  "object_math",
+  "investigation_math",
+  "inspired_math",
   "poor_fit",
 ] as const;
 
@@ -148,6 +150,15 @@ export const EvidenceRequestSchema = z.strictObject({
   reason: text.max(200),
 });
 
+/**
+ * A real-world connection that can later inspire a challenge, without
+ * inventing a fact about the photographed object.
+ */
+export const InspirationContextSchema = z.strictObject({
+  topic: text.max(120),
+  reason: text.max(280),
+});
+
 const skillFitShared = {
   selectedSkillCode: skillCode,
   fitScore: z.number().min(0).max(1),
@@ -156,34 +167,37 @@ const skillFitShared = {
   suggestedObjectCharacteristics: z.array(text),
   alternativeSkillCodes: z.array(skillCode),
   /**
-   * Observed facts and, for needs_evidence, one student_provided target.
+   * Observed facts and, for investigation_math, one student_provided target.
    * Structurally cannot hold `given_in_problem`.
    */
   anchors: z.array(InvestigationAnchorSchema),
 };
 
-const SkillFitDirectSchema = z.strictObject({
+const SkillFitObjectMathSchema = z.strictObject({
   ...skillFitShared,
-  challengeMode: z.literal("direct"),
+  challengeMode: z.literal("object_math"),
   canGenerateChallenge: z.literal(true),
   usableProperties: z.array(text).min(1),
   evidenceRequest: z.null(),
+  inspirationContext: z.null(),
 });
 
-const SkillFitGroundedSchema = z.strictObject({
+const SkillFitInvestigationMathSchema = z.strictObject({
   ...skillFitShared,
-  challengeMode: z.literal("grounded_scenario"),
-  canGenerateChallenge: z.literal(true),
-  usableProperties: z.array(text).min(1),
-  evidenceRequest: z.null(),
-});
-
-const SkillFitNeedsEvidenceSchema = z.strictObject({
-  ...skillFitShared,
-  challengeMode: z.literal("needs_evidence"),
+  challengeMode: z.literal("investigation_math"),
   canGenerateChallenge: z.literal(false),
   usableProperties: z.array(text),
   evidenceRequest: EvidenceRequestSchema,
+  inspirationContext: z.null(),
+});
+
+const SkillFitInspiredMathSchema = z.strictObject({
+  ...skillFitShared,
+  challengeMode: z.literal("inspired_math"),
+  canGenerateChallenge: z.literal(false),
+  usableProperties: z.array(text),
+  evidenceRequest: z.null(),
+  inspirationContext: InspirationContextSchema,
 });
 
 const SkillFitPoorFitSchema = z.strictObject({
@@ -192,18 +206,67 @@ const SkillFitPoorFitSchema = z.strictObject({
   canGenerateChallenge: z.literal(false),
   usableProperties: z.array(text),
   evidenceRequest: z.null(),
+  inspirationContext: z.null(),
 });
 
 /**
- * Discriminated on `challengeMode` so the evidence-request invariant is
- * structural: required for `needs_evidence`, null for every other mode.
+ * Discriminated on `challengeMode` so evidence and inspiration are
+ * structural: required on the path that needs them, null otherwise.
  */
 export const SkillFitAnalysisSchema = z.discriminatedUnion("challengeMode", [
-  SkillFitDirectSchema,
-  SkillFitGroundedSchema,
-  SkillFitNeedsEvidenceSchema,
+  SkillFitObjectMathSchema,
+  SkillFitInvestigationMathSchema,
+  SkillFitInspiredMathSchema,
   SkillFitPoorFitSchema,
 ]);
+
+const LEGACY_SKILL_FIT_MODES = {
+  direct: "object_math",
+  grounded_scenario: "object_math",
+  needs_evidence: "investigation_math",
+} as const;
+
+/**
+ * Rewrites a stored skill-fit record from the previous mode names onto
+ * the current path enum. New writes never use the old names; this exists
+ * so a ready quest stored before the rename can still be presented.
+ */
+export function normalizeSkillFitRecord(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+
+  const record = { ...(value as Record<string, unknown>) };
+  const mode = record.challengeMode;
+
+  if (mode === "direct" || mode === "grounded_scenario") {
+    record.challengeMode = LEGACY_SKILL_FIT_MODES[mode];
+    record.canGenerateChallenge = true;
+    record.evidenceRequest = null;
+    record.inspirationContext = null;
+    return record;
+  }
+
+  if (mode === "needs_evidence") {
+    record.challengeMode = LEGACY_SKILL_FIT_MODES[mode];
+    record.canGenerateChallenge = false;
+    if (record.inspirationContext === undefined) {
+      record.inspirationContext = null;
+    }
+    return record;
+  }
+
+  if (record.inspirationContext === undefined) {
+    record.inspirationContext = null;
+  }
+
+  return record;
+}
+
+/** Parse a stored or freshly produced skill-fit, including legacy mode names. */
+export function parseSkillFitAnalysis(value: unknown) {
+  return SkillFitAnalysisSchema.safeParse(normalizeSkillFitRecord(value));
+}
 
 // ---------------------------------------------------------------------------
 // Stage 4 — the quest itself
@@ -355,7 +418,9 @@ export const GenerationMetadataSchema = z.strictObject({
   computation: ComputationSchema,
   verificationStrategy: text,
   model: z.string().optional(),
-  challengeMode: z.enum(["direct", "grounded_scenario"]).optional(),
+  challengeMode: z
+    .enum(["object_math", "direct", "grounded_scenario"])
+    .optional(),
   adaptation: AdaptiveProfileSchema.optional(),
 });
 
@@ -412,16 +477,21 @@ export type EvidenceRequest = z.infer<typeof EvidenceRequestSchema>;
 export type SkillFitAnalysis = z.infer<typeof SkillFitAnalysisSchema>;
 export type ReadySkillFit = Extract<
   SkillFitAnalysis,
-  { challengeMode: "direct" | "grounded_scenario" }
+  { challengeMode: "object_math" }
 >;
-export type NeedsEvidenceFit = Extract<
+export type InvestigationMathFit = Extract<
   SkillFitAnalysis,
-  { challengeMode: "needs_evidence" }
+  { challengeMode: "investigation_math" }
+>;
+export type InspiredMathFit = Extract<
+  SkillFitAnalysis,
+  { challengeMode: "inspired_math" }
 >;
 export type PoorFitAnalysis = Extract<
   SkillFitAnalysis,
   { challengeMode: "poor_fit" }
 >;
+export type InspirationContext = z.infer<typeof InspirationContextSchema>;
 
 export type Discovery = z.infer<typeof DiscoverySchema>;
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];

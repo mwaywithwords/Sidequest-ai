@@ -4,16 +4,22 @@
  * Run with: npx tsx lib/ai/investigation-path.check.ts
  *
  * These do not call a model. They check that the path resolver and the
- * SkillFitAnalysis contract behave the way the product now requires.
+ * SkillFitAnalysis contract exhaust object_math, investigation_math, and
+ * inspired_math before poor_fit.
  */
 
 import {
   buildAnchors,
-  MIN_FIT_SCORE,
+  fallbackEvidenceRequest,
+  readingAnchors,
+  recoverInvestigation,
   resolveInvestigation,
 } from "@/lib/ai/investigation-path";
 import {
   type EvidenceRequest,
+  type InspirationContext,
+  type ObjectAnalysis,
+  parseSkillFitAnalysis,
   SkillFitAnalysisSchema,
 } from "@/lib/ai/schemas";
 
@@ -25,8 +31,15 @@ const sneakerEvidence: EvidenceRequest = {
     "The shoe size gives us a real number we can use for your subtraction Sidequest.",
 };
 
+const basketballInspiration: InspirationContext = {
+  topic: "basketball jersey numbers",
+  reason:
+    "Jersey numbers provide meaningful whole numbers connected to basketball.",
+};
+
 const bottleProperty = "printed bottle volume: 11 fl oz";
 const eggProperty = "12 visible eggs";
+const sphereProperty = "sphere";
 
 let failed = 0;
 
@@ -58,45 +71,144 @@ const base = {
   alternativeSkillCodes: [] as string[],
 };
 
-// --- schema invariant: evidenceRequest is structural -------------------
+// --- schema invariant: evidence and inspiration are structural ---------
 
-schemaFails("direct cannot carry an evidence request", {
+schemaFails("object_math cannot carry an evidence request", {
   ...base,
-  challengeMode: "direct",
+  challengeMode: "object_math",
   canGenerateChallenge: true,
   usableProperties: [bottleProperty],
   anchors: [{ property: bottleProperty, origin: "observed" }],
   evidenceRequest: sneakerEvidence,
+  inspirationContext: null,
 });
 
-schemaFails("needs_evidence without a request is invalid", {
+schemaFails("investigation_math without a request is invalid", {
   ...base,
-  challengeMode: "needs_evidence",
+  challengeMode: "investigation_math",
   canGenerateChallenge: false,
   usableProperties: [],
   anchors: [{ property: "shoe size", origin: "student_provided" }],
   evidenceRequest: null,
+  inspirationContext: null,
 });
 
-schemaFails("direct with no usable properties is invalid", {
+schemaFails("object_math with no usable properties is invalid", {
   ...base,
-  challengeMode: "direct",
+  challengeMode: "object_math",
   canGenerateChallenge: true,
   usableProperties: [],
   anchors: [],
   evidenceRequest: null,
+  inspirationContext: null,
 });
 
-schemaFails("grounded_scenario cannot set canGenerateChallenge false", {
+schemaFails("object_math cannot set canGenerateChallenge false", {
   ...base,
-  challengeMode: "grounded_scenario",
+  challengeMode: "object_math",
   canGenerateChallenge: false,
+  usableProperties: [bottleProperty],
+  anchors: [{ property: bottleProperty, origin: "observed" }],
+  evidenceRequest: null,
+  inspirationContext: null,
+});
+
+schemaFails("inspired_math without context is invalid", {
+  ...base,
+  challengeMode: "inspired_math",
+  canGenerateChallenge: false,
+  usableProperties: [],
+  anchors: [],
+  evidenceRequest: null,
+  inspirationContext: null,
+});
+
+schemaFails("inspired_math cannot generate a challenge in this step", {
+  ...base,
+  selectedSkillCode: "addition",
+  challengeMode: "inspired_math",
+  canGenerateChallenge: true,
+  usableProperties: [],
+  anchors: [],
+  evidenceRequest: null,
+  inspirationContext: basketballInspiration,
+});
+
+schemaOk(
+  "investigation_math with a request is valid even with no observed property",
+  {
+    ...base,
+    fitScore: 0.35,
+    challengeMode: "investigation_math",
+    canGenerateChallenge: false,
+    usableProperties: [],
+    anchors: [{ property: "shoe size", origin: "student_provided" }],
+    evidenceRequest: sneakerEvidence,
+    inspirationContext: null,
+  },
+);
+
+schemaOk("object_math with one observed quantity is valid", {
+  ...base,
+  challengeMode: "object_math",
+  canGenerateChallenge: true,
+  usableProperties: [bottleProperty],
+  anchors: [{ property: bottleProperty, origin: "observed" }],
+  evidenceRequest: null,
+  inspirationContext: null,
+});
+
+schemaOk("object_math with a countable structure is valid", {
+  ...base,
+  fitScore: 0.85,
+  selectedSkillCode: "multiplication",
+  challengeMode: "object_math",
+  canGenerateChallenge: true,
+  usableProperties: [eggProperty],
+  anchors: [{ property: eggProperty, origin: "observed" }],
+  evidenceRequest: null,
+  inspirationContext: null,
+});
+
+schemaOk("inspired_math with structured context is valid", {
+  ...base,
+  selectedSkillCode: "addition",
+  challengeMode: "inspired_math",
+  canGenerateChallenge: false,
+  usableProperties: [],
+  anchors: [],
+  evidenceRequest: null,
+  inspirationContext: basketballInspiration,
+});
+
+schemaFails("investigation anchors cannot carry given_in_problem", {
+  ...base,
+  challengeMode: "object_math",
+  canGenerateChallenge: true,
+  usableProperties: [bottleProperty],
+  anchors: [
+    { property: bottleProperty, origin: "observed" },
+    { property: "amount poured out", origin: "given_in_problem" },
+  ],
+  evidenceRequest: null,
+  inspirationContext: null,
+});
+
+const legacyDirect = parseSkillFitAnalysis({
+  ...base,
+  challengeMode: "direct",
+  canGenerateChallenge: true,
   usableProperties: [bottleProperty],
   anchors: [{ property: bottleProperty, origin: "observed" }],
   evidenceRequest: null,
 });
 
-schemaOk("needs_evidence with a request is valid even with no observed property", {
+check(
+  "legacy direct records normalise to object_math",
+  legacyDirect.success && legacyDirect.data.challengeMode === "object_math",
+);
+
+const legacyNeedsEvidence = parseSkillFitAnalysis({
   ...base,
   fitScore: 0.35,
   challengeMode: "needs_evidence",
@@ -106,86 +218,45 @@ schemaOk("needs_evidence with a request is valid even with no observed property"
   evidenceRequest: sneakerEvidence,
 });
 
-schemaOk("grounded_scenario with one observed quantity is valid", {
-  ...base,
-  challengeMode: "grounded_scenario",
-  canGenerateChallenge: true,
-  usableProperties: [bottleProperty],
-  anchors: [{ property: bottleProperty, origin: "observed" }],
-  evidenceRequest: null,
-});
-
-schemaOk("direct with a countable structure is valid", {
-  ...base,
-  fitScore: 0.85,
-  selectedSkillCode: "multiplication",
-  challengeMode: "direct",
-  canGenerateChallenge: true,
-  usableProperties: [eggProperty],
-  anchors: [{ property: eggProperty, origin: "observed" }],
-  evidenceRequest: null,
-});
-
-schemaFails("investigation anchors cannot carry given_in_problem", {
-  ...base,
-  challengeMode: "grounded_scenario",
-  canGenerateChallenge: true,
-  usableProperties: [bottleProperty],
-  anchors: [
-    { property: bottleProperty, origin: "observed" },
-    { property: "amount poured out", origin: "given_in_problem" },
-  ],
-  evidenceRequest: null,
-});
+check(
+  "legacy needs_evidence records normalise to investigation_math",
+  legacyNeedsEvidence.success &&
+    legacyNeedsEvidence.data.challengeMode === "investigation_math",
+);
 
 // --- path resolver -----------------------------------------------------
 
-check("MIN_FIT_SCORE is still 0.6", MIN_FIT_SCORE === 0.6);
-
-const bottleDirectBelowThreshold = resolveInvestigation(
+const bottleObjectMath = resolveInvestigation(
   {
-    challengeMode: "direct",
+    challengeMode: "object_math",
     fitScore: 0.55,
     reason: "One printed volume is visible.",
     evidenceRequest: null,
+    inspirationContext: null,
   },
   [bottleProperty],
 );
 
 check(
-  "bottle + subtraction below the direct bar becomes grounded_scenario",
-  bottleDirectBelowThreshold.challengeMode === "grounded_scenario" &&
-    bottleDirectBelowThreshold.evidenceRequest === null,
-);
-
-const bottleGrounded = resolveInvestigation(
-  {
-    challengeMode: "grounded_scenario",
-    fitScore: 0.72,
-    reason: "Printed volume can anchor a remaining-amount problem.",
-    evidenceRequest: null,
-  },
-  [bottleProperty],
-);
-
-check(
-  "bottle + subtraction with an observed volume stays grounded_scenario",
-  bottleGrounded.challengeMode === "grounded_scenario",
+  "bottle + subtraction with an observed volume is object_math",
+  bottleObjectMath.challengeMode === "object_math" &&
+    bottleObjectMath.evidenceRequest === null,
 );
 
 const sneakerNeedsEvidence = resolveInvestigation(
   {
-    challengeMode: "needs_evidence",
+    challengeMode: "investigation_math",
     fitScore: 0.3,
     reason: "No useful number is visible yet.",
     evidenceRequest: sneakerEvidence,
+    inspirationContext: null,
   },
   [],
 );
 
 check(
-  "sneaker + subtraction with no number becomes needs_evidence",
-  sneakerNeedsEvidence.challengeMode === "needs_evidence" &&
+  "sneaker + subtraction with no number becomes investigation_math",
+  sneakerNeedsEvidence.challengeMode === "investigation_math" &&
     sneakerNeedsEvidence.evidenceRequest?.targetProperty === "shoe size",
 );
 
@@ -195,58 +266,113 @@ const sneakerMislabelled = resolveInvestigation(
     fitScore: 0.2,
     reason: "No numbers on the outside.",
     evidenceRequest: sneakerEvidence,
+    inspirationContext: null,
   },
   [],
 );
 
 check(
-  "poor_fit with a valid evidence request is upgraded to needs_evidence",
-  sneakerMislabelled.challengeMode === "needs_evidence",
+  "poor_fit with a valid evidence request is upgraded to investigation_math",
+  sneakerMislabelled.challengeMode === "investigation_math",
 );
 
-const eggsDirect = resolveInvestigation(
+const eggsObjectMath = resolveInvestigation(
   {
-    challengeMode: "direct",
+    challengeMode: "object_math",
     fitScore: 0.88,
     reason: "Twelve eggs are visible.",
     evidenceRequest: null,
+    inspirationContext: null,
   },
   [eggProperty],
 );
 
 check(
-  "twelve visible eggs at a high score stay direct",
-  eggsDirect.challengeMode === "direct",
+  "twelve visible eggs stay object_math",
+  eggsObjectMath.challengeMode === "object_math",
 );
 
 const confidentUngrounded = resolveInvestigation(
   {
-    challengeMode: "direct",
+    challengeMode: "object_math",
     fitScore: 0.9,
     reason: "This would make a good challenge.",
     evidenceRequest: null,
+    inspirationContext: null,
   },
   [],
 );
 
 check(
-  "a high score with no grounded property cannot be direct",
+  "a high score with no grounded property cannot be object_math",
   confidentUngrounded.challengeMode === "poor_fit",
 );
 
 const confidentUngroundedWithAsk = resolveInvestigation(
   {
-    challengeMode: "direct",
+    challengeMode: "object_math",
     fitScore: 0.9,
     reason: "This would make a good challenge.",
     evidenceRequest: sneakerEvidence,
+    inspirationContext: null,
   },
   [],
 );
 
 check(
-  "a high score with no grounded property but a request becomes needs_evidence",
-  confidentUngroundedWithAsk.challengeMode === "needs_evidence",
+  "a high score with no grounded property but a request becomes investigation_math",
+  confidentUngroundedWithAsk.challengeMode === "investigation_math",
+);
+
+const inspiredWallet = resolveInvestigation(
+  {
+    challengeMode: "inspired_math",
+    fitScore: 0.4,
+    reason: "A wallet can inspire money maths.",
+    evidenceRequest: null,
+    inspirationContext: {
+      topic: "money and prices",
+      reason: "Wallets are used to hold money, which supports addition.",
+    },
+  },
+  [],
+);
+
+check(
+  "wallet + addition can be inspired_math without a visible amount",
+  inspiredWallet.challengeMode === "inspired_math",
+);
+
+const poorFitWithInspiration = resolveInvestigation(
+  {
+    challengeMode: "poor_fit",
+    fitScore: 0.1,
+    reason: "No printed numbers.",
+    evidenceRequest: null,
+    inspirationContext: basketballInspiration,
+  },
+  [],
+);
+
+check(
+  "poor_fit with inspiration context is upgraded to inspired_math",
+  poorFitWithInspiration.challengeMode === "inspired_math",
+);
+
+const poorFitWithShape = resolveInvestigation(
+  {
+    challengeMode: "poor_fit",
+    fitScore: 0.1,
+    reason: "No printed numbers.",
+    evidenceRequest: null,
+    inspirationContext: null,
+  },
+  [sphereProperty],
+);
+
+check(
+  "poor_fit with a grounded shape is upgraded to object_math",
+  poorFitWithShape.challengeMode === "object_math",
 );
 
 const truePoorFit = resolveInvestigation(
@@ -255,13 +381,87 @@ const truePoorFit = resolveInvestigation(
     fitScore: 0.1,
     reason: "No honest path remains.",
     evidenceRequest: null,
+    inspirationContext: null,
   },
   [],
 );
 
 check(
-  "poor_fit without a request or an anchor stays poor_fit",
+  "poor_fit without a request, anchor, or inspiration stays poor_fit",
   truePoorFit.challengeMode === "poor_fit",
+);
+
+const blankSky: ObjectAnalysis = {
+  objectName: "sky",
+  category: "scene",
+  confidence: 0.4,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: [],
+  observableProperties: [],
+};
+
+check(
+  "a featureless scene has no fallback investigation",
+  fallbackEvidenceRequest(blankSky, "addition") === null,
+);
+
+const basketball: ObjectAnalysis = {
+  objectName: "basketball",
+  category: "sports equipment",
+  confidence: 0.93,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: [
+    "sphere",
+    "circular panels",
+    "curved surface",
+    "symmetry",
+  ],
+  observableProperties: ["orange pebbled surface", "black seams"],
+};
+
+const recoveredGeometry = recoverInvestigation(
+  truePoorFit,
+  basketball,
+  "geometry",
+);
+
+check(
+  "basketball + geometry recovers as object_math from visible shape",
+  recoveredGeometry.resolved.challengeMode === "object_math" &&
+    recoveredGeometry.usableProperties.includes("sphere"),
+);
+
+check(
+  "readingAnchors for geometry uses shape, not a printed number",
+  readingAnchors(basketball, "geometry").includes("sphere"),
+);
+
+const sneaker: ObjectAnalysis = {
+  objectName: "sneaker",
+  category: "footwear",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["left-right symmetry", "curved sole"],
+  observableProperties: ["laces", "tread pattern"],
+};
+
+const recoveredMeasurement = recoverInvestigation(
+  truePoorFit,
+  sneaker,
+  "measurement",
+);
+
+check(
+  "sneaker + measurement recovers as investigation_math when no size is visible",
+  recoveredMeasurement.resolved.challengeMode === "investigation_math" &&
+    recoveredMeasurement.resolved.evidenceRequest?.type ===
+      "student_measurement",
 );
 
 // --- investigation anchors are only observed or student_provided -------
@@ -276,7 +476,7 @@ check(
 
 const clueAnchors = buildAnchors([], sneakerEvidence);
 check(
-  "needs_evidence records the target as student_provided",
+  "investigation_math records the target as student_provided",
   clueAnchors.length === 1 &&
     clueAnchors[0]?.origin === "student_provided" &&
     clueAnchors[0]?.property === "shoe size",

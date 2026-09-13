@@ -45,9 +45,10 @@ export async function assessQuestSkillFit({
   }
 
   // The investigation is kept for every path that produced one, including
-  // needs_evidence and poor_fit. `object_metadata`, `identified_object` and
-  // `image_path` are not in the update. 'ready' is not a status this stage
-  // may set: a quest is ready when verification accepts a challenge.
+  // investigation_math, inspired_math, and poor_fit. `object_metadata`,
+  // `identified_object` and `image_path` are not in the update. 'ready' is
+  // not a status this stage may set: a quest is ready when verification
+  // accepts a challenge.
   const { error } = await createAdminClient()
     .from("quests")
     .update({ validation_result: result.fit })
@@ -65,9 +66,9 @@ export async function assessQuestSkillFit({
     await setQuestStatus(questId, "rejected");
   }
 
-  // direct, grounded_scenario, and needs_evidence all stay 'pending'.
-  // needs_evidence is an investigation waiting for one more observation, which
-  // is still work waiting to happen rather than a finished or abandoned quest.
+  // object_math, investigation_math, and inspired_math all stay 'pending'.
+  // investigation_math waits for one more observation. inspired_math is a
+  // valid path stored for a later stage; this step does not generate from it.
 
   return result;
 }

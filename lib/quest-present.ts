@@ -90,7 +90,7 @@ export type PresentReadyQuestInput = {
   discoveryText: string;
   objectConnection: string;
   valuesUsed: readonly UsedValue[];
-  challengeMode: "direct" | "grounded_scenario";
+  challengeMode: "object_math" | "direct" | "grounded_scenario";
   question: string;
   hint1: string | null;
   answer: CorrectAnswer;
@@ -115,6 +115,9 @@ const FORBIDDEN_PAYLOAD_KEYS = [
   "skillId",
   "challengeMode",
   "grounded_scenario",
+  "object_math",
+  "investigation_math",
+  "inspired_math",
   "given_in_problem",
   "observed",
   "student_provided",
@@ -147,7 +150,10 @@ export function presentStudentQuest(
         ? null
         : copy.quest.experience.lookClosely(objectNameSpoken, primary.display),
     practiceLine: copy.quest.experience.thatMeasurement(skillSpoken),
-    imaginedSituation: input.challengeMode === "grounded_scenario",
+    imaginedSituation:
+      input.challengeMode === "grounded_scenario" ||
+      (input.challengeMode === "object_math" &&
+        input.valuesUsed.some((value) => value.origin === "given_in_problem")),
     highlightedValues,
     question: input.question,
     hint: emptyToNull(input.hint1),
