@@ -47,7 +47,7 @@ export async function assessQuestSkillFit({
   // The investigation is kept for every path that produced one, including
   // needs_evidence and poor_fit. `object_metadata`, `identified_object` and
   // `image_path` are not in the update. 'ready' is not a status this stage
-  // may set: a quest is ready when a valid challenge exists, and none does yet.
+  // may set: a quest is ready when verification accepts a challenge.
   const { error } = await createAdminClient()
     .from("quests")
     .update({ validation_result: result.fit })

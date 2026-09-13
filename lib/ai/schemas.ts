@@ -121,9 +121,9 @@ export const InvestigationAnchorSchema = z.strictObject({
 /**
  * The four ways an investigation can conclude.
  *
- * `direct` and `grounded_scenario` are both ready for a future Challenge
- * Generator. They differ in whether the photograph already holds enough, or
- * whether the problem may introduce an extra hypothetical value. `needs_evidence`
+ * `direct` and `grounded_scenario` are both ready for Challenge Generation.
+ * They differ in whether the photograph already holds enough, or whether
+ * the problem may introduce an extra hypothetical value. `needs_evidence`
  * is still a live quest. `poor_fit` is the last resort.
  */
 export const CHALLENGE_MODES = [
@@ -227,24 +227,90 @@ export const DiscoverySchema = z.strictObject({
 
 /**
  * A number the challenge is built on, carried alongside the question so
- * grading and review can see the arithmetic was done on values the object
- * really had. Unit is optional because counts ("8 segments") have none.
+ * grading and review can see where the figure came from. Unit is optional
+ * because counts ("8 segments") have none.
+ *
+ * `origin` is required: a later verifier cannot tell an observed 11 fl oz
+ * from a hypothetical 4 if the two are stored the same way.
  */
 export const UsedValueSchema = z.strictObject({
   label: text,
   value: z.number(),
   unit: text.optional(),
+  origin: z.enum(CHALLENGE_VALUE_ORIGINS),
 });
+
+/**
+ * One input the structured computation reads. Same shape as a used value so
+ * a verifier can match the two lists without a second vocabulary.
+ */
+export const ComputationOperandSchema = UsedValueSchema;
+
+/**
+ * What the student is asked to produce. Structured so grading can compare
+ * parts rather than a free-text string. Matches challenges.correct_answer.
+ */
+export const CorrectAnswerSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("number"),
+    value: z.number(),
+    unit: text.optional(),
+  }),
+  z.strictObject({
+    type: z.literal("fraction"),
+    numerator: z.int(),
+    denominator: z.int().positive(),
+    unit: text.optional(),
+  }),
+]);
+
+/**
+ * A constrained computation the next verification stage can evaluate
+ * without executing arbitrary expressions. Small on purpose: only the
+ * Grade 3–5 operations SIDEQUEST actually generates.
+ */
+export const ComputationSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("arithmetic"),
+    operation: z.enum(["add", "subtract", "multiply"]),
+    operands: z.array(ComputationOperandSchema).min(2).max(4),
+  }),
+  z.strictObject({
+    type: z.literal("division"),
+    operation: z.enum(["quotient", "whole_groups", "remainder"]),
+    dividend: ComputationOperandSchema,
+    divisor: ComputationOperandSchema,
+  }),
+  z.strictObject({
+    type: z.literal("fraction_of"),
+    quantity: ComputationOperandSchema,
+    numerator: z.int().positive(),
+    denominator: z.int().positive(),
+  }),
+  z.strictObject({
+    type: z.literal("fraction_remaining"),
+    totalParts: ComputationOperandSchema,
+    usedParts: ComputationOperandSchema,
+    simplify: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal("conversion"),
+    operation: z.enum(["multiply", "divide"]),
+    value: ComputationOperandSchema,
+    factor: ComputationOperandSchema,
+  }),
+  z.strictObject({
+    type: z.literal("geometry"),
+    operation: z.enum(["perimeter", "area"]),
+    shape: z.enum(["rectangle", "square", "triangle"]),
+    dimensions: z.array(ComputationOperandSchema).min(1).max(4),
+  }),
+]);
 
 export const ChallengeSchema = z.strictObject({
   question: text,
   skillCode,
-  /**
-   * Structured rather than a string because the answer can be a number, a
-   * fraction, or a value with a unit, and grading needs the parts. Matches
-   * challenges.correct_answer, which is jsonb for the same reason.
-   */
-  correctAnswer: z.json(),
+  correctAnswer: CorrectAnswerSchema,
   solution: text,
   hint1: text,
   hint2: text,
@@ -254,6 +320,11 @@ export const ChallengeSchema = z.strictObject({
   valuesUsed: z.array(UsedValueSchema).min(1),
   /** How the answer should be checked — the instruction the grading stage follows. */
   verificationStrategy: text,
+  /**
+   * Everything a deterministic verifier needs to recompute the answer.
+   * Not an expression language: only the union above.
+   */
+  computation: ComputationSchema,
 });
 
 // ---------------------------------------------------------------------------
@@ -324,6 +395,9 @@ export type Discovery = z.infer<typeof DiscoverySchema>;
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];
 
 export type UsedValue = z.infer<typeof UsedValueSchema>;
+export type ComputationOperand = z.infer<typeof ComputationOperandSchema>;
+export type CorrectAnswer = z.infer<typeof CorrectAnswerSchema>;
+export type Computation = z.infer<typeof ComputationSchema>;
 /** The generated problem. Distinct from the mock `Challenge` in lib/types.ts, which is UI shape. */
 export type GeneratedChallenge = z.infer<typeof ChallengeSchema>;
 

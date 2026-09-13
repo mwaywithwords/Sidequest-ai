@@ -9,11 +9,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * - 'pending'    work is still waiting to happen: the photo has not been
  *                learned from yet, an investigation is waiting for one more
- *                observation, or a discovery has been stored and a challenge
- *                has not been generated yet.
+ *                observation, or a candidate challenge has been stored and
+ *                is waiting for deterministic verification.
  * - 'processing' picked up by a stage.
- * - 'ready'      a valid challenge exists. Only the stage that generates one may
- *                set this, which is why nothing in the pipeline sets it today.
+ * - 'ready'      a verified challenge exists. Only the verification stage
+ *                may set this. Generation must not.
  * - 'rejected'   read successfully, but no honest maths came out of it. This is
  *                the student's cue to photograph something else.
  * - 'failed'     the pipeline itself did not work.

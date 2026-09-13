@@ -10,6 +10,7 @@ import {
 } from "@/lib/image-capture";
 import { getOrCreateProfileId } from "@/lib/profile";
 import { analyzeQuestObject } from "@/lib/quest-analysis";
+import { generateQuestChallenge } from "@/lib/quest-challenge";
 import { recordQuestDiscovery } from "@/lib/quest-discovery";
 import { assessQuestSkillFit } from "@/lib/quest-fit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,18 +22,18 @@ import {
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Five model calls now sit inside this request, one of them reading small print,
+ * Six model calls now sit inside this request, one of them reading small print,
  * so it needs longer than a platform's default ten seconds. Each call is bounded
  * by the client timeout in lib/ai/openai.ts well before this.
  */
-export const maxDuration = 90;
+export const maxDuration = 120;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
  * validate the file, screen it for safety and suitability, store it in the
  * private bucket, record the row that points at it, read the object in it,
  * investigate whether that object can support the mission the student chose,
- * then write one short discovery about it.
+ * write one short discovery about it, then generate a candidate challenge.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
@@ -41,9 +42,8 @@ export const maxDuration = 90;
  *
  * The stages run here for the same reason: this is the one point every photo
  * must pass through, and each stage is a gate the next one depends on.
- * Discovery is the first generated student-facing fact. A quest that gets
- * this far still stays 'pending' until challenge generation exists to finish
- * it.
+ * A generated challenge is a candidate only. The quest stays 'pending' until
+ * deterministic verification exists to make it displayable.
  */
 export async function POST(request: Request) {
   let form: FormData;
@@ -206,10 +206,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Last generated fact for now: one short discovery from the reading and
-    // the investigation, with no second look at the photograph. Challenge
-    // generation is the next stage and does not exist yet, so a failure here
-    // stops the pipeline rather than being skipped.
     const discovery = await recordQuestDiscovery({
       questId,
       analysis: reading.analysis,
@@ -221,6 +217,23 @@ export async function POST(request: Request) {
       console.warn("[POST /api/quests] no discovery", discovery.failure.reason);
 
       return refused(discovery.failure.reason);
+    }
+
+    // A candidate only. Reloads the stored reading and investigation; does
+    // not fetch the photograph again. The response does not include the
+    // question or the answer — verification has not run.
+    const challenge = await generateQuestChallenge(questId);
+
+    if (challenge.status === "poorFit") {
+      console.warn("[POST /api/quests] no challenge", challenge.failure.reason);
+
+      return refused(challenge.failure.reason);
+    }
+
+    if (challenge.status !== "ok") {
+      console.warn("[POST /api/quests] no challenge", challenge.failure.reason);
+
+      return refused(challenge.failure.reason);
     }
 
     return NextResponse.json(
