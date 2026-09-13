@@ -165,6 +165,18 @@ export const copy = {
   },
 
   /**
+   * What the discovery stage says when it cannot write a fact it trusts.
+   *
+   * Same discipline as the other pipeline copy: one next step, no internals.
+   * The student is not told that a model failed, only that this photo did
+   * not become a Sidequest and that another try is the way out.
+   */
+  discovery: {
+    failure:
+      "Something went wrong finding an interesting fact in that photo, so no Sidequest came out of it. Take another one and try again.",
+  },
+
+  /**
    * What a student sees when a photograph does not become a Sidequest.
    *
    * These are not errors. A detour is the product saying "not this object,
