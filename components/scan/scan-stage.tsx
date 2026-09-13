@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ClueCollection,
+  CluePanel,
+} from "@/components/scan/clue-panel";
 import { DetourPanel } from "@/components/scan/detour-panel";
 import { ProcessingOverlay } from "@/components/scan/processing-overlay";
 import { Button } from "@/components/ui/button";
@@ -12,11 +16,9 @@ import {
   ImageIcon,
   RetryIcon,
 } from "@/components/ui/icons";
+import { type ClueRequest, presentClue } from "@/lib/clue";
 import { copy } from "@/lib/copy";
-import {
-  type DetourRequest,
-  presentDetour,
-} from "@/lib/detour";
+import { type DetourRequest, presentDetour } from "@/lib/detour";
 import {
   type ImageRejection,
   MAX_IMAGE_MB,
@@ -27,7 +29,7 @@ import type { Grade, Skill } from "@/lib/types";
 
 type Stage = "idle" | "preview" | "processing";
 
-/** Roughly the cadence the real two-stage pipeline will run at. */
+/** Roughly the cadence the real pipeline runs at. */
 const STEP_MS = 750;
 
 const STEPS = copy.scan.processingSteps;
@@ -72,6 +74,7 @@ export function ScanStage({
   const router = useRouter();
   const cameraInput = useRef<HTMLInputElement>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
+  const cluePhotoInput = useRef<HTMLInputElement>(null);
 
   const [stage, setStage] = useState<Stage>("idle");
   // The file is held, not just its preview URL, so a failed upload can resend
@@ -79,10 +82,20 @@ export function ScanStage({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejection, setRejection] = useState<ImageRejection | null>(null);
-  // Student-safe presentation data only. The pipeline reason never lands here.
   const [detour, setDetour] = useState<DetourRequest | null>(null);
+  const [clue, setClue] = useState<ClueRequest | null>(null);
+  const [clueCollection, setClueCollection] = useState<ClueCollection>({
+    status: "idle",
+  });
   const [uploadFailed, setUploadFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+
+  const revokeCluePreview = useCallback(() => {
+    setClueCollection((current) => {
+      if (current.status === "photo") URL.revokeObjectURL(current.previewUrl);
+      return { status: "idle" };
+    });
+  }, []);
 
   const clearPicked = useCallback(() => {
     setFile(null);
@@ -90,7 +103,8 @@ export function ScanStage({
       if (current) URL.revokeObjectURL(current);
       return null;
     });
-  }, []);
+    revokeCluePreview();
+  }, [revokeCluePreview]);
 
   useEffect(() => clearPicked, [clearPicked]);
 
@@ -99,6 +113,7 @@ export function ScanStage({
       clearPicked();
       setRejection(reason);
       setDetour(null);
+      setClue(null);
       setUploadFailed(false);
       setStage("idle");
     },
@@ -113,13 +128,29 @@ export function ScanStage({
   const refuse = useCallback((request: DetourRequest) => {
     setRejection(null);
     setDetour(request);
+    setClue(null);
+    revokeCluePreview();
     setUploadFailed(false);
     setStage("preview");
-  }, []);
+  }, [revokeCluePreview]);
 
-  const dismissDetour = useCallback(() => {
+  /**
+   * An investigation that needs one more observation. The original photo and
+   * quest stay; this is not a failure and not a detour.
+   */
+  const beginClue = useCallback((request: ClueRequest) => {
+    setRejection(null);
+    setDetour(null);
+    setClue(request);
+    revokeCluePreview();
+    setUploadFailed(false);
+    setStage("preview");
+  }, [revokeCluePreview]);
+
+  const dismissInvestigation = useCallback(() => {
     clearPicked();
     setDetour(null);
+    setClue(null);
     setRejection(null);
     setUploadFailed(false);
     setStage("idle");
@@ -127,15 +158,10 @@ export function ScanStage({
 
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
     const picked = event.target.files?.[0];
-    // Allow re-picking the same file, which otherwise fires no change event.
     event.target.value = "";
 
-    // Dismissing the picker is a change of mind, not a mistake to report.
     if (!picked) return;
 
-    // Checks the file as it sits on the device, so a full-size camera photo
-    // passes here and gets normalised on the way out. The server re-checks the
-    // prepared upload against its own, much smaller, budget.
     const problem = validateImageFile(picked);
     if (problem) {
       reject(problem);
@@ -145,10 +171,35 @@ export function ScanStage({
     clearPicked();
     setRejection(null);
     setDetour(null);
+    setClue(null);
     setUploadFailed(false);
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
     setStage("preview");
+  }
+
+  /**
+   * A supporting photograph for the current investigation. It must not replace
+   * the original object, and it is not uploaded yet — multi-image storage is
+   * the next implementation step.
+   */
+  function handleCluePhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!picked) return;
+
+    const problem = validateImageFile(picked);
+    if (problem) {
+      // The original investigation photo is still the one on screen. A bad
+      // supporting shot should not wipe it.
+      return;
+    }
+
+    setClueCollection((current) => {
+      if (current.status === "photo") URL.revokeObjectURL(current.previewUrl);
+      return { status: "photo", previewUrl: URL.createObjectURL(picked) };
+    });
   }
 
   async function findTheMath() {
@@ -159,13 +210,12 @@ export function ScanStage({
 
     setRejection(null);
     setDetour(null);
+    setClue(null);
+    revokeCluePreview();
     setUploadFailed(false);
     setStepIndex(0);
     setStage("processing");
 
-    // Hold the overlay for a full run of the messages even when the upload
-    // beats them, so the wait reads as work rather than a flicker. A slower
-    // upload just rests on the last message until it finishes.
     const [outcome] = await Promise.all([
       uploadQuestImage(file, grade, skill.id),
       new Promise((resolve) => setTimeout(resolve, STEP_MS * STEPS.length)),
@@ -175,6 +225,15 @@ export function ScanStage({
       router.push(
         `/quest/${questId}?grade=${grade}&skill=${skill.id}&quest=${outcome.questId}`,
       );
+      return;
+    }
+
+    if (outcome.status === "needsEvidence") {
+      beginClue({
+        questId: outcome.questId,
+        objectName: outcome.objectName,
+        evidenceRequest: outcome.evidenceRequest,
+      });
       return;
     }
 
@@ -188,7 +247,6 @@ export function ScanStage({
       return;
     }
 
-    // Nothing was persisted, so go back to the photo with a retry offered.
     setUploadFailed(true);
     setStage("preview");
   }
@@ -204,23 +262,36 @@ export function ScanStage({
   }, [stage]);
 
   const notice = problemNotice(rejection, uploadFailed);
+  const investigating = clue !== null;
 
   return (
     <div className="flex flex-col gap-6">
-      {detour ? (
+      {investigating ? (
+        <CluePanel
+          questId={clue.questId}
+          presentation={presentClue(clue)}
+          type={clue.evidenceRequest.type}
+          accent={skill.accent}
+          collection={clueCollection}
+          onAddPhoto={() => cluePhotoInput.current?.click()}
+          onStartEntry={() => setClueCollection({ status: "entering" })}
+          onSaveEntry={(value) => setClueCollection({ status: "value", value })}
+          onChangeObject={dismissInvestigation}
+        />
+      ) : detour ? (
         <DetourPanel
           presentation={presentDetour(detour, skill)}
           accent={skill.accent}
           primary={{
             label: "Find Another Object",
-            onClick: dismissDetour,
+            onClick: dismissInvestigation,
           }}
           secondary={
             detour.offerSkillChange
               ? {
                   label: "Try Another Math Skill",
                   href: `/setup?grade=${grade}`,
-                  onClick: dismissDetour,
+                  onClick: dismissInvestigation,
                 }
               : undefined
           }
@@ -257,7 +328,6 @@ export function ScanStage({
             <img
               src={previewUrl}
               alt={copy.scan.previewAlt}
-              // Catches formats the browser accepted but cannot actually decode.
               onError={() => reject("unsupported")}
               className="max-h-[24rem] w-full object-contain"
             />
@@ -300,8 +370,16 @@ export function ScanStage({
         onChange={handlePick}
         className="hidden"
       />
+      <input
+        ref={cluePhotoInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleCluePhoto}
+        className="hidden"
+      />
 
-      {detour ? (
+      {investigating || detour ? (
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button
             variant="secondary"

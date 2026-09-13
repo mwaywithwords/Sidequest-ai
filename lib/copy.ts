@@ -75,10 +75,35 @@ export const copy = {
       "Something went wrong sending your photo, so nothing was saved. It's still here — you can send it again.",
     processingSteps: [
       "Looking closely…",
-      "Finding the math hiding in your photo…",
+      "Finding what we can use…",
       "Checking your Sidequest…",
-      "Building your challenge…",
     ],
+  },
+
+  /**
+   * What the student sees when the first photograph can support the skill,
+   * but SIDEQUEST still needs one more observation. This is progress, not a
+   * detour: the object stayed, the quest stayed, and the next step is a clue.
+   */
+  clue: {
+    eyebrow: "SIDEQUEST CLUE",
+    heading: "I think we can use this.",
+    investigate: (objectName: string) =>
+      `Let's investigate your ${objectName} a little more.`,
+    cta: {
+      second_photo: "Add Another Photo",
+      student_measurement: "Enter Measurement",
+      student_count: "Enter Count",
+      student_input: "Answer Question",
+    },
+    replacePhoto: "Replace Clue Photo",
+    saveClue: "Save this clue",
+    measurementPlaceholder: "48 inches",
+    countPlaceholder: "8",
+    inputPlaceholder: "Your answer",
+    photoReady: "Nice — that extra photo is ready for the next step.",
+    valueReady: "Got it. We'll use this in the next step.",
+    anotherObject: "Choose a different object",
   },
 
   /**

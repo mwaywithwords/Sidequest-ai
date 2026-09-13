@@ -1,8 +1,13 @@
 import {
+  parseEvidenceRequest,
+  sanitiseObjectName,
+} from "@/lib/clue";
+import {
   type DetourRequest,
   isDetourKind,
   sanitiseSuggestions,
 } from "@/lib/detour";
+import type { EvidenceRequest } from "@/lib/ai/schemas";
 import type { ImageRejection } from "@/lib/image-capture";
 import { prepareImageForUpload } from "@/lib/image-prepare";
 import type { Grade, SkillId } from "@/lib/types";
@@ -11,15 +16,19 @@ import type { Grade, SkillId } from "@/lib/types";
  * What came back from handing a photo to the server.
  *
  * The split matters for what the student is told. "rejected" is the server
- * disagreeing with the file itself, which deserves the same specific wording
- * the browser check already uses, and retrying the same bytes would only fail
- * again. "refused" is a stage of the pipeline turning the photo away, already
- * mapped to a student-safe detour. "failed" is everything else — offline,
- * storage, database, or a stage that could not finish — where the same photo
- * is worth resending.
+ * disagreeing with the file itself. "refused" is a stage turning the photo
+ * away, already mapped to a student-safe detour. "needsEvidence" is progress:
+ * the quest is alive and waiting for one more observation. "failed" is
+ * everything else, where the same photo is worth resending.
  */
 export type UploadOutcome =
   | { status: "ok"; questId: string }
+  | {
+      status: "needsEvidence";
+      questId: string;
+      objectName: string;
+      evidenceRequest: EvidenceRequest;
+    }
   | { status: "rejected"; reason: ImageRejection }
   | { status: "refused"; detour: DetourRequest }
   | { status: "failed" };
@@ -30,14 +39,11 @@ function isRejection(value: unknown): value is ImageRejection {
 
 /**
  * Normalises the photo, posts it to the upload boundary, and returns the new
- * quest's id.
+ * quest's id — or the investigation that should continue from it.
  *
  * Preparation lives here rather than in the component because getting a photo
  * to the server is what this module is for, and the server only ever sees the
  * prepared file — the original never leaves the device.
- *
- * The body is FormData so the browser sets the multipart boundary itself;
- * setting Content-Type by hand here would corrupt the request.
  */
 export async function uploadQuestImage(
   file: File,
@@ -46,9 +52,6 @@ export async function uploadQuestImage(
 ): Promise<UploadOutcome> {
   const prepared = await prepareImageForUpload(file);
 
-  // The browser could not decode it, which in practice means an HEIC outside
-  // Safari. Reported as 'unsupported' because from the student's side it is
-  // the same problem as a file that was never a readable photo.
   if (prepared === null) {
     return { status: "rejected", reason: "unsupported" };
   }
@@ -62,7 +65,6 @@ export async function uploadQuestImage(
   try {
     response = await fetch("/api/quests", { method: "POST", body });
   } catch {
-    // Offline, or the request was cut off in flight.
     return { status: "failed" };
   }
 
@@ -74,18 +76,26 @@ export async function uploadQuestImage(
 
   if (response.ok) {
     const questId = field("questId");
+    if (typeof questId !== "string") return { status: "failed" };
 
-    return typeof questId === "string"
-      ? { status: "ok", questId }
-      : { status: "failed" };
+    if (field("challengeMode") === "needs_evidence") {
+      const evidenceRequest = parseEvidenceRequest(field("evidenceRequest"));
+      if (evidenceRequest === null) return { status: "failed" };
+
+      return {
+        status: "needsEvidence",
+        questId,
+        objectName: sanitiseObjectName(field("objectName")),
+        evidenceRequest,
+      };
+    }
+
+    return { status: "ok", questId };
   }
 
   const reason = field("error");
 
   if (reason === "refused") {
-    // Kind is already student-safe. An unknown or missing kind becomes a
-    // generic "everyday object" detour rather than showing the student a
-    // code, so a truncated response still has a way out.
     const rawKind = field("kind");
     const kind = isDetourKind(rawKind) ? rawKind : "unsafe";
 
@@ -99,9 +109,6 @@ export async function uploadQuestImage(
     };
   }
 
-  // 'badMission' also lands here: the grade or skill in the URL was not one we
-  // recognise, which is not something retrying the photo can fix, but it is
-  // rare enough not to deserve its own screen.
   return isRejection(reason)
     ? { status: "rejected", reason }
     : { status: "failed" };

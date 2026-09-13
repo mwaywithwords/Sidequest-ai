@@ -4,8 +4,11 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { openai } from "@/lib/ai/openai";
 import {
+  finalizeObjectReading,
+  sanitizeObservations,
+} from "@/lib/ai/object-observations";
+import {
   type ObjectAnalysis,
-  ObjectAnalysisSchema,
   type QuestFailureReason,
   type QuestGenerationFailure,
   QuestGenerationFailureSchema,
@@ -35,17 +38,6 @@ import { copy } from "@/lib/copy";
  * for once per quest; the gate's job is coarse by comparison.
  */
 const ANALYSIS_MODEL = "gpt-5.4";
-
-/**
- * Below this, the object was not really identified.
- *
- * The instructions tell the model to widen its answer rather than guess — 'soft
- * drink can' over 'Pepsi Zero Sugar can' — so a truthful reading of an ordinary
- * object should land well above this. A score under it means the photo defeated
- * recognition, and the honest response is to ask for a different object rather
- * than to build a challenge on a shrug.
- */
-const MIN_CONFIDENCE = 0.5;
 
 /**
  * The shape the model fills in, which is not the shape the application uses.
@@ -152,63 +144,31 @@ export async function analyzeObject(image: string): Promise<ObjectAnalysisResult
     return failure("generation_failure");
   }
 
-  if (!wire.identifiable || wire.confidence < MIN_CONFIDENCE) {
+  const droppedMeasurements =
+    wire.visibleMeasurements.length -
+    sanitizeObservations(wire).visibleMeasurements.length;
+
+  if (droppedMeasurements > 0) {
+    console.warn("[object-analysis] dropped malformed measurements", {
+      dropped: droppedMeasurements,
+    });
+  }
+
+  const reading = finalizeObjectReading(wire);
+
+  if (reading.status === "ok") {
+    return { status: "ok", analysis: reading.analysis };
+  }
+
+  if (reading.status === "unknown_object") {
     console.warn("[object-analysis] object not identified");
-
-    return failure("unknown_object");
-  }
-
-  // Identified, but the photograph gave up nothing to count, read, or measure.
-  // A challenge built on this would have to invent its own numbers, which is the
-  // one thing the next stage must never be asked to do.
-  if (observationCount(wire) === 0) {
+  } else if (reading.status === "insufficient_information") {
     console.warn("[object-analysis] nothing observable to build on");
-
-    return failure("insufficient_information");
+  } else {
+    console.warn("[object-analysis] reading failed validation");
   }
 
-  // Copied field by field, so what crosses into the application is visible
-  // here: `identifiable` was a question for the model and stays behind, and a
-  // null brand becomes an absent one, which is what the schema's optional brand
-  // means — no brand was legible.
-  const parsed = ObjectAnalysisSchema.safeParse({
-    objectName: wire.objectName,
-    category: wire.category,
-    ...(wire.brand === null ? {} : { brand: wire.brand }),
-    confidence: wire.confidence,
-    visibleText: wire.visibleText,
-    visibleMeasurements: wire.visibleMeasurements,
-    countableProperties: wire.countableProperties,
-    shapeProperties: wire.shapeProperties,
-    observableProperties: wire.observableProperties,
-  });
-
-  if (!parsed.success) {
-    // Paths and codes only. The values that failed are the photograph's
-    // contents, and those do not belong in a log.
-    console.warn(
-      "[object-analysis] reading failed validation",
-      parsed.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        code: issue.code,
-      })),
-    );
-
-    return failure("generation_failure");
-  }
-
-  return { status: "ok", analysis: parsed.data };
-}
-
-/** How much the photograph actually gave us, across every kind of observation. */
-function observationCount(wire: z.infer<typeof WireAnalysisSchema>): number {
-  return (
-    wire.visibleText.length +
-    wire.visibleMeasurements.length +
-    wire.countableProperties.length +
-    wire.shapeProperties.length +
-    wire.observableProperties.length
-  );
+  return failure(reading.status);
 }
 
 /** The three ways this stage can decline. The other reasons belong to other stages. */

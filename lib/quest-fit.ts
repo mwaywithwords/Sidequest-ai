@@ -7,12 +7,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Grade, SkillId } from "@/lib/types";
 
 /**
- * The skill-fit stage, run against a stored quest.
+ * The math-investigation stage, run against a stored quest.
  *
- * Sits between the reading and the challenge that does not exist yet, and its
- * only job is to decide whether that challenge is allowed to be attempted. The
- * reading arrives as an argument rather than being re-read from the row: it has
- * already been through `ObjectAnalysisSchema` in this request, and the
+ * Sits between the reading and the challenge that does not exist yet. It
+ * decides whether a challenge may later be attempted, whether the quest should
+ * wait for one more observation, or whether this object honestly cannot support
+ * the skill.
+ *
+ * The reading arrives as an argument rather than being re-read from the row: it
+ * has already been through `ObjectAnalysisSchema` in this request, and the
  * photograph is not touched again.
  */
 export async function assessQuestSkillFit({
@@ -41,9 +44,9 @@ export async function assessQuestSkillFit({
     return result;
   }
 
-  // The judgement is kept either way, because it is the record of why this quest
-  // did or did not go on. `object_metadata`, `identified_object` and
-  // `image_path` are not in the update, and 'ready' is not a status this stage
+  // The investigation is kept for every path that produced one, including
+  // needs_evidence and poor_fit. `object_metadata`, `identified_object` and
+  // `image_path` are not in the update. 'ready' is not a status this stage
   // may set: a quest is ready when a valid challenge exists, and none does yet.
   const { error } = await createAdminClient()
     .from("quests")
@@ -57,11 +60,14 @@ export async function assessQuestSkillFit({
   }
 
   if (result.status === "poorFit") {
-    // 'rejected': read, judged, and found to hold no honest maths for this
-    // mission. Nothing downstream may pick it up, and the student is told what
-    // to try instead.
+    // 'rejected': investigated, and no honest path remained. Nothing downstream
+    // may pick it up, and the student is told what to try instead.
     await setQuestStatus(questId, "rejected");
   }
+
+  // direct, grounded_scenario, and needs_evidence all stay 'pending'.
+  // needs_evidence is an investigation waiting for one more observation, which
+  // is still work waiting to happen rather than a finished or abandoned quest.
 
   return result;
 }

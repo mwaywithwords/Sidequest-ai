@@ -2,8 +2,18 @@ import "server-only";
 
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import {
+  buildAnchors,
+  canGenerateFromMode,
+  MIN_FIT_SCORE,
+  resolveInvestigation,
+} from "@/lib/ai/investigation-path";
 import { openai } from "@/lib/ai/openai";
 import {
+  CHALLENGE_MODES,
+  EVIDENCE_REQUEST_TYPES,
+  type EvidenceRequest,
+  EvidenceRequestSchema,
   type ObjectAnalysis,
   type QuestGenerationFailure,
   QuestGenerationFailureSchema,
@@ -15,135 +25,139 @@ import { getSkill, SKILLS } from "@/lib/skills";
 import { type Grade, SKILL_IDS, type SkillId } from "@/lib/types";
 
 /**
- * Deciding whether this object actually supports the skill the student chose.
+ * The math-investigation stage: can this object support a legitimate,
+ * grade-appropriate investigation for the skill the student chose?
  *
- * The stage exists to be allowed to say no. A model asked to find fractions in a
- * wooden spoon will find some, and the result is the thing SIDEQUEST is supposed
- * to be the opposite of: a worksheet problem with a photograph stapled to it. So
- * the fit is judged before anything is generated, and a weak fit ends the quest
- * rather than lowering the bar for it.
+ * Object Analysis has already been conservative. This stage does not get the
+ * photograph again, and it may not invent a fact about the object. What it may
+ * do is be creative about the *path*: a bottle that shows 11 fl oz can anchor
+ * subtraction with a hypothetical amount poured out; a sneaker with no visible
+ * number can still be investigated by asking for the size label.
  *
- * Works from the validated `ObjectAnalysis` and nothing else. The photograph is
- * not fetched again and no new fact about the object may enter here: every
- * property this stage reports has to be traceable back to something the vision
- * stage already recorded, and that is enforced below rather than trusted.
+ * The camera starts the investigation. It does not have to finish it.
  */
 
 /**
- * The same model the reading uses. This is the pedagogical judgement in the
- * product — whether a connection is honest, and whether it suits a grade-3
- * student rather than a grade-5 one — and it runs on a page of JSON, so it is
- * cheap to do properly.
+ * The same model the reading uses. The judgement is pedagogical — whether a
+ * path is honest, and whether it suits the grade — and it runs on a page of
+ * JSON, so it is cheap to do properly.
  */
 const FIT_MODEL = "gpt-5.4";
 
-/**
- * The fit a challenge needs before it is worth building.
- *
- * One constant, and the only number in the stage. 0.6 rather than 0.5 because
- * 0.5 on a self-reported scale is a shrug, and a shrug is exactly the case this
- * stage exists to catch: the model can nearly always construct *something*, so
- * the question is whether it is leaning towards a real connection or away from
- * one. Below 0.6 it is hedging, and a hedged connection is a forced one.
- *
- * It is a floor, not a licence: a score above it still cannot produce a
- * challenge without at least one grounded property to anchor the maths.
- */
-export const MIN_FIT_SCORE = 0.6;
+export { MIN_FIT_SCORE };
 
 /**
- * Why the application refused a model-positive fit.
- *
- * Used only when `canGenerateChallenge` was true on the wire and the code then
- * set it false. The model's own reason is kept in every other case, including
- * when it already declined.
+ * What each skill has a natural claim on, including paths that need one more
+ * observation. Model-facing pedagogy, so it lives here rather than on the
+ * `Skill` records shipped to the browser.
  */
-function overrideReason(scoreTooLow: boolean, noGroundedProperty: boolean): string {
-  if (scoreTooLow && noGroundedProperty) {
-    return "The fit is below the minimum required, and no grounded property remains to anchor a challenge.";
-  }
-
-  if (noGroundedProperty) {
-    return "No observable property from the object reading can legitimately anchor this skill.";
-  }
-
-  return "The fit is below the minimum required to generate a challenge.";
-}
-
-/**
- * What each skill has a natural claim on.
- *
- * Model-facing pedagogy, so it lives here rather than on the `Skill` records in
- * lib/skills.ts, which are shipped to the browser for the setup and scan
- * screens. The whole table goes into every request because choosing sensible
- * alternatives means weighing the object against all seven, not just the one
- * that was picked.
- */
-const SKILL_AFFINITY: Record<SkillId, string> = {
+const SKILL_INVESTIGATION: Record<SkillId, string> = {
   addition:
-    "meaningful quantities, measurements, comparisons, and real amounts that can be combined",
+    "adding to an observed quantity; combining groups; totals; counts; measurements; hypothetical increases; comparing quantities. Example: 8 visible eyelets → 'if 3 more were added…'",
   subtraction:
-    "meaningful quantities, measurements, comparisons, and real amounts that can be removed, used up, or left over",
-  multiplication: "repeated units, groups, rows and columns, and quantities",
+    "removing from an observed quantity; amounts remaining; differences; measurement differences; capacity remaining; counts remaining; comparisons. Example: a bottle labelled 11 fl oz → 'if 4 ounces are poured out…' is a grounded_scenario, not a poor fit. One visible quantity is enough.",
+  multiplication:
+    "repeated units; repeated groups; rows; columns; pairs; scaling a real observed quantity; 'what if you had N of these?'. Example: one sneaker with 8 eyelets → 'if 4 sneakers had the same number…'",
   division:
-    "volume, capacity, quantities, packages, repeated units, and anything that can be shared out equally",
+    "equal sharing; grouping; portions; capacity divided among containers; quantities per group; repeated components. Example: 12 visible objects → 'if they were divided equally among 3 groups…'",
   fractions:
-    "divisible parts, portions, repeated sections, ratios, clock faces, containers, and grouped elements",
+    "equal parts; portions; sections; ratios; containers; clocks; groups; fractional use of a real quantity. A visible whole can be enough; do not require printed numerators.",
   measurement:
-    "visible length, weight, volume, capacity, dimensions, and labelled quantities",
+    "visible measurements; student measurement of length, width, height, volume, capacity, or time; comparisons. If no number is printed, asking the student to measure one side is needs_evidence, not poor_fit.",
   geometry:
-    "recognisable shapes, angles, symmetry, dimensions, and spatial relationships",
+    "recognisable 2D shapes; recognisable 3D forms; angles; symmetry; perimeter; area; spatial relationships; repeated geometric structures. Do not require printed numbers.",
 };
 
 /**
  * What the model answers, which is less than the schema holds.
  *
- * `selectedSkillCode` is missing on purpose: the skill is the student's choice,
- * not the model's, so it is filled in from the input afterwards and there is no
- * field here for a model to quietly switch it. `canGenerateChallenge` is asked
- * for but not taken at face value — see `analyzeSkillFit`.
+ * `selectedSkillCode` is the student's choice and is filled in afterwards.
+ * `canGenerateChallenge` and `anchors` are derived from the resolved path, not
+ * asked of the model. `evidenceRequest` is nullable on the wire so structured
+ * outputs can return null when the path does not need one.
  */
+const WireEvidenceRequestSchema = z.strictObject({
+  type: z.enum(EVIDENCE_REQUEST_TYPES),
+  prompt: z.string(),
+  targetProperty: z.string(),
+  reason: z.string(),
+});
+
 const WireSkillFitSchema = z.strictObject({
+  challengeMode: z.enum(CHALLENGE_MODES),
   fitScore: z.number(),
-  canGenerateChallenge: z.boolean(),
   usableProperties: z.array(z.string()),
   reason: z.string(),
   suggestedObjectCharacteristics: z.array(z.string()),
   alternativeSkillCodes: z.array(z.enum(SKILL_IDS)),
+  evidenceRequest: WireEvidenceRequestSchema.nullable(),
 });
 
-const INSTRUCTIONS = `You are the skill-fit stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student chose a maths skill, then photographed an object. The vision stage has already read that object and its reading is given to you as JSON. Decide whether this object honestly supports this skill for this grade.
+const INSTRUCTIONS = `You are the math-investigation stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student chose a maths skill, then photographed an object. The vision stage has already read that object. Its reading is given to you as JSON. Your job is to decide whether this real-world object can support a legitimate, grade-appropriate mathematical investigation for the selected skill.
 
-Saying no is a correct and useful answer. Do not manufacture a connection. If the maths would work just as well without this object, the fit is poor.
+Do not ask: "Does this single photograph already contain every number needed to make a math problem?"
+Ask: "Can this object support a legitimate investigation for this skill?"
 
-The reading is your only evidence. Do not introduce any measurement, quantity, dimension, capacity, price, specification, or fact about the object that is not already in it. If a number is not in the reading, it does not exist.
+An ordinary object must not be rejected simply because the first photograph contains no obvious numbers. Investigate before giving up. The camera starts the investigation; it does not have to finish it.
 
-What each skill has a natural claim on:
+The reading is your only evidence about the object. Do not introduce any measurement, quantity, dimension, capacity, price, specification, or fact about the object that is not already in it. If a number is not in the reading, it does not exist as an OBSERVED fact.
+
+You MAY plan a hypothetical maths situation that a later stage will write. You may NOT invent facts about the photographed object.
+
+Value origins a later Challenge Generator will use — understand them, do not invent the third:
+- OBSERVED: a fact in the reading.
+- STUDENT_PROVIDED: something the student will look up, count, or measure.
+- GIVEN_IN_PROBLEM: a hypothetical a later stage may introduce ("if 4 ounces are poured out"). You do not invent those values now.
+
+Four challenge modes. Choose the strongest honest path, in this order:
+
+1. "direct" — the reading already contains enough grounded information to create a legitimate challenge. Examples: 12 visible eggs; 6 visible compartments; 8 visible repeated pieces; a clearly readable measurement; a recognisable geometric structure sufficient for the selected skill.
+
+2. "grounded_scenario" — the photograph contains at least one real property that can anchor a challenge, and a later stage may introduce additional hypothetical values. The object must remain mathematically necessary because the starting quantity or structure came from it.
+   Example: a bottle whose reading includes printed volume 11 fl oz, skill subtraction. This is a valid grounded_scenario. Future challenge: "This bottle holds 11 fluid ounces. If 4 fluid ounces are poured out, how many remain?" 11 is OBSERVED. 4 will be GIVEN_IN_PROBLEM. One visible quantity is enough. Do not require a second visible number.
+
+3. "needs_evidence" — the object naturally supports the skill, but SIDEQUEST needs one small additional observation. Do NOT reject the quest. Ask the student to investigate further. Examples:
+   - Sneaker: "Find the size label inside your sneaker and take a picture of it."
+   - Table: "Measure one side of the table."
+   - LEGO structure: "How many blocks are in one row?"
+   - Book: "Can you find the total number of pages?"
+   - Container: "Can you find a label showing how much it holds?"
+   Choose the simplest legitimate request for this grade.
+
+4. "poor_fit" — LAST RESORT. Use this only when you cannot find a legitimate path through existing observable properties, a grounded hypothetical scenario, counting, measurement, comparison, geometry, repeated groups, equal sharing, portions, spatial reasoning, one simple student question, or one additional supporting photograph. Ordinary objects (a sneaker, a book, a chair, a pillow, a toy car, a bottle) almost always have a path.
+
+Ordinary-object reminders:
+- Sneaker: do not fail for lack of a printed number. Measurement can ask for heel-to-toe length or a size-label photo. Subtraction can wait for shoe size or length. Multiplication can use visible eyelets, lace crossings, or tread — or ask the student to count one. Geometry can use symmetry, sole shape, curves, angles, repeated tread.
+- Bottle labelled 11 fl oz + subtraction is grounded_scenario, not poor_fit.
+- Book: page count, dimensions, rectangular geometry, thickness, pages read vs remaining. If page count is not visible, ask for it.
+- Toy car: wheel count, symmetry, shapes, length, repeated wheels, hypothetical scaling.
+- Chair: legs, geometry, symmetry, height, seat dimensions, grouping.
+- Pillow: rectangular/square geometry, symmetry, length and width, perimeter, area after collecting measurements. A pillow is not mathematically useless.
+
+How to investigate each skill:
 {skills}
 
 Answer with:
+- "challengeMode": one of the four modes above.
+- "fitScore": 0 to 1, how naturally this object supports an investigation for the selected skill at this grade. A moderate score can still be an excellent needs_evidence path. A high score is required only for "direct".
+- "usableProperties": entries of the reading that could anchor the maths, copied verbatim. Copy a countable, shape, or observable property exactly as written. Copy visible text exactly as written, and only when the text itself carries usable mathematical information. Write a measurement as "label: value unit", for example "printed bottle volume: 11 fl oz". Anything not copied verbatim will be discarded.
+- "reason": one or two factual sentences on why this path was chosen. Written for an engineer or a teacher reading a log, not for the student.
+- "suggestedObjectCharacteristics": what a better object for this skill would have. Fill this in only for poor_fit; use an empty array otherwise.
+- "alternativeSkillCodes": skill codes that this object's properties would suit better than the selected skill. Never include the selected skill. Empty when nothing else fits, and empty for needs_evidence.
+- "evidenceRequest": required when challengeMode is needs_evidence; null otherwise. Shape:
+  { "type": "second_photo" | "student_measurement" | "student_count" | "student_input", "prompt": string, "targetProperty": string, "reason": string }
+  "prompt" and "reason" are shown to the student. Do not state a number as a fact about the object. Ask them to find, count, or measure it. Pick the simplest type that would produce a real anchor.
 
-- "fitScore": 0 to 1, how naturally this object supports the selected skill at this grade.
-- "canGenerateChallenge": whether an honest challenge could be built from the properties you list, and only from those.
-- "usableProperties": the entries of the reading that could anchor the maths, copied verbatim. Copy a countable, shape, or observable property exactly as written. Copy a piece of visible text exactly as written, and only when the text itself carries usable mathematical information. Write a measurement as "label: value unit", for example "printed can volume: 12 fl oz". Anything not copied verbatim from the reading will be discarded, and a fit with nothing left cannot produce a challenge.
-- "reason": one or two factual sentences on why the fit is strong or weak. Written for an engineer or a teacher reading a log, not for the student.
-- "suggestedObjectCharacteristics": what a better object for this skill would have. Fill this in when the fit is weak; use an empty array when it is strong.
-- "alternativeSkillCodes": skill codes from the list above that this object's properties would suit better than the selected skill. Never include the selected skill. Use an empty array when nothing else fits either.
-
-Grade matters. A property can support a skill in principle and still be wrong for the grade: sharing 355 mL between 8 people is not a grade-3 division problem, and counting six equal segments is not a grade-5 fractions problem. Judge the fit for the grade you are given, and lower the score when the only available connection would be too hard or too slight for it.`;
+Grade matters. A property can support a skill in principle and still be wrong for the grade. Judge the path for the grade you are given. Prefer the simplest legitimate investigation.`;
 
 /**
- * A fit good enough to build on, a fit that is honestly poor, or a stage that
- * did not work.
- *
- * The middle case carries both: the validated analysis, which is worth keeping
- * because it is the record of why this quest stopped, and the typed failure that
- * answers the student. A poor fit is not an error — it is this stage doing its
- * job.
+ * A path ready for a future challenge, a path waiting on one more observation,
+ * a path that is honestly poor, or a stage that did not work.
  */
 export type SkillFitResult =
-  | { status: "ok"; fit: SkillFitAnalysis }
-  | { status: "poorFit"; fit: SkillFitAnalysis; failure: QuestGenerationFailure }
+  | { status: "ok"; fit: Extract<SkillFitAnalysis, { challengeMode: "direct" | "grounded_scenario" }> }
+  | { status: "needsEvidence"; fit: Extract<SkillFitAnalysis, { challengeMode: "needs_evidence" }> }
+  | { status: "poorFit"; fit: Extract<SkillFitAnalysis, { challengeMode: "poor_fit" }>; failure: QuestGenerationFailure }
   | { status: "failed"; failure: QuestGenerationFailure };
 
 /**
@@ -168,7 +182,7 @@ export async function analyzeSkillFit({
 
   const response = await openai().responses.parse({
     model: FIT_MODEL,
-    instructions: INSTRUCTIONS.replace("{skills}", skillAffinityList()),
+    instructions: INSTRUCTIONS.replace("{skills}", skillInvestigationList()),
     input: [
       {
         role: "user",
@@ -197,10 +211,8 @@ export async function analyzeSkillFit({
     return failed();
   }
 
-  // Grounding, enforced rather than requested: each property the model listed is
-  // looked up in the reading, and what survives is the reading's own wording. A
-  // property the vision stage never recorded cannot reach a challenge, whatever
-  // the model called it.
+  // Grounding, enforced rather than requested: each property the model listed
+  // is looked up in the reading, and what survives is the reading's own wording.
   const grounded = groundProperties(wire.usableProperties, analysis);
 
   if (grounded.length < wire.usableProperties.length) {
@@ -210,41 +222,37 @@ export async function analyzeSkillFit({
     });
   }
 
-  const scoreTooLow = wire.fitScore < MIN_FIT_SCORE;
-  const noGroundedProperty = grounded.length === 0;
-  const canGenerateChallenge =
-    wire.canGenerateChallenge && !scoreTooLow && !noGroundedProperty;
+  const evidenceRequest = parseEvidenceRequest(wire.evidenceRequest);
 
-  // The model can write a positive reason and still be overridden here. When
-  // that happens the stored reason has to match the decision that actually
-  // landed; a leftover "this would make a good challenge" is a lie in the row.
-  const reason =
-    wire.canGenerateChallenge && (scoreTooLow || noGroundedProperty)
-      ? overrideReason(scoreTooLow, noGroundedProperty)
-      : wire.reason;
+  const resolved = resolveInvestigation(
+    {
+      challengeMode: wire.challengeMode,
+      fitScore: wire.fitScore,
+      reason: wire.reason,
+      evidenceRequest,
+    },
+    grounded,
+  );
 
   const parsed = SkillFitAnalysisSchema.safeParse({
-    // The student's choice, not the model's. Nothing in the answer could change
-    // which skill was assessed.
     selectedSkillCode: skillId,
     fitScore: wire.fitScore,
-    // Three conditions, all required: the model's own verdict, a score clear of
-    // the threshold, and something concrete to anchor the maths to. A confident
-    // score with no grounded property is the case this stage most needs to
-    // refuse.
-    canGenerateChallenge,
+    challengeMode: resolved.challengeMode,
+    canGenerateChallenge: canGenerateFromMode(resolved.challengeMode),
     usableProperties: grounded,
-    reason,
-    suggestedObjectCharacteristics: wire.suggestedObjectCharacteristics,
-    // A suggestion to switch to the skill they already chose is noise, and the
-    // student's mission is never changed for them regardless.
+    reason: resolved.reason,
+    suggestedObjectCharacteristics:
+      resolved.challengeMode === "poor_fit"
+        ? wire.suggestedObjectCharacteristics
+        : [],
     alternativeSkillCodes: [
       ...new Set(wire.alternativeSkillCodes.filter((code) => code !== skillId)),
     ],
+    anchors: buildAnchors(grounded, resolved.evidenceRequest),
+    evidenceRequest: resolved.evidenceRequest,
   });
 
   if (!parsed.success) {
-    // Paths and codes only: the values came off the student's photograph.
     console.warn(
       "[skill-fit] judgement failed validation",
       parsed.error.issues.map((issue) => ({
@@ -258,15 +266,17 @@ export async function analyzeSkillFit({
 
   const fit = parsed.data;
 
-  if (!fit.canGenerateChallenge) {
+  if (fit.challengeMode === "needs_evidence") {
+    return { status: "needsEvidence", fit };
+  }
+
+  if (fit.challengeMode === "poor_fit") {
     return {
       status: "poorFit",
       fit,
       failure: QuestGenerationFailureSchema.parse({
         reason: "poor_skill_fit",
         studentMessage: poorFitMessage(skillId, fit.alternativeSkillCodes),
-        // A named alternative is something to act on; without one, the object
-        // itself is what needs to change.
         recommendedNextAction:
           fit.alternativeSkillCodes.length > 0
             ? "choose_different_skill"
@@ -276,6 +286,28 @@ export async function analyzeSkillFit({
   }
 
   return { status: "ok", fit };
+}
+
+/**
+ * The evidence request is student-facing, so it has to pass the same schema
+ * the rest of the application uses. A request the model shaped badly is
+ * treated as absent, which may downgrade the path.
+ */
+function parseEvidenceRequest(value: unknown): EvidenceRequest | null {
+  if (typeof value !== "object" || value === null) return null;
+
+  const record = value as Record<string, unknown>;
+  const clip = (field: unknown, max: number) =>
+    typeof field === "string" ? field.trim().slice(0, max) : field;
+
+  const parsed = EvidenceRequestSchema.safeParse({
+    ...record,
+    prompt: clip(record.prompt, 200),
+    targetProperty: clip(record.targetProperty, 80),
+    reason: clip(record.reason, 200),
+  });
+
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -334,10 +366,6 @@ function normalise(value: string): string {
  * The student's side of a poor fit: what could not be found, what to look for
  * instead, and — only when the object really suits one — which other mission
  * would work.
- *
- * Assembled from the centralised copy and the skill catalogue, so the wording is
- * reviewable in one place and the "look for" phrase is the same one the scan
- * screen already showed them.
  */
 function poorFitMessage(skillId: SkillId, alternatives: readonly SkillId[]) {
   const skill = getSkill(skillId);
@@ -366,9 +394,9 @@ function failed(): SkillFitResult {
   };
 }
 
-/** The affinity table as prompt text, in the order the setup screen offers. */
-function skillAffinityList(): string {
+/** The investigation table as prompt text, in the order the setup screen offers. */
+function skillInvestigationList(): string {
   return SKILLS.map(
-    (skill) => `- ${skill.id} (${skill.label}): ${SKILL_AFFINITY[skill.id]}`,
+    (skill) => `- ${skill.id} (${skill.label}): ${SKILL_INVESTIGATION[skill.id]}`,
   ).join("\n");
 }
