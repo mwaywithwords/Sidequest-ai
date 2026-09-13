@@ -41,6 +41,7 @@ const STEPS = copy.scan.processingSteps;
 function problemNotice(
   rejection: ImageRejection | null,
   uploadFailed: boolean,
+  generationFailed: boolean,
 ) {
   if (rejection) {
     return {
@@ -49,6 +50,13 @@ function problemNotice(
         rejection === "tooLarge"
           ? copy.scan.rejected.tooLarge(MAX_IMAGE_MB)
           : copy.scan.rejected[rejection],
+    };
+  }
+
+  if (generationFailed) {
+    return {
+      heading: copy.scan.generationFailedHeading,
+      body: copy.scan.generationFailedBody,
     };
   }
 
@@ -86,6 +94,7 @@ export function ScanStage({
     status: "idle",
   });
   const [uploadFailed, setUploadFailed] = useState(false);
+  const [generationFailed, setGenerationFailed] = useState(false);
   const [cluePhotoFailed, setCluePhotoFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const uploadLock = useRef(false);
@@ -116,6 +125,7 @@ export function ScanStage({
       setClue(null);
       setCluePhotoFailed(false);
       setUploadFailed(false);
+      setGenerationFailed(false);
       setStage("idle");
     },
     [clearPicked],
@@ -133,6 +143,7 @@ export function ScanStage({
     revokeCluePreview();
     setCluePhotoFailed(false);
     setUploadFailed(false);
+    setGenerationFailed(false);
     setStage("preview");
   }, [revokeCluePreview]);
 
@@ -147,6 +158,7 @@ export function ScanStage({
     revokeCluePreview();
     setCluePhotoFailed(false);
     setUploadFailed(false);
+    setGenerationFailed(false);
     setStage("preview");
   }, [revokeCluePreview]);
 
@@ -157,6 +169,7 @@ export function ScanStage({
     setRejection(null);
     setCluePhotoFailed(false);
     setUploadFailed(false);
+    setGenerationFailed(false);
     setStage("idle");
   }, [clearPicked]);
 
@@ -178,6 +191,7 @@ export function ScanStage({
     setClue(null);
     setCluePhotoFailed(false);
     setUploadFailed(false);
+    setGenerationFailed(false);
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
     setStage("preview");
@@ -225,6 +239,7 @@ export function ScanStage({
     revokeCluePreview();
     setCluePhotoFailed(false);
     setUploadFailed(false);
+    setGenerationFailed(false);
     setStepIndex(0);
     setStage("processing");
 
@@ -256,6 +271,12 @@ export function ScanStage({
       return;
     }
 
+    if (outcome.status === "generationFailed") {
+      setGenerationFailed(true);
+      setStage("preview");
+      return;
+    }
+
     setUploadFailed(true);
     setStage("preview");
   }
@@ -270,7 +291,7 @@ export function ScanStage({
     return () => clearInterval(ticker);
   }, [stage]);
 
-  const notice = problemNotice(rejection, uploadFailed);
+  const notice = problemNotice(rejection, uploadFailed, generationFailed);
   const investigating = clue !== null;
 
   return (
@@ -427,7 +448,7 @@ export function ScanStage({
       ) : stage === "preview" ? (
         <div className="flex flex-col gap-3">
           <Button size="lg" onClick={findTheMath} className="w-full">
-            {uploadFailed ? (
+            {uploadFailed || generationFailed ? (
               <>
                 Try again
                 <RetryIcon className="size-5" />

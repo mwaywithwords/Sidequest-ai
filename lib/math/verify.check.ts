@@ -758,6 +758,52 @@ check(
   bottleIdentifyOk.ok,
 );
 
+const walletForm: ObjectAnalysis = {
+  objectName: "wallet",
+  category: "personal accessory",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["rectangular form", "symmetry"],
+  observableProperties: ["card slots", "billfold"],
+};
+
+const walletIdentify = challenge({
+  question: "Which 2D shape is the front of your wallet most like?",
+  skillCode: "geometry",
+  solution: "The front is most like a rectangle.",
+  objectConnection:
+    "Your wallet has a rectangular form you can see from this photo.",
+  valuesUsed: [],
+  shapesUsed: [
+    {
+      label: "wallet face",
+      form: "rectangle",
+      aspect: "plane",
+      origin: "observed",
+    },
+  ],
+  correctAnswer: { type: "choice", value: "rectangle", set: "plane" },
+  computation: {
+    type: "shape_identify",
+    aspect: "plane",
+    label: "rectangle",
+  },
+});
+
+const walletIdentifyOk = verify(
+  walletIdentify,
+  walletForm,
+  "geometry",
+  "rectangular form",
+  4,
+);
+check(
+  "qualitative wallet rectangle verifies when the connection uses form language",
+  walletIdentifyOk.ok,
+);
+
 const grade5Ok = verify(
   bottleSubtract,
   bottle,

@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       skillId,
     });
 
-    if (result.kind === "failed") {
+    if (result.kind === "failed" || result.kind === "generationFailed") {
       return NextResponse.json(toClientCreateBody(result), { status: 500 });
     }
 

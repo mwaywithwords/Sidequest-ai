@@ -31,6 +31,7 @@ export type UploadOutcome =
     }
   | { status: "rejected"; reason: ImageRejection }
   | { status: "refused"; detour: DetourRequest }
+  | { status: "generationFailed" }
   | { status: "failed" };
 
 function isRejection(value: unknown): value is ImageRejection {
@@ -109,6 +110,10 @@ export async function uploadQuestImage(
         offerSkillChange: field("offerSkillChange") === true,
       },
     };
+  }
+
+  if (reason === "generationFailed") {
+    return { status: "generationFailed" };
   }
 
   return isRejection(reason)

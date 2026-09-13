@@ -17,9 +17,11 @@ import {
 } from "@/lib/ai/schemas";
 import {
   aspectAllowsLabel,
-  isGeometryAspect,
-  isGeometryFeature,
-  isGeometryLabel,
+  geometryCitationTokens,
+  normaliseGeometryAspect,
+  normaliseGeometryChoiceSet,
+  normaliseGeometryFeature,
+  normaliseGeometryLabel,
   shapeSupports,
   structureCount,
 } from "@/lib/math/geometry-forms";
@@ -124,10 +126,15 @@ export type ChallengeContext = {
   contextualGrounding?: ContextualPayload | null;
 };
 
+export type ChallengeValidationIssue = {
+  path: string;
+  code: string;
+};
+
 export type ChallengeFinalization =
   | { status: "ok"; challenge: GeneratedChallenge }
   | { status: "poor_fit" }
-  | { status: "generation_failure" };
+  | { status: "generation_failure"; issue: ChallengeValidationIssue };
 
 /**
  * Turns a parsed model answer into a challenge the application may store,
@@ -161,7 +168,7 @@ export function finalizeChallenge(
     objectConnection.length === 0 ||
     verificationStrategy.length === 0
   ) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "empty_required_text");
   }
 
   if (
@@ -171,11 +178,11 @@ export function finalizeChallenge(
     hint2.length > HINT_MAX ||
     objectConnection.length > CONNECTION_MAX
   ) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "text_too_long");
   }
 
   if (wire.skillCode !== context.skillId) {
-    return { status: "generation_failure" };
+    return generationFailure("skillCode", "skill_mismatch");
   }
 
   if (
@@ -183,27 +190,35 @@ export function finalizeChallenge(
     wire.difficulty < 1 ||
     wire.difficulty > 5
   ) {
-    return { status: "generation_failure" };
+    return generationFailure("difficulty", "invalid_difficulty");
   }
 
   const valuesUsed = parseValues(wire.valuesUsed);
-  if (valuesUsed === null) return { status: "generation_failure" };
+  if (valuesUsed === null) {
+    return generationFailure("valuesUsed", "invalid_used_value");
+  }
 
   const shapesUsed = parseShapes(wire.shapesUsed ?? []);
-  if (shapesUsed === null) return { status: "generation_failure" };
+  if (shapesUsed === null) {
+    return generationFailure("shapesUsed", "unrecognized_geometry_label");
+  }
 
   const correctAnswer = parseCorrectAnswer(wire.correctAnswer);
-  if (correctAnswer === null) return { status: "generation_failure" };
+  if (correctAnswer === null) {
+    return generationFailure("correctAnswer", "invalid_choice_or_answer");
+  }
 
   const computation = parseComputation(wire.computation);
-  if (computation === null) return { status: "generation_failure" };
+  if (computation === null) {
+    return generationFailure("computation", "invalid_computation");
+  }
 
   if (!valuesAreGrounded(valuesUsed, context)) {
-    return { status: "generation_failure" };
+    return generationFailure("valuesUsed", "ungrounded_value");
   }
 
   if (!shapesAreGrounded(shapesUsed, context)) {
-    return { status: "generation_failure" };
+    return generationFailure("shapesUsed", "ungrounded_shape");
   }
 
   if (!hasUsableAnchor(valuesUsed, context, shapesUsed)) {
@@ -217,11 +232,11 @@ export function finalizeChallenge(
   }
 
   if (!computationMatchesValues(computation, valuesUsed)) {
-    return { status: "generation_failure" };
+    return generationFailure("computation", "computation_value_mismatch");
   }
 
   if (!refersToObject(question, context.analysis)) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "missing_object_reference");
   }
 
   if (
@@ -232,23 +247,23 @@ export function finalizeChallenge(
       shapesUsed,
     )
   ) {
-    return { status: "generation_failure" };
+    return generationFailure("objectConnection", "missing_anchor_citation");
   }
 
   if (!inspiredStaysOnTopic(question, context)) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "inspired_off_topic");
   }
 
   if (attributesContextualAsObserved(question, valuesUsed, context)) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "contextual_as_observed");
   }
 
   if (!hypotheticalsAreFramed(question, valuesUsed)) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "unframed_hypothetical");
   }
 
   if (attributesUnobservedMeasurement(question, context.analysis)) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "invented_measurement");
   }
 
   if (
@@ -259,7 +274,7 @@ export function finalizeChallenge(
       correctAnswer,
     )
   ) {
-    return { status: "generation_failure" };
+    return generationFailure("question", "invented_object_fact");
   }
 
   const parsed = ChallengeSchema.safeParse({
@@ -278,10 +293,38 @@ export function finalizeChallenge(
   });
 
   if (!parsed.success) {
-    return { status: "generation_failure" };
+    return generationFailureFromZod(parsed.error);
   }
 
   return { status: "ok", challenge: parsed.data };
+}
+
+function generationFailure(
+  path: string,
+  code: string,
+): Extract<ChallengeFinalization, { status: "generation_failure" }> {
+  return { status: "generation_failure", issue: { path, code } };
+}
+
+export function sanitiseZodIssue(error: {
+  issues: readonly { path: PropertyKey[]; code: string }[];
+}): ChallengeValidationIssue {
+  const issue = error.issues[0];
+  if (issue === undefined) {
+    return { path: "challenge", code: "invalid" };
+  }
+
+  return {
+    path: issue.path.map(String).join(".") || "challenge",
+    code: issue.code,
+  };
+}
+
+function generationFailureFromZod(error: {
+  issues: readonly { path: PropertyKey[]; code: string }[];
+}): Extract<ChallengeFinalization, { status: "generation_failure" }> {
+  const issue = sanitiseZodIssue(error);
+  return { status: "generation_failure", issue };
 }
 
 /**
@@ -369,13 +412,7 @@ export function objectConnectionCitesAnchor(
     return true;
   }
 
-  if (
-    shapes.some(
-      (shape) =>
-        hay.includes(shape.form.toLowerCase()) ||
-        hay.includes(shape.label.toLowerCase()),
-    )
-  ) {
+  if (shapes.some((shape) => connectionCitesShape(hay, shape))) {
     return true;
   }
 
@@ -404,6 +441,14 @@ function connectionCitesValue(hay: string, value: UsedValue): boolean {
   if (hay.includes(value.label.toLowerCase())) return true;
   if (value.unit && hay.includes(value.unit.toLowerCase())) return true;
   return false;
+}
+
+function connectionCitesShape(hay: string, shape: UsedShape): boolean {
+  if (hay.includes(shape.label.toLowerCase())) return true;
+
+  return geometryCitationTokens(shape.form).some((token) =>
+    hay.includes(token.toLowerCase()),
+  );
 }
 
 function inspiredStaysOnTopic(
@@ -512,10 +557,14 @@ function parseShapes(shapes: readonly WireShape[]): UsedShape[] | null {
   const parsed: UsedShape[] = [];
 
   for (const shape of shapes) {
+    const form = normaliseGeometryLabel(shape.form);
+    const aspect = normaliseGeometryAspect(shape.aspect);
+    if (form === null || aspect === null) return null;
+
     const item = UsedShapeSchema.safeParse({
       label: shape.label,
-      form: shape.form,
-      aspect: shape.aspect,
+      form,
+      aspect,
       origin: shape.origin,
     });
     if (!item.success) return null;
@@ -530,12 +579,16 @@ function parseCorrectAnswer(
 ): CorrectAnswer | null {
   if (answer.type === "choice") {
     const raw = cleanOptional(answer.label ?? null);
-    const set = cleanOptional(answer.set ?? null);
-    if (raw === undefined || set === undefined) return null;
+    const setRaw = cleanOptional(answer.set ?? null);
+    if (raw === undefined || setRaw === undefined) return null;
+
+    const label = normaliseGeometryLabel(raw);
+    const set = normaliseGeometryChoiceSet(setRaw);
+    if (label === null || set === null) return null;
 
     const parsed = CorrectAnswerSchema.safeParse({
       type: "choice",
-      value: raw,
+      value: label,
       set,
     });
     return parsed.success ? parsed.data : null;
@@ -650,34 +703,40 @@ function parseComputation(
         shape: wire.shape,
         dimensions: operands,
       });
-    case "shape_identify":
+    case "shape_identify": {
+      const aspect = normaliseGeometryAspect(wire.operation);
+      const label =
+        wire.shape === null ? null : normaliseGeometryLabel(wire.shape);
       if (
-        !isGeometryAspect(wire.operation) ||
-        wire.shape === null ||
-        !isGeometryLabel(wire.shape) ||
-        !aspectAllowsLabel(wire.operation, wire.shape)
+        aspect === null ||
+        label === null ||
+        !aspectAllowsLabel(aspect, label)
       ) {
         return null;
       }
       return parseUnion({
         type: "shape_identify",
-        aspect: wire.operation,
-        label: wire.shape,
+        aspect,
+        label,
       });
-    case "shape_count":
+    }
+    case "shape_count": {
+      const shape =
+        wire.shape === null ? null : normaliseGeometryLabel(wire.shape);
+      const feature = normaliseGeometryFeature(wire.operation);
       if (
-        wire.shape === null ||
-        !isGeometryLabel(wire.shape) ||
-        !isGeometryFeature(wire.operation) ||
-        structureCount(wire.shape, wire.operation) === null
+        shape === null ||
+        feature === null ||
+        structureCount(shape, feature) === null
       ) {
         return null;
       }
       return parseUnion({
         type: "shape_count",
-        shape: wire.shape,
-        feature: wire.operation,
+        shape,
+        feature,
       });
+    }
   }
 }
 

@@ -547,6 +547,11 @@ check(
 );
 
 check(
+  "wallet + geometry is object_math from visible rectangular form",
+  recoveredMode(OBJECTS.wallet, "geometry") === "object_math",
+);
+
+check(
   "protein bottle + geometry is object_math without a printed dimension",
   recoveredMode(OBJECTS["protein bottle"], "geometry") === "object_math" &&
     OBJECTS["protein bottle"].visibleMeasurements.every(
@@ -833,6 +838,51 @@ verifyNamed(
     solution: "The bottle is a cylinder.",
   }),
   3,
+);
+
+verifyNamed(
+  "Grade 4 geometry + wallet names a rectangle from visible form",
+  OBJECTS.wallet,
+  readyFit("geometry", "object_math", OBJECTS.wallet, {
+    properties: ["rectangular form", "symmetry"],
+  }),
+  baseWire({
+    skillCode: "geometry",
+    question: "Which 2D shape is the front of your wallet most like?",
+    objectConnection:
+      "Your wallet has a rectangular form you can see from this photo.",
+    hint1: "Look at the outline.",
+    hint2: "Count the sides and corners you can see.",
+    valuesUsed: [],
+    shapesUsed: [
+      {
+        label: "wallet face",
+        form: "rectangular form",
+        aspect: "plane",
+        origin: "observed",
+      },
+    ],
+    correctAnswer: {
+      type: "choice",
+      value: null,
+      numerator: null,
+      denominator: null,
+      unit: null,
+      label: "rectangular form",
+      set: "plane",
+    },
+    computation: {
+      type: "shape_identify",
+      operation: "plane",
+      shape: "rectangular form",
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [],
+    },
+    solution: "The front of the wallet is a rectangle.",
+  }),
+  4,
 );
 
 verifyNamed(

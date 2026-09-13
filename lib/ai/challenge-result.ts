@@ -35,7 +35,17 @@ export function resultFromFinalization(
     };
   }
 
-  console.warn("[challenge] challenge failed validation");
+  if (finalized.status === "generation_failure") {
+    console.warn("[challenge] challenge failed validation", {
+      path: finalized.issue.path,
+      code: finalized.issue.code,
+    });
+  } else {
+    console.warn("[challenge] challenge failed validation", {
+      path: "challenge",
+      code: "invalid",
+    });
+  }
 
   return challengeFailed();
 }

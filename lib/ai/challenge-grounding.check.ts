@@ -14,6 +14,7 @@ import {
   hasGroundedAnchor,
   objectConnectionCitesAnchor,
   refersToObject,
+  sanitiseZodIssue,
   targetDifficulty,
   type WireChallenge,
 } from "@/lib/ai/challenge-grounding";
@@ -809,6 +810,23 @@ const inventedAtHighDifficulty = finalizeChallenge(
 check(
   "a higher target difficulty still cannot invent an observed value",
   inventedAtHighDifficulty.status === "generation_failure",
+);
+
+const loggedIssue = sanitiseZodIssue({
+  issues: [
+    {
+      path: ["shapesUsed", 0, "form"],
+      code: "invalid_value",
+    },
+  ],
+});
+
+check(
+  "schema failures log a path and code without received values",
+  loggedIssue.path === "shapesUsed.0.form" &&
+    loggedIssue.code === "invalid_value" &&
+    !JSON.stringify(loggedIssue).includes("rectangular") &&
+    !Object.keys(loggedIssue).includes("received"),
 );
 
 if (bottleChallenge.status === "ok") {

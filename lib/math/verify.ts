@@ -16,7 +16,10 @@ import {
   type StudentEvidenceValue,
   valuesMatch,
 } from "@/lib/math/grounding";
-import { shapeSupports } from "@/lib/math/geometry-forms";
+import {
+  geometryCitationTokens,
+  shapeSupports,
+} from "@/lib/math/geometry-forms";
 import { isFiniteNumber, sameUnit, unitsCompatible } from "@/lib/math/units";
 import type { Grade, SkillId } from "@/lib/types";
 
@@ -589,9 +592,10 @@ function objectConnectionHolds(
   });
 
   const citesShape = (challenge.shapesUsed ?? []).some((shape) => {
-    if (hay.includes(shape.form.toLowerCase())) return true;
     if (hay.includes(shape.label.toLowerCase())) return true;
-    return false;
+    return geometryCitationTokens(shape.form).some((token) =>
+      hay.includes(token.toLowerCase()),
+    );
   });
 
   if (fit.challengeMode === "inspired_math") {

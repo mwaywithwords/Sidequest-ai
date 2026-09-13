@@ -12,6 +12,7 @@ import type { ImageSafetyReason } from "@/lib/ai/schemas";
 import type { QuestGenerationResult } from "@/lib/ai/quest-generation-finalize";
 import type { VisionAnalysisResult } from "@/lib/ai/vision-finalize";
 import { imageSafetyVerdict } from "@/lib/ai/image-safety-verdict";
+import { copy } from "@/lib/copy";
 import { planAfterVerification } from "@/lib/math/verify";
 import { createPipelineTimer } from "@/lib/pipeline-timing";
 import {
@@ -327,11 +328,28 @@ const malformedGenerationResult = await run(malformedGeneration.deps);
 
 check(
   "if generation fails, the quest never becomes ready",
-  malformedGenerationResult.kind === "refused" &&
-    malformedGenerationResult.reason === "generation_failure" &&
+  malformedGenerationResult.kind === "generationFailed" &&
     !malformedGeneration.readyMarked &&
     malformedGeneration.calls.includes("db:failed") &&
     !malformedGeneration.calls.includes("verification"),
+);
+
+const generationFailedBody = toClientCreateBody(malformedGenerationResult);
+
+check(
+  "a generation failure is not an object detour",
+  generationFailedBody.error === "generationFailed" &&
+    generationFailedBody.kind === undefined &&
+    !JSON.stringify(generationFailedBody).includes("poorFit") &&
+    !JSON.stringify(generationFailedBody).includes("wandered") &&
+    !JSON.stringify(generationFailedBody).includes("Find Another Object"),
+);
+
+check(
+  "generation failure copy does not blame the photographed object",
+  !copy.scan.generationFailedBody.toLowerCase().includes("find another") &&
+    !copy.scan.generationFailedBody.toLowerCase().includes("different object") &&
+    copy.scan.generationFailedBody.toLowerCase().includes("photo is fine"),
 );
 
 const unverified = recordingDeps({ verification: "failed" });
