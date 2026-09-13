@@ -46,6 +46,22 @@ export type GradeView =
   | { status: "invalid"; reason: "blank" | "malformed" | "zero_denominator" }
   | { status: "unavailable" };
 
+/**
+ * What the browser is allowed to see after a submission.
+ *
+ * Invalid reason codes stay on the server. The UI already has one
+ * student-safe sentence for a bad number and one for a bad fraction.
+ */
+export type StudentGradeView =
+  | ChallengeProgress
+  | { status: "invalid" }
+  | { status: "unavailable" };
+
+export function toStudentGradeView(view: GradeView): StudentGradeView {
+  if (view.status === "invalid") return { status: "invalid" };
+  return view;
+}
+
 export function questIsGradeable(input: {
   exists: boolean;
   owned: boolean;

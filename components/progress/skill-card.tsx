@@ -37,11 +37,11 @@ export function SkillCard({ skill }: { skill: PresentedSkill }) {
       </div>
 
       <div
-        className="mt-4 h-2 overflow-hidden rounded-full bg-void/70 ring-1 ring-hair"
+        className="mt-4 h-2.5 overflow-hidden rounded-full bg-void/70 ring-1 ring-hair"
         {...(skill.practiced
           ? {
               role: "progressbar" as const,
-              "aria-label": `${catalogue.label} mastery`,
+              "aria-label": `${catalogue.label} mastery, ${percent} percent`,
               "aria-valuemin": 0,
               "aria-valuemax": 100,
               "aria-valuenow": percent,
@@ -50,10 +50,10 @@ export function SkillCard({ skill }: { skill: PresentedSkill }) {
       >
         {skill.practiced ? (
           <div
-            className="h-full rounded-full"
+            className="h-full rounded-full transition-[width] duration-500"
             style={{
-              width: `${percent}%`,
-              background: catalogue.accent,
+              width: `${percent === 0 ? 0 : Math.max(percent, 8)}%`,
+              background: `linear-gradient(90deg, ${catalogue.accent}88, ${catalogue.accent})`,
             }}
           />
         ) : null}

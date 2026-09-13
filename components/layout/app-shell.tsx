@@ -25,7 +25,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Wordmark />
           <Link
             href="/progress"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm text-muted transition hover:bg-raised hover:text-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime"
+            aria-label="Your progress"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full px-3 text-sm text-muted transition hover:bg-raised hover:text-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime"
           >
             <CompassIcon className="size-4" />
             <span>Progress</span>

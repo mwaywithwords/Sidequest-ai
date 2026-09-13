@@ -78,7 +78,7 @@ export async function uploadQuestImage(
     const questId = field("questId");
     if (typeof questId !== "string") return { status: "failed" };
 
-    if (field("challengeMode") === "needs_evidence") {
+    if (field("needsEvidence") === true) {
       const evidenceRequest = parseEvidenceRequest(field("evidenceRequest"));
       if (evidenceRequest === null) return { status: "failed" };
 

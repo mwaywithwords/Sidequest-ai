@@ -19,7 +19,9 @@ export default async function ProgressPage() {
       <div>
         <SectionLabel>{copy.progress.eyebrow}</SectionLabel>
         <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          {copy.progress.heading}
+          {progress.hasProgress
+            ? copy.progress.heading
+            : copy.progress.emptyHeading}
         </h1>
         <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
           {progress.hasProgress ? copy.progress.body : copy.progress.emptyBody}

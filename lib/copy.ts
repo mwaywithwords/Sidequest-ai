@@ -11,24 +11,24 @@ export const copy = {
     metaTitle: "SIDEQUEST — Find the math hiding in your world",
     metaDescription:
       "Photograph something real and SIDEQUEST turns the math hiding inside it into a challenge built just for you.",
-    footer: "SIDEQUEST — turn your world into your classroom.",
+    footer: "SIDEQUEST — find the math hiding in your world.",
   },
 
   landing: {
-    eyebrow: "Math that starts with your camera",
+    eyebrow: "Your next mission starts with a photo",
     heroLineOne: "Find the math",
     heroLineTwo: "hiding in your",
     heroAccent: "world.",
     heroBody:
-      "Take a photo of something around you. SIDEQUEST finds the real numbers inside it and turns them into a challenge made only for that object.",
-    howItWorksLabel: "How a sidequest works",
+      "Photograph something real. SIDEQUEST looks closely, finds the numbers hiding inside, and turns them into a challenge made only for that object.",
+    howItWorksLabel: "How a mission works",
     howItWorks: [
       {
         title: "Point at something real",
         body: "A can, a window, a carton of eggs. Anything nearby with numbers or shapes hiding in it.",
       },
       {
-        title: "See what's hiding inside",
+        title: "Look closely",
         body: "SIDEQUEST names the object, tells you something surprising about it, and finds the math it carries.",
       },
       {
@@ -40,24 +40,27 @@ export const copy = {
     closingLineOne: "Turn your world into",
     closingLineTwo: "your classroom.",
     closingBody:
-      "No worksheets. Just whatever you can find, and the math already inside it.",
+      "No worksheets. Just whatever you can find, and the math already hiding in it.",
   },
 
   setup: {
-    gradeLabel: "Step one · Your grade",
+    gradeLabel: "Step one · Your year",
     gradeHeading: "Which grade are you in?",
-    skillsLocked: "Pick a grade to unlock your skills.",
+    skillsLocked: "Pick a grade to unlock your missions.",
     skillLabel: "Step two · Your mission",
-    skillHeading: "What are you working on?",
+    skillHeading: "What are we investigating?",
     nothingChosen: "Choose a grade and a skill to begin.",
+    launch: "Let's investigate.",
   },
 
   scan: {
-    heading: "Point at something real",
+    heading: "Let's investigate.",
     /** Precedes the skill's own "look for" phrase, which stays highlighted. */
     lookForLead: (skill: string) => `For ${skill}, look for `,
     emptyPreview: "Your photo will appear here",
     previewAlt: "The object you photographed",
+    cluePhotoFailed:
+      "That extra photo didn't come through. Try another one — your first photo is still here.",
     rejectedHeading: "Let's try a different photo",
     rejectedPreview: "No photo loaded",
     /** Keyed to `ImageRejection`, so every rejection has something to say. */
@@ -75,9 +78,17 @@ export const copy = {
       "Something went wrong sending your photo, so nothing was saved. It's still here — you can send it again.",
     processingSteps: [
       "Looking closely…",
-      "Finding what we can use…",
+      "Finding the object…",
+      "Hunting for the math…",
+      "Writing your discovery…",
       "Checking your Sidequest…",
     ],
+  },
+
+  flow: {
+    setup: "Mission",
+    scan: "Scan",
+    quest: "Quest",
   },
 
   /**
@@ -295,12 +306,17 @@ export const copy = {
      */
     experience: {
       discoverEyebrow: "Discover",
-      connectEyebrow: "The hidden math",
+      connectEyebrow: "You found the math",
       challengeEyebrow: "Your challenge",
+      stageDiscover: "Discover",
+      stageConnect: "Connect",
+      stageChallenge: "Challenge",
       showMath: "Show Me the Math",
       startQuest: "Start Sidequest",
       submit: "Submit",
       hint: "Hint",
+      hint1: "Hint 1",
+      hint2: "Hint 2",
       lookClosely: (objectName: string, value: string) =>
         `Look closely — your ${objectName} shows ${value}.`,
       thatMeasurement: (skill: string) =>
@@ -348,16 +364,16 @@ export const copy = {
 
   progress: {
     eyebrow: "Your explorer log",
-    heading: "What you've found so far",
+    heading: "Your math map is growing.",
     body: "Every Sidequest you finish fills in your math map — one skill, one object, one little win at a time.",
-    emptyBody:
-      "Your math map is ready. Complete a Sidequest to start filling it in.",
+    emptyHeading: "Your math map is ready.",
+    emptyBody: "Complete a Sidequest to start filling it in.",
     explorerStat: "Math Explorer Level",
     completedStat: "Sidequests Completed",
     discoveredStat: "Objects Discovered",
     skillsLabel: "Your skills",
-    nextCta: "Find My Next Sidequest",
-    firstCta: "Find My First Sidequest",
+    nextCta: "Ready for another mission?",
+    firstCta: "Find my first mission",
     skillStatus: {
       unpracticed: (skill: string) => `${skill} is waiting to be explored.`,
       needsPractice: (skill: string) =>

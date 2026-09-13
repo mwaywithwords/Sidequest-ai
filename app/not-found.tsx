@@ -13,7 +13,7 @@ export default function NotFound() {
         {copy.notFound.body}
       </p>
       <ButtonLink href="/setup" size="lg" className="mt-8">
-        Start a sidequest
+        Start a mission
       </ButtonLink>
     </div>
   );

@@ -1,7 +1,10 @@
 "use server";
 
 import type { AnswerSubmission } from "@/lib/math/answer";
-import type { GradeView } from "@/lib/progress/outcome";
+import {
+  type StudentGradeView,
+  toStudentGradeView,
+} from "@/lib/progress/outcome";
 import { gradeQuestAnswer } from "@/lib/quest-grade";
 
 export async function submitQuestAnswer(input: {
@@ -9,20 +12,22 @@ export async function submitQuestAnswer(input: {
   answer: unknown;
   hintRevealed: unknown;
   responseTimeMs: unknown;
-}): Promise<GradeView> {
+}): Promise<StudentGradeView> {
   const questId = typeof input.questId === "string" ? input.questId : "";
   const answer = parseAnswer(input.answer);
   if (answer === null) {
-    return { status: "invalid", reason: "malformed" };
+    return { status: "invalid" };
   }
 
-  return gradeQuestAnswer({
-    questId,
-    answer,
-    hintRevealed: input.hintRevealed === true,
-    responseTimeMs:
-      typeof input.responseTimeMs === "number" ? input.responseTimeMs : 0,
-  });
+  return toStudentGradeView(
+    await gradeQuestAnswer({
+      questId,
+      answer,
+      hintRevealed: input.hintRevealed === true,
+      responseTimeMs:
+        typeof input.responseTimeMs === "number" ? input.responseTimeMs : 0,
+    }),
+  );
 }
 
 function parseAnswer(value: unknown): AnswerSubmission | null {
