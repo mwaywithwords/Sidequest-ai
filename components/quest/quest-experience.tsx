@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { submitQuestAnswer } from "@/app/quest/actions";
 import { QuestPhotoFrame } from "@/components/quest/quest-photo";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, SectionLabel } from "@/components/ui/card";
-import { ArrowRightIcon, SparkIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, CheckIcon, SparkIcon } from "@/components/ui/icons";
 import { copy } from "@/lib/copy";
+import type { ChallengeProgress, GradeView } from "@/lib/progress/outcome";
 import type { StudentQuest } from "@/lib/quest-present";
 
 type Stage = "discover" | "connect" | "challenge";
@@ -143,11 +145,25 @@ function ConnectStage({
 }
 
 function ChallengeStage({ quest }: { quest: StudentQuest }) {
+  const startedAt = useRef(0);
   const [value, setValue] = useState("");
   const [numerator, setNumerator] = useState("");
   const [denominator, setDenominator] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [hintOpen, setHintOpen] = useState(false);
+  const [progress, setProgress] = useState<ChallengeProgress>(quest.progress);
+  const [hintOpen, setHintOpen] = useState(quest.progress.status === "incorrect");
+  const [hintRevealed, setHintRevealed] = useState(
+    quest.progress.status === "incorrect",
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [invalid, setInvalid] = useState<string | null>(null);
+
+  useEffect(() => {
+    startedAt.current = performance.now();
+  }, []);
+
+  const finished = progress.status === "correct" || progress.status === "complete";
+  const shownHint =
+    progress.status === "incorrect" ? progress.hint : hintOpen ? quest.hint : null;
 
   const answerReady =
     quest.answer.kind === "number"
@@ -156,10 +172,52 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
         ? numerator.trim().length > 0 && denominator.trim().length > 0
         : false;
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!answerReady) return;
-    setSubmitted(true);
+    if (!answerReady || submitting || finished) return;
+    if (quest.answer.kind === "unsupported") return;
+
+    setSubmitting(true);
+    setInvalid(null);
+
+    const answer =
+      quest.answer.kind === "fraction"
+        ? { kind: "fraction" as const, numerator, denominator }
+        : { kind: "number" as const, value };
+
+    const result = await submitQuestAnswer({
+      questId: quest.questId,
+      answer,
+      hintRevealed: hintRevealed || shownHint !== null,
+      // Telemetry only: measured in the submit handler, not during render.
+      // eslint-disable-next-line react-hooks/purity -- event-handler clock
+      responseTimeMs: Math.max(0, Math.round(performance.now() - startedAt.current)),
+    });
+
+    applyGrade(result);
+    setSubmitting(false);
+  }
+
+  function applyGrade(result: GradeView) {
+    if (result.status === "invalid") {
+      setInvalid(
+        quest.answer.kind === "fraction"
+          ? copy.quest.experience.invalidFraction
+          : copy.quest.experience.invalidNumber,
+      );
+      return;
+    }
+
+    if (result.status === "unavailable") {
+      setInvalid(copy.quest.experience.unavailable);
+      return;
+    }
+
+    setProgress(result);
+    if (result.status === "incorrect") {
+      setHintOpen(true);
+      setHintRevealed(true);
+    }
   }
 
   return (
@@ -178,30 +236,8 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
           <p className="mt-6 text-sm leading-relaxed text-muted sm:text-base">
             {copy.quest.experience.unsupportedAnswer}
           </p>
-        ) : submitted ? (
-          <div className="mt-6">
-            <p className="text-base leading-relaxed text-cream/90">
-              {copy.quest.experience.submitted}
-            </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <ButtonLink
-                href={quest.scanHref}
-                size="lg"
-                className="w-full sm:flex-1"
-              >
-                {copy.quest.experience.scanAnother}
-                <ArrowRightIcon className="size-5" />
-              </ButtonLink>
-              <ButtonLink
-                href={quest.setupHref}
-                variant="secondary"
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                {copy.quest.experience.changeMission}
-              </ButtonLink>
-            </div>
-          </div>
+        ) : progress.status === "correct" || progress.status === "complete" ? (
+          <FinishedState progress={progress} quest={quest} />
         ) : (
           <form onSubmit={submit} className="mt-6">
             <AnswerFields
@@ -218,17 +254,22 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
               <Button
                 type="submit"
                 size="lg"
-                disabled={!answerReady}
+                disabled={!answerReady || submitting}
                 className="w-full sm:flex-1"
               >
-                {copy.quest.experience.submit}
+                {submitting
+                  ? copy.quest.experience.checking
+                  : copy.quest.experience.submit}
               </Button>
-              {quest.hint ? (
+              {quest.hint && !shownHint ? (
                 <Button
                   type="button"
                   variant="secondary"
                   size="lg"
-                  onClick={() => setHintOpen((open) => !open)}
+                  onClick={() => {
+                    setHintOpen(true);
+                    setHintRevealed(true);
+                  }}
                   className="w-full sm:w-auto"
                 >
                   {copy.quest.experience.hint}
@@ -236,15 +277,96 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
               ) : null}
             </div>
 
-            {hintOpen && quest.hint ? (
+            {invalid ? (
+              <p className="mt-5 animate-rise text-sm leading-relaxed text-muted">
+                {invalid}
+              </p>
+            ) : null}
+
+            {progress.status === "incorrect" ? (
+              <div className="mt-5 animate-rise rounded-tile bg-void/50 p-4 ring-1 ring-hair">
+                <p className="text-sm font-medium text-cream sm:text-base">
+                  {copy.quest.experience.incorrectTrail}
+                </p>
+                {progress.hint ? (
+                  <p className="mt-2.5 text-sm leading-relaxed text-muted sm:text-base">
+                    <span className="text-amber">
+                      {copy.quest.experience.hint}:{" "}
+                    </span>
+                    {progress.hint}
+                  </p>
+                ) : null}
+              </div>
+            ) : shownHint ? (
               <p className="mt-5 animate-rise text-sm leading-relaxed text-muted sm:text-base">
                 <span className="text-amber">{copy.quest.experience.hint}: </span>
-                {quest.hint}
+                {shownHint}
               </p>
             ) : null}
           </form>
         )}
       </Card>
+    </div>
+  );
+}
+
+function FinishedState({
+  progress,
+  quest,
+}: {
+  progress: Extract<ChallengeProgress, { status: "correct" | "complete" }>;
+  quest: StudentQuest;
+}) {
+  const solved = progress.status === "correct";
+
+  return (
+    <div className="mt-6 animate-rise">
+      <div
+        className="flex items-center gap-2.5 rounded-tile px-4 py-3.5"
+        style={{ background: `${quest.accent}1f` }}
+      >
+        <CheckIcon className="size-5" style={{ color: quest.accent }} />
+        <p className="font-display text-lg font-bold tracking-tight text-cream">
+          {solved
+            ? copy.quest.experience.correctHeading
+            : copy.quest.experience.revealedHeading}
+        </p>
+      </div>
+
+      {solved ? (
+        <p
+          className="mt-4 inline-flex items-center rounded-full px-3 py-1.5 font-mono text-sm font-semibold"
+          style={{ color: quest.accent, background: `${quest.accent}1f` }}
+        >
+          {copy.quest.experience.xp(progress.xp)}
+        </p>
+      ) : (
+        <p className="mt-4 text-sm leading-relaxed text-muted sm:text-base">
+          {copy.quest.experience.revealedBody}
+        </p>
+      )}
+
+      <p className="mt-4 text-base leading-relaxed text-cream/90 sm:text-lg">
+        {progress.explanation}
+      </p>
+      <p className="mt-2 font-mono text-sm text-muted">
+        {progress.revealedAnswer}
+      </p>
+
+      <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+        <ButtonLink href={quest.scanHref} size="lg" className="w-full sm:flex-1">
+          {copy.quest.experience.scanAnother}
+          <ArrowRightIcon className="size-5" />
+        </ButtonLink>
+        <ButtonLink
+          href={quest.setupHref}
+          variant="secondary"
+          size="lg"
+          className="w-full sm:w-auto"
+        >
+          {copy.quest.experience.changeMission}
+        </ButtonLink>
+      </div>
     </div>
   );
 }

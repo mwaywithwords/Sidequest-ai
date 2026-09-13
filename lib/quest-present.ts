@@ -1,6 +1,7 @@
 import type { CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
 import type { DetourPresentation } from "@/lib/detour";
+import type { ChallengeProgress } from "@/lib/progress/outcome";
 import type { Grade, SkillId } from "@/lib/types";
 
 /**
@@ -27,6 +28,7 @@ export type StudentAnswerInput =
   | { kind: "unsupported" };
 
 export type StudentQuest = {
+  questId: string;
   photo: QuestPhoto | null;
   objectName: string;
   objectNameSpoken: string;
@@ -42,6 +44,7 @@ export type StudentQuest = {
   question: string;
   hint: string | null;
   answer: StudentAnswerInput;
+  progress: ChallengeProgress;
   scanHref: string;
   setupHref: string;
 };
@@ -80,6 +83,7 @@ export type QuestExperience =
   | { kind: "ready"; quest: StudentQuest };
 
 export type PresentReadyQuestInput = {
+  questId: string;
   objectName: string;
   photo: QuestPhoto | null;
   discoveryTitle: string;
@@ -94,6 +98,7 @@ export type PresentReadyQuestInput = {
   skillAccent: string;
   grade: Grade;
   skillId: SkillId;
+  progress?: ChallengeProgress;
 };
 
 const FORBIDDEN_PAYLOAD_KEYS = [
@@ -128,6 +133,7 @@ export function presentStudentQuest(
   const skillSpoken = input.skillLabel.toLowerCase();
 
   return {
+    questId: input.questId,
     photo: input.photo,
     objectName: input.objectName,
     objectNameSpoken,
@@ -146,6 +152,7 @@ export function presentStudentQuest(
     question: input.question,
     hint: emptyToNull(input.hint1),
     answer: studentAnswerInput(input.answer),
+    progress: input.progress ?? { status: "open" },
     scanHref: `/scan?grade=${input.grade}&skill=${input.skillId}`,
     setupHref: `/setup?grade=${input.grade}`,
   };
