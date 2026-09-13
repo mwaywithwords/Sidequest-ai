@@ -142,6 +142,7 @@ export async function generateDiscovery({
                     usableProperties: fit.usableProperties,
                     anchors: fit.anchors,
                     reason: fit.reason,
+                    inspirationContext: fit.inspirationContext,
                   },
                   null,
                   2,

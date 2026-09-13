@@ -6,6 +6,7 @@ import {
   type ChallengeGenerationResult,
   type RegenerationHint,
 } from "@/lib/ai/challenge";
+import { buildContextualPayload } from "@/lib/ai/inspired-context";
 import {
   ObjectAnalysisSchema,
   type ReadySkillFit,
@@ -96,7 +97,8 @@ export async function generateQuestChallenge(
 
   const fit = fitParsed.data;
   if (
-    fit.challengeMode !== "object_math"
+    fit.challengeMode !== "object_math" &&
+    fit.challengeMode !== "inspired_math"
   ) {
     console.warn("[quest-challenge] refused mode", fit.challengeMode);
 
@@ -135,6 +137,11 @@ export async function generateQuestChallenge(
     recentOutcomes,
   });
 
+  const contextualGrounding =
+    readyFit.challengeMode === "inspired_math"
+      ? buildContextualPayload(analysis.data, readyFit.inspirationContext)
+      : null;
+
   const result = await generateChallenge({
     analysis: analysis.data,
     fit: readyFit,
@@ -142,6 +149,7 @@ export async function generateQuestChallenge(
     skillDescription: skill.description,
     grade,
     adaptation,
+    contextualGrounding,
     regeneration: options?.regeneration,
   });
 
@@ -173,6 +181,9 @@ export async function generateQuestChallenge(
       verificationStrategy: result.challenge.verificationStrategy,
       model: CHALLENGE_MODEL,
       challengeMode: readyFit.challengeMode,
+      ...(contextualGrounding === null
+        ? {}
+        : { contextualGrounding }),
       adaptation,
     },
   });

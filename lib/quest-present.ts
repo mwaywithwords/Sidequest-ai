@@ -40,6 +40,7 @@ export type StudentQuest = {
   lookClosely: string | null;
   practiceLine: string;
   imaginedSituation: boolean;
+  worldContext: boolean;
   highlightedValues: GroundedValueView[];
   question: string;
   hint: string | null;
@@ -90,7 +91,8 @@ export type PresentReadyQuestInput = {
   discoveryText: string;
   objectConnection: string;
   valuesUsed: readonly UsedValue[];
-  challengeMode: "object_math" | "direct" | "grounded_scenario";
+  challengeMode: "object_math" | "inspired_math" | "direct" | "grounded_scenario";
+  inspirationTopic?: string | null;
   question: string;
   hint1: string | null;
   answer: CorrectAnswer;
@@ -118,6 +120,7 @@ const FORBIDDEN_PAYLOAD_KEYS = [
   "object_math",
   "investigation_math",
   "inspired_math",
+  "contextual",
   "given_in_problem",
   "observed",
   "student_provided",
@@ -134,6 +137,8 @@ export function presentStudentQuest(
   const primary = highlightedValues[0];
   const objectNameSpoken = spokenObjectName(input.objectName);
   const skillSpoken = input.skillLabel.toLowerCase();
+  const inspired = input.challengeMode === "inspired_math";
+  const topic = input.inspirationTopic?.trim() || objectNameSpoken;
 
   return {
     questId: input.questId,
@@ -145,15 +150,20 @@ export function presentStudentQuest(
     discoveryTitle: input.discoveryTitle,
     discoveryText: input.discoveryText,
     connection: input.objectConnection,
-    lookClosely:
-      primary === undefined
+    lookClosely: inspired
+      ? copy.quest.experience.inspiredTrail(objectNameSpoken, topic)
+      : primary === undefined
         ? null
         : copy.quest.experience.lookClosely(objectNameSpoken, primary.display),
-    practiceLine: copy.quest.experience.thatMeasurement(skillSpoken),
+    practiceLine: inspired
+      ? copy.quest.experience.inspiredPractice(skillSpoken)
+      : copy.quest.experience.thatMeasurement(skillSpoken),
     imaginedSituation:
+      inspired ||
       input.challengeMode === "grounded_scenario" ||
       (input.challengeMode === "object_math" &&
         input.valuesUsed.some((value) => value.origin === "given_in_problem")),
+    worldContext: inspired,
     highlightedValues,
     question: input.question,
     hint: emptyToNull(input.hint1),

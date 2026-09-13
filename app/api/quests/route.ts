@@ -195,20 +195,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (fit.status === "inspiredMath") {
-      // A legitimate path, stored on the quest. Challenge Generation for
-      // inspired_math is a later step; this request must not invent one.
-      return NextResponse.json(
-        {
-          questId,
-          inspiredMath: true,
-          objectName: reading.analysis.objectName,
-          inspirationContext: fit.fit.inspirationContext,
-        },
-        { status: 201 },
-      );
-    }
-
     if (fit.status !== "ok") {
       // A poor fit and a broken stage are both refusals here, and both leave the
       // quest marked so nothing downstream treats it as teachable. Which of the

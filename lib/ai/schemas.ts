@@ -94,7 +94,9 @@ export const ObjectAnalysisSchema = z.strictObject({
  * OBSERVED          a fact established by ObjectAnalysis.
  * STUDENT_PROVIDED  something collected during a SIDEQUEST investigation.
  *
- * `given_in_problem` is not here. That origin belongs to Challenge Generation.
+ * `contextual` and `given_in_problem` are not here. Those origins belong
+ * to Challenge Generation, not to a fact established by the photograph
+ * or a student investigation.
  */
 export const INVESTIGATION_VALUE_ORIGINS = [
   "observed",
@@ -102,14 +104,19 @@ export const INVESTIGATION_VALUE_ORIGINS = [
 ] as const;
 
 /**
- * The full set a future Challenge Generator may use. Includes the investigation
- * origins plus GIVEN_IN_PROBLEM — a hypothetical the problem text may invent.
+ * The full set Challenge Generation may persist on a used value.
  *
- * Skill Fit must not emit this broader type. Investigation anchors stay on
- * `INVESTIGATION_VALUE_ORIGINS` so a hypothetical cannot be stored as a fact.
+ * OBSERVED            a fact established by ObjectAnalysis.
+ * STUDENT_PROVIDED    something collected during an investigation.
+ * CONTEXTUAL          reliable real-world context for the identified object.
+ * GIVEN_IN_PROBLEM    a hypothetical the problem text introduces explicitly.
+ *
+ * These four must never be confused. Skill Fit must not emit contextual
+ * or given_in_problem on investigation anchors.
  */
 export const CHALLENGE_VALUE_ORIGINS = [
   ...INVESTIGATION_VALUE_ORIGINS,
+  "contextual",
   "given_in_problem",
 ] as const;
 
@@ -121,11 +128,11 @@ export const InvestigationAnchorSchema = z.strictObject({
 /**
  * The four investigation paths, in the order SIDEQUEST must try them.
  *
- * `object_math` uses properties already in the reading and is the only
- * path this step may send to Challenge Generation.
+ * `object_math` uses properties already in the reading.
  * `investigation_math` keeps the quest alive for one more observation.
- * `inspired_math` records a legitimate real-world context for a later
- * stage; it does not generate a challenge here.
+ * `inspired_math` uses the object as a topic anchor plus contextual or
+ * given-in-problem values. Challenge Generation may run for both ready
+ * paths.
  * `poor_fit` is last, after all three paths have been considered.
  */
 export const CHALLENGE_MODES = [
@@ -157,6 +164,28 @@ export const EvidenceRequestSchema = z.strictObject({
 export const InspirationContextSchema = z.strictObject({
   topic: text.max(120),
   reason: text.max(280),
+});
+
+/**
+ * One evergreen real-world fact that may later be used as a contextual
+ * value. It is never an observed property of the photograph.
+ */
+export const ContextualFactSchema = z.strictObject({
+  label: text.max(80),
+  value: z.number(),
+  unit: text.optional(),
+  statement: text.max(200),
+});
+
+/**
+ * The contextual payload Challenge Generation and the verifier share.
+ * A contextual used value must match one of these facts. An empty facts
+ * list means the challenge may only use given_in_problem numbers.
+ */
+export const ContextualPayloadSchema = z.strictObject({
+  topic: text.max(120),
+  reason: text.max(280),
+  facts: z.array(ContextualFactSchema),
 });
 
 const skillFitShared = {
@@ -194,7 +223,7 @@ const SkillFitInvestigationMathSchema = z.strictObject({
 const SkillFitInspiredMathSchema = z.strictObject({
   ...skillFitShared,
   challengeMode: z.literal("inspired_math"),
-  canGenerateChallenge: z.literal(false),
+  canGenerateChallenge: z.literal(true),
   usableProperties: z.array(text),
   evidenceRequest: z.null(),
   inspirationContext: InspirationContextSchema,
@@ -254,6 +283,10 @@ export function normalizeSkillFitRecord(value: unknown): unknown {
       record.inspirationContext = null;
     }
     return record;
+  }
+
+  if (mode === "inspired_math") {
+    record.canGenerateChallenge = true;
   }
 
   if (record.inspirationContext === undefined) {
@@ -419,8 +452,9 @@ export const GenerationMetadataSchema = z.strictObject({
   verificationStrategy: text,
   model: z.string().optional(),
   challengeMode: z
-    .enum(["object_math", "direct", "grounded_scenario"])
+    .enum(["object_math", "inspired_math", "direct", "grounded_scenario"])
     .optional(),
+  contextualGrounding: ContextualPayloadSchema.optional(),
   adaptation: AdaptiveProfileSchema.optional(),
 });
 
@@ -477,7 +511,7 @@ export type EvidenceRequest = z.infer<typeof EvidenceRequestSchema>;
 export type SkillFitAnalysis = z.infer<typeof SkillFitAnalysisSchema>;
 export type ReadySkillFit = Extract<
   SkillFitAnalysis,
-  { challengeMode: "object_math" }
+  { challengeMode: "object_math" | "inspired_math" }
 >;
 export type InvestigationMathFit = Extract<
   SkillFitAnalysis,
@@ -492,6 +526,8 @@ export type PoorFitAnalysis = Extract<
   { challengeMode: "poor_fit" }
 >;
 export type InspirationContext = z.infer<typeof InspirationContextSchema>;
+export type ContextualFact = z.infer<typeof ContextualFactSchema>;
+export type ContextualPayload = z.infer<typeof ContextualPayloadSchema>;
 
 export type Discovery = z.infer<typeof DiscoverySchema>;
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];

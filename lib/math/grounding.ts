@@ -1,4 +1,6 @@
+import { isContextualFact } from "@/lib/ai/inspired-context";
 import type {
+  ContextualPayload,
   ObjectAnalysis,
   ReadySkillFit,
   UsedValue,
@@ -76,6 +78,13 @@ export function isObservedValue(
     if (!unitsAgree(fact.unit, value.unit)) return false;
     return fact.labels.some((label) => labelsLooselyMatch(label, value.label));
   });
+}
+
+export function isContextualValue(
+  value: UsedValue,
+  payload: ContextualPayload | null | undefined,
+): boolean {
+  return isContextualFact(value, payload ?? null);
 }
 
 export function isStudentProvidedValue(

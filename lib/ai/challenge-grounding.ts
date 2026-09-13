@@ -1,7 +1,9 @@
+import { isContextualFact } from "@/lib/ai/inspired-context";
 import {
   type ChallengeValueOrigin,
   type Computation,
   ComputationSchema,
+  type ContextualPayload,
   type CorrectAnswer,
   CorrectAnswerSchema,
   ChallengeSchema,
@@ -11,6 +13,7 @@ import {
   type UsedValue,
   UsedValueSchema,
 } from "@/lib/ai/schemas";
+import { normaliseUnit as foldUnit } from "@/lib/math/units";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
 import type { Grade, SkillId } from "@/lib/types";
 
@@ -96,6 +99,7 @@ export type ChallengeContext = {
   skillId: SkillId;
   grade: Grade;
   studentEvidence: readonly StudentEvidenceValue[];
+  contextualGrounding?: ContextualPayload | null;
 };
 
 export type ChallengeFinalization =
@@ -173,11 +177,11 @@ export function finalizeChallenge(
     return { status: "generation_failure" };
   }
 
-  if (!hasGroundedAnchor(valuesUsed)) {
+  if (!hasUsableAnchor(valuesUsed, context)) {
     return { status: "poor_fit" };
   }
 
-  if (!computationUsesGroundedAnchor(computation, valuesUsed)) {
+  if (!computationUsesUsableAnchor(computation, valuesUsed, context)) {
     return { status: "poor_fit" };
   }
 
@@ -189,7 +193,15 @@ export function finalizeChallenge(
     return { status: "generation_failure" };
   }
 
-  if (!objectConnectionCitesAnchor(objectConnection, valuesUsed)) {
+  if (!objectConnectionCitesAnchor(objectConnection, valuesUsed, context)) {
+    return { status: "generation_failure" };
+  }
+
+  if (!inspiredStaysOnTopic(question, context)) {
+    return { status: "generation_failure" };
+  }
+
+  if (attributesContextualAsObserved(question, valuesUsed, context)) {
     return { status: "generation_failure" };
   }
 
@@ -259,6 +271,20 @@ export function hasGroundedAnchor(values: readonly UsedValue[]): boolean {
   );
 }
 
+export function hasUsableAnchor(
+  values: readonly UsedValue[],
+  context: ChallengeContext,
+): boolean {
+  if (hasGroundedAnchor(values)) return true;
+
+  if (context.fit.challengeMode !== "inspired_math") return false;
+
+  return (
+    values.some((value) => value.origin === "contextual") ||
+    values.some((value) => value.origin === "given_in_problem")
+  );
+}
+
 export function refersToObject(
   question: string,
   analysis: ObjectAnalysis,
@@ -285,19 +311,108 @@ export function refersToObject(
 export function objectConnectionCitesAnchor(
   connection: string,
   values: readonly UsedValue[],
+  context?: ChallengeContext,
 ): boolean {
   const hay = connection.toLowerCase();
-  const anchors = values.filter(
+  const photoAnchors = values.filter(
     (value) =>
       value.origin === "observed" || value.origin === "student_provided",
   );
 
-  return anchors.some((anchor) => {
-    if (hay.includes(String(anchor.value))) return true;
-    if (hay.includes(anchor.label.toLowerCase())) return true;
-    if (anchor.unit && hay.includes(anchor.unit.toLowerCase())) return true;
+  if (
+    photoAnchors.some((anchor) => connectionCitesValue(hay, anchor))
+  ) {
+    return true;
+  }
+
+  if (context?.fit.challengeMode !== "inspired_math") {
+    return false;
+  }
+
+  const worldAnchors = values.filter(
+    (value) =>
+      value.origin === "contextual" || value.origin === "given_in_problem",
+  );
+
+  if (worldAnchors.some((anchor) => connectionCitesValue(hay, anchor))) {
+    return true;
+  }
+
+  const topic =
+    context.contextualGrounding?.topic ??
+    context.fit.inspirationContext?.topic ??
+    "";
+  return topicTokens(topic).some((token) => hay.includes(token));
+}
+
+function connectionCitesValue(hay: string, value: UsedValue): boolean {
+  if (hay.includes(String(value.value))) return true;
+  if (hay.includes(value.label.toLowerCase())) return true;
+  if (value.unit && hay.includes(value.unit.toLowerCase())) return true;
+  return false;
+}
+
+function inspiredStaysOnTopic(
+  question: string,
+  context: ChallengeContext,
+): boolean {
+  if (context.fit.challengeMode !== "inspired_math") return true;
+  if (!refersToObject(question, context.analysis)) return false;
+
+  const payload = context.contextualGrounding;
+  const topic =
+    payload?.topic ?? context.fit.inspirationContext?.topic ?? "";
+  const extra = (payload?.facts ?? [])
+    .flatMap((fact) => [fact.label, fact.statement])
+    .join(" ");
+  const tokens = topicTokens(`${topic} ${extra}`).filter(
+    (token) => !context.analysis.objectName.toLowerCase().includes(token),
+  );
+
+  if (tokens.length === 0) return true;
+
+  const hay = question.toLowerCase();
+  return tokens.some((token) => {
+    if (hay.includes(token)) return true;
+    if (token.endsWith("s") && hay.includes(token.slice(0, -1))) return true;
     return false;
   });
+}
+
+const ATTRIBUTED_TO_OBJECT =
+  /\b(?:your|the)\s+[\w-]+\s+(?:shows|showed|has printed|is labelled|is labeled|contains|holds)\s+(\d+(?:\.\d+)?)/gi;
+
+function attributesContextualAsObserved(
+  question: string,
+  values: readonly UsedValue[],
+  context: ChallengeContext,
+): boolean {
+  if (context.fit.challengeMode !== "inspired_math") return false;
+
+  const contextual = values.filter((value) => value.origin === "contextual");
+  if (contextual.length === 0) return false;
+
+  for (const match of question.matchAll(ATTRIBUTED_TO_OBJECT)) {
+    const raw = match[1];
+    if (raw === undefined) continue;
+    const amount = Number(raw);
+    if (contextual.some((value) => value.value === amount)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function topicTokens(text: string): string[] {
+  return [
+    ...new Set(
+      text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/i)
+        .filter((token) => token.length >= 4),
+    ),
+  ];
 }
 
 export function computationOperands(computation: Computation): UsedValue[] {
@@ -463,6 +578,7 @@ function valuesAreGrounded(
   context: ChallengeContext,
 ): boolean {
   const observed = catalogObserved(context.analysis, context.fit);
+  const payload = context.contextualGrounding ?? null;
 
   for (const value of values) {
     if (value.origin === "observed" && !isObservedFact(value, observed)) {
@@ -476,30 +592,42 @@ function valuesAreGrounded(
       return false;
     }
 
-    if (
-      value.origin === "given_in_problem" &&
-      isObservedFact(value, observed)
-    ) {
-      // A real object fact labelled as hypothetical would hide where the
-      // number came from. The origin has to stay honest.
-      return false;
+    if (value.origin === "contextual") {
+      if (context.fit.challengeMode !== "inspired_math") return false;
+      if (isObservedFact(value, observed)) return false;
+      if (!isContextualFact(value, payload)) return false;
+    }
+
+    if (value.origin === "given_in_problem") {
+      if (isObservedFact(value, observed)) return false;
+      if (isContextualFact(value, payload)) return false;
     }
   }
 
   return true;
 }
 
-function computationUsesGroundedAnchor(
+function computationUsesUsableAnchor(
   computation: Computation,
   values: readonly UsedValue[],
+  context: ChallengeContext,
 ): boolean {
   const operands = computationOperands(computation);
-  const anchors = values.filter(
-    (value) =>
-      value.origin === "observed" || value.origin === "student_provided",
-  );
+  const allowed =
+    context.fit.challengeMode === "inspired_math"
+      ? values.filter(
+          (value) =>
+            value.origin === "observed" ||
+            value.origin === "student_provided" ||
+            value.origin === "contextual" ||
+            value.origin === "given_in_problem",
+        )
+      : values.filter(
+          (value) =>
+            value.origin === "observed" || value.origin === "student_provided",
+        );
 
-  return anchors.some((anchor) =>
+  return allowed.some((anchor) =>
     operands.some((operand) => sameValue(operand, anchor)),
   );
 }
@@ -680,7 +808,7 @@ function unitsAgree(left?: string, right?: string): boolean {
 }
 
 function unitsLooselyMatch(recorded: string, mentioned: string): boolean {
-  return normaliseUnit(recorded) === normaliseUnit(mentioned);
+  return foldUnit(recorded) === foldUnit(mentioned);
 }
 
 function labelsLooselyMatch(left: string, right: string): boolean {
@@ -691,34 +819,6 @@ function labelsLooselyMatch(left: string, right: string): boolean {
 
 function normaliseLabel(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ").replace(/[.,;:]+$/g, "");
-}
-
-function normaliseUnit(unit: string): string {
-  const folded = unit
-    .toLowerCase()
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (
-    folded === "fluid ounces" ||
-    folded === "fluid ounce" ||
-    folded === "fl oz"
-  ) {
-    return "fl oz";
-  }
-  if (folded === "ounces" || folded === "ounce" || folded === "oz") return "oz";
-  if (
-    folded === "millilitres" ||
-    folded === "milliliters" ||
-    folded === "millilitre" ||
-    folded === "milliliter" ||
-    folded === "ml"
-  ) {
-    return "ml";
-  }
-  if (folded === "inches" || folded === "inch" || folded === "in") return "in";
-  return folded;
 }
 
 function cleanOptional(value: string | null): string | undefined {

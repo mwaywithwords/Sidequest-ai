@@ -1,5 +1,6 @@
 import type {
   Computation,
+  ContextualPayload,
   CorrectAnswer,
   GeneratedChallenge,
   ObjectAnalysis,
@@ -9,6 +10,7 @@ import type {
 import { computationOperands, evaluateComputation, simplifyFraction } from "@/lib/math/evaluate";
 import { gradeViolation } from "@/lib/math/grade-rules";
 import {
+  isContextualValue,
   isObservedValue,
   isStudentProvidedValue,
   type StudentEvidenceValue,
@@ -52,6 +54,7 @@ export type VerificationInput = {
   skillId: SkillId;
   grade: Grade;
   studentEvidence?: readonly StudentEvidenceValue[];
+  contextualGrounding?: ContextualPayload | null;
 };
 
 const HYPOTHETICAL = /\b(if|suppose|imagine|what if)\b/i;
@@ -82,6 +85,7 @@ export function verifyChallenge(input: VerificationInput): VerificationResult {
     analysis,
     fit,
     evidence,
+    input.contextualGrounding ?? null,
   );
   if (originCheck) return originCheck;
 
@@ -121,7 +125,15 @@ export function verifyChallenge(input: VerificationInput): VerificationResult {
     return fail("grade_inappropriate", gradeProblem);
   }
 
-  if (!objectConnectionHolds(challenge, analysis, operands)) {
+  if (
+    !objectConnectionHolds(
+      challenge,
+      analysis,
+      operands,
+      fit,
+      input.contextualGrounding ?? null,
+    )
+  ) {
     return fail(
       "weak_object_connection",
       "objectConnection does not explain how this object grounds the challenge.",
@@ -152,7 +164,7 @@ export function guidanceForFailure(reason: VerificationReason): string {
     case "incorrect_answer":
       return "Your previous arithmetic did not match the structured computation. Generate a new challenge and recompute carefully.";
     case "ungrounded_value":
-      return "The previous challenge used a value that was not established by ObjectAnalysis. Use only grounded object values plus explicitly hypothetical given-in-problem values.";
+      return "The previous challenge used a value that was not established by its declared origin. Observed values must match ObjectAnalysis. Contextual values must match the contextual payload. Given-in-problem values must be stated in the question. Do not relabel origins.";
     case "unit_mismatch":
       return "The previous challenge mixed incompatible units.";
     case "invalid_values":
@@ -164,7 +176,7 @@ export function guidanceForFailure(reason: VerificationReason): string {
     case "grade_inappropriate":
       return "The previous challenge was not appropriate for this grade. Use smaller numbers and the operations this grade has met.";
     case "weak_object_connection":
-      return "The previous objectConnection did not name a real grounded property from the photograph.";
+      return "The previous objectConnection did not explain how this object or its real-world context grounds the challenge.";
     case "unsupported_computation":
       return "The previous computation type is not supported. Use one of the allowed structured computation shapes.";
   }
@@ -285,6 +297,7 @@ function verifyOrigins(
   analysis: ObjectAnalysis,
   fit: ReadySkillFit,
   evidence: readonly StudentEvidenceValue[],
+  payload: ContextualPayload | null,
 ): VerificationResult | null {
   for (const value of challenge.valuesUsed) {
     if (value.origin === "observed" && !isObservedValue(value, analysis, fit)) {
@@ -302,6 +315,45 @@ function verifyOrigins(
         "ungrounded_value",
         `The student-provided value "${value.label}" has no persisted evidence.`,
       );
+    }
+
+    if (value.origin === "contextual") {
+      if (fit.challengeMode !== "inspired_math") {
+        return fail(
+          "ungrounded_value",
+          "A contextual value was used outside inspired_math.",
+        );
+      }
+
+      if (isObservedValue(value, analysis, fit)) {
+        return fail(
+          "ungrounded_value",
+          `The contextual value "${value.label}" is actually an observed object fact.`,
+        );
+      }
+
+      if (!isContextualValue(value, payload)) {
+        return fail(
+          "ungrounded_value",
+          `The contextual value "${value.label}" is not in the contextual payload.`,
+        );
+      }
+    }
+
+    if (value.origin === "given_in_problem") {
+      if (isObservedValue(value, analysis, fit)) {
+        return fail(
+          "ungrounded_value",
+          `The given-in-problem value "${value.label}" is actually an observed object fact.`,
+        );
+      }
+
+      if (isContextualValue(value, payload)) {
+        return fail(
+          "ungrounded_value",
+          `The given-in-problem value "${value.label}" is actually a contextual fact.`,
+        );
+      }
     }
   }
 
@@ -324,6 +376,45 @@ function verifyOrigins(
         );
       }
     }
+  }
+
+  if (fit.challengeMode === "inspired_math") {
+    const inspiredOperands = operands.filter(
+      (operand) =>
+        operand.origin === "contextual" ||
+        operand.origin === "given_in_problem" ||
+        operand.origin === "observed" ||
+        operand.origin === "student_provided",
+    );
+
+    if (inspiredOperands.length === 0) {
+      return fail(
+        "ungrounded_value",
+        "The inspired computation does not use a declared value.",
+      );
+    }
+
+    const inspiredOk = inspiredOperands.some((operand) => {
+      if (operand.origin === "observed") {
+        return isObservedValue(operand, analysis, fit);
+      }
+      if (operand.origin === "student_provided") {
+        return isStudentProvidedValue(operand, evidence);
+      }
+      if (operand.origin === "contextual") {
+        return isContextualValue(operand, payload);
+      }
+      return operand.origin === "given_in_problem";
+    });
+
+    if (!inspiredOk) {
+      return fail(
+        "ungrounded_value",
+        "The inspired computation operand could not be established independently.",
+      );
+    }
+
+    return null;
   }
 
   const groundedOperands = operands.filter(
@@ -393,26 +484,49 @@ function objectConnectionHolds(
   challenge: GeneratedChallenge,
   analysis: ObjectAnalysis,
   operands: readonly UsedValue[],
+  fit: ReadySkillFit,
+  payload: ContextualPayload | null,
 ): boolean {
   const connection = challenge.objectConnection.trim();
   if (connection.length === 0) return false;
 
   const hay = connection.toLowerCase();
-  const anchors = operands.filter(
+  const photoAnchors = operands.filter(
     (operand) =>
       operand.origin === "observed" || operand.origin === "student_provided",
   );
 
-  const citesAnchor = anchors.some((anchor) => {
+  const citesPhoto = photoAnchors.some((anchor) => {
     if (hay.includes(String(anchor.value))) return true;
     if (hay.includes(anchor.label.toLowerCase())) return true;
     if (anchor.unit && hay.includes(anchor.unit.toLowerCase())) return true;
     return false;
   });
 
-  if (!citesAnchor) return false;
+  if (fit.challengeMode === "inspired_math") {
+    const worldAnchors = operands.filter(
+      (operand) =>
+        operand.origin === "contextual" ||
+        operand.origin === "given_in_problem",
+    );
+    const citesWorld = worldAnchors.some((anchor) => {
+      if (hay.includes(String(anchor.value))) return true;
+      if (hay.includes(anchor.label.toLowerCase())) return true;
+      return false;
+    });
+    const topic = payload?.topic ?? fit.inspirationContext?.topic ?? "";
+    const citesTopic = topic
+      .toLowerCase()
+      .split(/[^a-z0-9]+/i)
+      .filter((token) => token.length >= 4)
+      .some((token) => hay.includes(token));
 
-  if (GENERIC_CONNECTION.test(connection) && anchors.length === 0) {
+    if (!citesPhoto && !citesWorld && !citesTopic) return false;
+  } else if (!citesPhoto) {
+    return false;
+  }
+
+  if (GENERIC_CONNECTION.test(connection) && photoAnchors.length === 0) {
     return false;
   }
 
@@ -421,12 +535,11 @@ function objectConnectionHolds(
     .split(/[^a-z0-9]+/i)
     .filter((token) => token.length >= 4);
 
-  const citesObject =
+  return (
     (objectName.length > 0 && hay.includes(objectName)) ||
     tokens.some((token) => hay.includes(token)) ||
-    citesAnchor;
-
-  return citesObject;
+    citesPhoto
+  );
 }
 
 function answerUnitsAgree(
