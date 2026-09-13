@@ -82,3 +82,28 @@ export function CompassIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 5 5" />
+    </Icon>
+  );
+}
+
+export function BoltIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13 3 5 14h6l-1 7 9-12h-6Z" />
+    </Icon>
+  );
+}
+
+export function StarIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m12 3 2.2 5.4L20 9.2l-4 3.8.9 5.8L12 16.2 7.1 18.8 8 13 4 9.2l5.8-.8Z" />
+    </Icon>
+  );
+}

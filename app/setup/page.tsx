@@ -11,7 +11,7 @@ export default async function SetupPage(props: PageProps<"/setup">) {
   const params = await props.searchParams;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="game-page game-page-tight">
       <FlowSteps current="setup" />
       <SetupFlow initialGrade={parseGrade(params.grade)} />
     </div>

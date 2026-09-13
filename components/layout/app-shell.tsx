@@ -1,48 +1,69 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { CompassIcon } from "@/components/ui/icons";
-import { Wordmark } from "@/components/brand/wordmark";
-import { copy } from "@/lib/copy";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Wordmark } from "@/components/brand/wordmark";
+import { CompassIcon } from "@/components/ui/icons";
+import { copy } from "@/lib/copy";
+
+type RouteKind = "landing" | "setup" | "scan" | "quest" | "progress" | "page";
+
+function routeKind(pathname: string): RouteKind {
+  if (pathname === "/") return "landing";
+  if (pathname.startsWith("/setup")) return "setup";
+  if (pathname.startsWith("/scan")) return "scan";
+  if (pathname.startsWith("/quest")) return "quest";
+  if (pathname.startsWith("/progress")) return "progress";
+  return "page";
+}
 
 /**
- * Frames every route: ambient light, the top bar, and a centred column that
- * stays comfortable from a phone up to an iPad in landscape.
+ * Shared handheld game chrome. Route kind only changes density, footer,
+ * and progress access — never product behavior.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const kind = routeKind(usePathname());
+  const showFooter = kind === "landing";
+  const onProgress = kind === "progress";
+
   return (
-    <div className="relative isolate flex min-h-[100dvh] flex-col">
+    <div className="game-app" data-route={kind}>
       <div
         aria-hidden
         className="ambient-glow pointer-events-none fixed inset-0 -z-10"
       />
       <div
         aria-hidden
-        className="dot-grid pointer-events-none fixed inset-0 -z-10"
+        className="play-specks pointer-events-none fixed inset-0 -z-10"
       />
 
-      <header className="sticky top-0 z-20 border-b border-hair bg-ink/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-5 sm:px-8">
+      <header className="game-header">
+        <div className="game-header-bar">
           <Wordmark />
-          <Link
-            href="/progress"
-            aria-label="Your progress"
-            className="inline-flex min-h-12 items-center gap-2 rounded-full px-3 text-sm text-muted transition hover:bg-raised hover:text-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime"
-          >
-            <CompassIcon className="size-4" />
-            <span>Progress</span>
-          </Link>
+          {onProgress ? (
+            <span className="game-profile is-current" aria-current="page">
+              <CompassIcon className="size-5" />
+            </span>
+          ) : (
+            <Link
+              href="/progress"
+              aria-label="Your progress"
+              className="game-profile"
+            >
+              <CompassIcon className="size-5" />
+            </Link>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-20 pt-8 sm:px-8 sm:pt-12">
-        {children}
-      </main>
+      <main className="game-main">{children}</main>
 
-      <footer className="border-t border-hair px-5 py-8 sm:px-8">
-        <p className="mx-auto max-w-5xl text-xs text-faint">
-          {copy.brand.footer}
-        </p>
-      </footer>
+      {showFooter ? (
+        <footer className="game-footer">
+          <p className="game-footer-copy">{copy.brand.footer}</p>
+        </footer>
+      ) : null}
     </div>
   );
 }

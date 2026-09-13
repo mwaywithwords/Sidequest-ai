@@ -31,6 +31,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#0e0c18",
 };
 
@@ -40,7 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${display.variable} ${sans.variable} ${mono.variable} antialiased`}
     >
-      <body className="min-h-[100dvh] bg-ink font-sans text-cream">
+      <body className="min-h-[100dvh] overflow-x-hidden bg-ink font-sans text-cream">
         <AppShell>{children}</AppShell>
       </body>
     </html>

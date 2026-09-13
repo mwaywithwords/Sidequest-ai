@@ -1,5 +1,4 @@
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Card, SectionLabel } from "@/components/ui/card";
 import { CompassIcon } from "@/components/ui/icons";
 import type { DetourPresentation } from "@/lib/detour";
 
@@ -14,8 +13,8 @@ type DetourAction = {
  *
  * Takes presentation data only — title, message, suggestions, actions — so
  * it cannot leak a reason code or a moderation category even if a caller
- * has one. The compass and lime accent keep it in the same visual family
- * as the rest of the product, not in the family of error pages.
+ * has one. The compass keeps it in the same visual family as the rest of
+ * the product, not in the family of error pages.
  */
 export function DetourPanel({
   presentation,
@@ -28,39 +27,34 @@ export function DetourPanel({
   secondary?: DetourAction;
   accent?: string;
 }) {
+  const tone = accent ?? "#c8ff4d";
+
   return (
-    <Card accent={accent ?? "#c8ff4d"} className="animate-rise p-5 sm:p-8">
-      <div className="flex items-center gap-2">
-        <CompassIcon
-          className="size-6"
-          style={{ color: accent ?? "#c8ff4d" }}
-        />
-        <SectionLabel accent={accent ?? "#c8ff4d"}>
+    <div className="animate-rise text-center">
+      <div className="flex items-center justify-center gap-2">
+        <CompassIcon className="size-5" style={{ color: tone }} />
+        <p className="game-moment" style={{ color: tone }}>
           {presentation.title}
-        </SectionLabel>
+        </p>
       </div>
 
-      <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-        {presentation.heading}
-      </h1>
+      <h1 className="game-title mt-3">{presentation.heading}</h1>
 
-      <p className="mt-4 max-w-lg text-base leading-relaxed text-cream/90 sm:text-lg">
-        {presentation.message}
-      </p>
+      <p className="mx-auto mt-3 game-support">{presentation.message}</p>
 
       {presentation.suggestions.length > 0 ? (
-        <div className="mt-6">
-          <p className="text-sm font-medium text-cream">{presentation.lead}</p>
+        <div className="mx-auto mt-5 max-w-sm text-left">
+          <p className="text-sm font-extrabold text-cream">{presentation.lead}</p>
           <ul className="mt-3 flex flex-col gap-2">
             {presentation.suggestions.map((suggestion) => (
               <li
                 key={suggestion}
-                className="flex items-start gap-3 text-sm leading-relaxed text-muted sm:text-base"
+                className="flex items-start gap-3 text-sm leading-relaxed text-muted"
               >
                 <span
                   aria-hidden
-                  className="mt-2 size-1.5 shrink-0 rounded-full"
-                  style={{ background: accent ?? "#c8ff4d" }}
+                  className="mt-1.5 size-1.5 shrink-0 rounded-full"
+                  style={{ background: tone }}
                 />
                 {suggestion}
               </li>
@@ -69,13 +63,13 @@ export function DetourPanel({
         </div>
       ) : null}
 
-      <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+      <div className="game-actions mt-6">
         <ActionButton action={primary} variant="primary" />
         {secondary ? (
           <ActionButton action={secondary} variant="secondary" />
         ) : null}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -86,15 +80,13 @@ function ActionButton({
   action: DetourAction;
   variant: "primary" | "secondary";
 }) {
-  const className = "w-full sm:flex-1";
-
   if (action.href) {
     return (
       <ButtonLink
         href={action.href}
         variant={variant}
         size="lg"
-        className={className}
+        className="w-full"
         onClick={action.onClick}
       >
         {action.label}
@@ -108,7 +100,7 @@ function ActionButton({
       variant={variant}
       size="lg"
       onClick={action.onClick}
-      className={className}
+      className="w-full"
     >
       {action.label}
     </Button>

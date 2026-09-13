@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { CheckIcon } from "@/components/ui/icons";
 
 /**
  * The selectable tile used for both grade and skill. Presentational only, so it
@@ -7,49 +8,63 @@ import { cn } from "@/lib/cn";
 export function OptionTile({
   mark,
   label,
-  blurb,
   accent,
   selected,
   onSelect,
+  variant = "skill",
 }: {
   mark: string;
   label: string;
-  blurb: string;
+  blurb?: string;
   accent: string;
   selected: boolean;
   onSelect: () => void;
+  variant?: "skill" | "grade";
 }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={onSelect}
+      data-selected={selected}
       className={cn(
-        "group relative flex min-h-[104px] w-full flex-col items-start gap-1 overflow-hidden rounded-tile",
-        "bg-raised/70 p-4 text-left ring-1 transition active:scale-[0.98]",
+        "relative flex w-full flex-col items-center justify-center overflow-hidden rounded-[1.15rem] border-[3px] border-b-8 px-2 py-4 text-center transition-transform",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime",
-        selected ? "ring-transparent" : "ring-hair hover:bg-hover hover:ring-hair-strong",
+        "active:translate-y-1",
+        variant === "grade" ? "min-h-[6.5rem] sm:min-h-[7.25rem]" : "min-h-[7.5rem] sm:min-h-[8.25rem]",
       )}
-      style={
-        selected
-          ? {
-              boxShadow: `inset 0 0 0 2px ${accent}, 0 14px 40px -16px ${accent}80`,
-              background: `linear-gradient(180deg, ${accent}1f, transparent 70%)`,
-            }
-          : undefined
-      }
+      style={{
+        borderColor: selected ? accent : "#3a3458",
+        borderBottomColor: selected ? accent : "#0b0914",
+        background: selected
+          ? `linear-gradient(180deg, ${accent}55, #1c1830 68%)`
+          : `linear-gradient(180deg, ${accent}22, #1c1830 62%)`,
+        boxShadow: selected ? `0 0 0 3px ${accent}` : "0 2px 0 rgb(0 0 0 / 0.35)",
+        transform: selected ? "translateY(3px)" : undefined,
+      }}
     >
+      {selected ? (
+        <span
+          aria-hidden
+          className="absolute top-2 right-2 grid size-6 place-items-center rounded-md text-void"
+          style={{ background: accent }}
+        >
+          <CheckIcon className="size-4" />
+        </span>
+      ) : null}
       <span
         aria-hidden
-        className="font-display text-2xl font-bold leading-none"
+        className={cn(
+          "font-display leading-none font-extrabold",
+          variant === "grade" ? "text-4xl sm:text-5xl" : "text-5xl sm:text-6xl",
+        )}
         style={{ color: accent }}
       >
         {mark}
       </span>
-      <span className="mt-1 font-display text-base font-bold tracking-tight text-cream">
+      <span className="mt-2 font-display text-[0.7rem] font-extrabold tracking-wide text-cream uppercase sm:text-sm">
         {label}
       </span>
-      <span className="text-xs leading-snug text-muted">{blurb}</span>
     </button>
   );
 }

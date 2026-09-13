@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/card";
 import type { PresentedSkill } from "@/lib/progress/presentation";
 import { getSkill } from "@/lib/skills";
 
@@ -12,54 +11,49 @@ export function SkillCard({ skill }: { skill: PresentedSkill }) {
   const percent = skill.practiced ? (skill.masteryPercent ?? 0) : 0;
 
   return (
-    <Card accent={catalogue.accent} className="p-5">
-      <div className="flex items-start gap-3">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
         <span
           aria-hidden
-          className="font-display text-2xl font-bold leading-none"
+          className="font-display text-4xl leading-none font-extrabold"
           style={{ color: catalogue.accent }}
         >
           {catalogue.symbol}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-bold tracking-tight text-cream">
+          <p className="font-display text-lg font-extrabold tracking-wide text-cream uppercase">
             {catalogue.label}
           </p>
           {skill.practiced && skill.masteryPercent !== null ? (
-            <p
-              className="mt-0.5 font-mono text-sm"
-              style={{ color: catalogue.accent }}
-            >
+            <p className="text-sm font-extrabold" style={{ color: catalogue.accent }}>
               {skill.masteryPercent}%
             </p>
           ) : null}
         </div>
       </div>
 
-      <div
-        className="mt-4 h-2.5 overflow-hidden rounded-full bg-void/70 ring-1 ring-hair"
-        {...(skill.practiced
-          ? {
-              role: "progressbar" as const,
-              "aria-label": `${catalogue.label} mastery, ${percent} percent`,
-              "aria-valuemin": 0,
-              "aria-valuemax": 100,
-              "aria-valuenow": percent,
-            }
-          : { "aria-hidden": true })}
-      >
-        {skill.practiced ? (
+      {skill.practiced ? (
+        <div
+          className="skill-bar"
+          role="progressbar"
+          aria-label={`${catalogue.label} mastery, ${percent} percent`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+        >
           <div
-            className="h-full rounded-full transition-[width] duration-500"
+            className="h-full rounded-full"
             style={{
               width: `${percent === 0 ? 0 : Math.max(percent, 8)}%`,
-              background: `linear-gradient(90deg, ${catalogue.accent}88, ${catalogue.accent})`,
+              background: catalogue.accent,
             }}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <p className="mt-3 text-sm leading-relaxed text-muted">{skill.status}</p>
-    </Card>
+      <p className={skill.practiced ? "text-sm text-muted" : "text-sm text-faint"}>
+        {skill.status}
+      </p>
+    </div>
   );
 }
