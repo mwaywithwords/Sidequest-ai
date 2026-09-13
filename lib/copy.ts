@@ -287,6 +287,50 @@ export const copy = {
     correct: (answer: number, unit: string) => `That's it. ${answer} ${unit}.`,
     solutionLabel: "How it works out",
     incorrect: "Not quite. Have another go.",
+
+    /**
+     * The three-stage reveal on a real, ready Sidequest — and the friendly
+     * states when a quest is not ready yet. Static sentences live here;
+     * object names, measurements, and the challenge question stay data.
+     */
+    experience: {
+      discoverEyebrow: "Discover",
+      connectEyebrow: "The hidden math",
+      challengeEyebrow: "Your challenge",
+      showMath: "Show Me the Math",
+      startQuest: "Start Sidequest",
+      submit: "Submit",
+      hint: "Hint",
+      lookClosely: (objectName: string, value: string) =>
+        `Look closely — your ${objectName} shows ${value}.`,
+      thatMeasurement: (skill: string) =>
+        `That real measurement gives us a starting point for ${skill}.`,
+      imaginedSituation:
+        "Your object gives us the real number to start from. The challenge may set up a situation around it.",
+      processingHeading: "Still looking closely.",
+      processingBody:
+        "SIDEQUEST is still finding the math in your photo. This usually takes just a moment.",
+      checkAgain: "Check again",
+      failedHeading: "This trail didn't quite open.",
+      failedBody:
+        "Something got in the way of turning that photo into a Sidequest. You can try another photo, or pick a new mission.",
+      tryAgain: "Try another photo",
+      scanAnother: "Scan another object",
+      changeMission: "Change mission",
+      findAnother: "Find Another Object",
+      tryAnotherSkill: "Try Another Math Skill",
+      submitted:
+        "Got it. Checking answers is coming next — your Sidequest is still here.",
+      answerLabel: "Your answer",
+      answerUnitLabel: (unit: string) => `Your answer in ${unit}`,
+      numberPlaceholder: "Type a number",
+      fractionNumerator: "Top number",
+      fractionDenominator: "Bottom number",
+      unsupportedAnswer:
+        "This challenge needs a kind of answer we can't collect yet. Photograph another object to get a new one.",
+      photoAlt: (objectName: string) => `Your photo of ${objectName}`,
+      photoMissing: "Your photo will appear here",
+    },
   },
 
   progress: {

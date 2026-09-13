@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { FlowSteps } from "@/components/layout/flow-steps";
 import { ScanStage } from "@/components/scan/scan-stage";
-import { mockQuestIdForSkill } from "@/lib/mock-quests";
 import { getSkill } from "@/lib/skills";
 import { parseGrade, parseSkillId } from "@/lib/types";
 
@@ -23,11 +22,7 @@ export default async function ScanPage(props: PageProps<"/scan">) {
   return (
     <div className="flex flex-col gap-8">
       <FlowSteps current="scan" />
-      <ScanStage
-        grade={grade}
-        skill={getSkill(skillId)}
-        questId={mockQuestIdForSkill(skillId)}
-      />
+      <ScanStage grade={grade} skill={getSkill(skillId)} />
     </div>
   );
 }
