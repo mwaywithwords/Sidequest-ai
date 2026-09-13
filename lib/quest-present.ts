@@ -1,5 +1,6 @@
 import type { CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
+import { labelsForChoiceSet } from "@/lib/math/geometry-forms";
 import type { DetourPresentation } from "@/lib/detour";
 import type { ChallengeProgress } from "@/lib/progress/outcome";
 import type { Grade, SkillId } from "@/lib/types";
@@ -25,6 +26,7 @@ export type GroundedValueView = {
 export type StudentAnswerInput =
   | { kind: "number"; unit: string | null }
   | { kind: "fraction"; unit: string | null }
+  | { kind: "choice"; options: string[] }
   | { kind: "unsupported" };
 
 export type StudentQuest = {
@@ -213,6 +215,13 @@ export function studentAnswerInput(answer: CorrectAnswer): StudentAnswerInput {
 
   if (answer.type === "fraction") {
     return { kind: "fraction", unit: emptyToNull(answer.unit) };
+  }
+
+  if (answer.type === "choice") {
+    return {
+      kind: "choice",
+      options: [...labelsForChoiceSet(answer.set)],
+    };
   }
 
   return { kind: "unsupported" };

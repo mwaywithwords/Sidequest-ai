@@ -361,9 +361,12 @@ export const copy = {
         "That answer didn't come through as a number I can check. Try typing it again.",
       invalidFraction:
         "That fraction needs two whole numbers, and the bottom can't be zero.",
+      invalidChoice:
+        "Pick one of the shape names on the list. We can only check those exact words.",
       unavailable:
         "This Sidequest isn't ready to check yet. Try another photo.",
       answerLabel: "Your answer",
+      answerChoiceLabel: "Choose the best match",
       answerUnitLabel: (unit: string) => `Your answer in ${unit}`,
       numberPlaceholder: "Type a number",
       fractionNumerator: "Top number",

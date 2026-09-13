@@ -183,7 +183,9 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
       ? value.trim().length > 0
       : quest.answer.kind === "fraction"
         ? numerator.trim().length > 0 && denominator.trim().length > 0
-        : false;
+        : quest.answer.kind === "choice"
+          ? value.trim().length > 0
+          : false;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -197,7 +199,9 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
     const answer =
       quest.answer.kind === "fraction"
         ? { kind: "fraction" as const, numerator, denominator }
-        : { kind: "number" as const, value };
+        : quest.answer.kind === "choice"
+          ? { kind: "choice" as const, value }
+          : { kind: "number" as const, value };
 
     const result = await submitQuestAnswer({
       questId: quest.questId,
@@ -218,7 +222,9 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
       setInvalid(
         quest.answer.kind === "fraction"
           ? copy.quest.experience.invalidFraction
-          : copy.quest.experience.invalidNumber,
+          : quest.answer.kind === "choice"
+            ? copy.quest.experience.invalidChoice
+            : copy.quest.experience.invalidNumber,
       );
       return;
     }
@@ -412,10 +418,51 @@ function AnswerFields({
   onDenominator: (value: string) => void;
 }) {
   const unit =
-    quest.answer.kind === "unsupported" ? null : quest.answer.unit;
-  const label = unit
-    ? copy.quest.experience.answerUnitLabel(unit)
-    : copy.quest.experience.answerLabel;
+    quest.answer.kind === "number" || quest.answer.kind === "fraction"
+      ? quest.answer.unit
+      : null;
+  const label =
+    quest.answer.kind === "choice"
+      ? copy.quest.experience.answerChoiceLabel
+      : unit
+        ? copy.quest.experience.answerUnitLabel(unit)
+        : copy.quest.experience.answerLabel;
+
+  if (quest.answer.kind === "choice") {
+    return (
+      <fieldset className="min-w-0 border-0 p-0">
+        <legend className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
+          {label}
+        </legend>
+        <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+          {quest.answer.options.map((option) => {
+            const selected = value === option;
+            return (
+              <label
+                key={option}
+                className={cn(
+                  "flex min-h-14 cursor-pointer items-center rounded-full px-5 text-base ring-1 transition",
+                  selected
+                    ? "bg-void text-cream ring-2 ring-lime"
+                    : "bg-void/60 text-cream/90 ring-hair hover:ring-cream/40",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="geometry-choice"
+                  value={option}
+                  checked={selected}
+                  onChange={() => onNumber(option)}
+                  className="sr-only"
+                />
+                {option}
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+    );
+  }
 
   if (quest.answer.kind === "fraction") {
     return (

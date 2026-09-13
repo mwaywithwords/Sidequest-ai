@@ -248,6 +248,20 @@ check(
     JSON.stringify({ kind: "number", unit: "cans" }),
 );
 
+const choiceView = studentAnswerInput({
+  type: "choice",
+  value: "cylinder",
+  set: "solid",
+});
+
+check(
+  "choice answers send the option list and drop the correct label as a value field",
+  choiceView.kind === "choice" &&
+    choiceView.options.includes("cylinder") &&
+    choiceView.options.includes("sphere") &&
+    !("value" in choiceView),
+);
+
 check(
   "quest id is the only database identifier on the student payload",
   presented.questId === "00000000-0000-4000-8000-000000000001" &&

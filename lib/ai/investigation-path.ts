@@ -5,6 +5,7 @@ import {
   type InvestigationAnchor,
   type ObjectAnalysis,
 } from "@/lib/ai/schemas";
+import { looksGeometric } from "@/lib/math/geometry-forms";
 import type { SkillId } from "@/lib/types";
 
 /**
@@ -149,7 +150,11 @@ export function readingAnchors(
   skillId: SkillId,
 ): string[] {
   if (skillId === "geometry") {
-    return unique(analysis.shapeProperties);
+    return unique([
+      ...analysis.shapeProperties,
+      ...analysis.observableProperties.filter(looksGeometric),
+      ...analysis.countableProperties.filter(looksGeometric),
+    ]);
   }
 
   const measurements = analysis.visibleMeasurements.map(

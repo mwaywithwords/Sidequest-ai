@@ -232,6 +232,9 @@ function verifyLoaded(loaded: LoadedContext): VerificationResult {
     difficulty: loaded.challenge.difficulty,
     objectConnection: loaded.challenge.object_connection ?? "",
     valuesUsed: metadata.data.valuesUsed,
+    ...(metadata.data.shapesUsed === undefined
+      ? {}
+      : { shapesUsed: metadata.data.shapesUsed }),
     verificationStrategy: metadata.data.verificationStrategy,
     computation: metadata.data.computation,
   });

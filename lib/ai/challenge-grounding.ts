@@ -10,9 +10,19 @@ import {
   type GeneratedChallenge,
   type ObjectAnalysis,
   type ReadySkillFit,
+  type UsedShape,
+  UsedShapeSchema,
   type UsedValue,
   UsedValueSchema,
 } from "@/lib/ai/schemas";
+import {
+  aspectAllowsLabel,
+  isGeometryAspect,
+  isGeometryFeature,
+  isGeometryLabel,
+  shapeSupports,
+  structureCount,
+} from "@/lib/math/geometry-forms";
 import { normaliseUnit as foldUnit } from "@/lib/math/units";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
 import type { Grade, SkillId } from "@/lib/types";
@@ -58,6 +68,13 @@ export type WireOperand = {
   origin: ChallengeValueOrigin;
 };
 
+export type WireShape = {
+  label: string;
+  form: string;
+  aspect: string;
+  origin: "observed" | "student_provided";
+};
+
 export type WireChallenge = {
   canGenerate: boolean;
   question: string;
@@ -69,12 +86,15 @@ export type WireChallenge = {
   objectConnection: string;
   verificationStrategy: string;
   valuesUsed: WireOperand[];
+  shapesUsed?: WireShape[];
   correctAnswer: {
-    type: "number" | "fraction";
+    type: "number" | "fraction" | "choice";
     value: number | null;
     numerator: number | null;
     denominator: number | null;
     unit: string | null;
+    label?: string | null;
+    set?: string | null;
   };
   computation: {
     type:
@@ -83,7 +103,9 @@ export type WireChallenge = {
       | "fraction_of"
       | "fraction_remaining"
       | "conversion"
-      | "geometry";
+      | "geometry"
+      | "shape_identify"
+      | "shape_count";
     operation: string;
     shape: string | null;
     numerator: number | null;
@@ -167,6 +189,9 @@ export function finalizeChallenge(
   const valuesUsed = parseValues(wire.valuesUsed);
   if (valuesUsed === null) return { status: "generation_failure" };
 
+  const shapesUsed = parseShapes(wire.shapesUsed ?? []);
+  if (shapesUsed === null) return { status: "generation_failure" };
+
   const correctAnswer = parseCorrectAnswer(wire.correctAnswer);
   if (correctAnswer === null) return { status: "generation_failure" };
 
@@ -177,11 +202,17 @@ export function finalizeChallenge(
     return { status: "generation_failure" };
   }
 
-  if (!hasUsableAnchor(valuesUsed, context)) {
+  if (!shapesAreGrounded(shapesUsed, context)) {
+    return { status: "generation_failure" };
+  }
+
+  if (!hasUsableAnchor(valuesUsed, context, shapesUsed)) {
     return { status: "poor_fit" };
   }
 
-  if (!computationUsesUsableAnchor(computation, valuesUsed, context)) {
+  if (
+    !computationUsesUsableAnchor(computation, valuesUsed, context, shapesUsed)
+  ) {
     return { status: "poor_fit" };
   }
 
@@ -193,7 +224,14 @@ export function finalizeChallenge(
     return { status: "generation_failure" };
   }
 
-  if (!objectConnectionCitesAnchor(objectConnection, valuesUsed, context)) {
+  if (
+    !objectConnectionCitesAnchor(
+      objectConnection,
+      valuesUsed,
+      context,
+      shapesUsed,
+    )
+  ) {
     return { status: "generation_failure" };
   }
 
@@ -234,6 +272,7 @@ export function finalizeChallenge(
     difficulty: wire.difficulty,
     objectConnection,
     valuesUsed,
+    ...(shapesUsed.length > 0 ? { shapesUsed } : {}),
     verificationStrategy,
     computation,
   });
@@ -274,8 +313,12 @@ export function hasGroundedAnchor(values: readonly UsedValue[]): boolean {
 export function hasUsableAnchor(
   values: readonly UsedValue[],
   context: ChallengeContext,
+  shapes: readonly UsedShape[] = [],
 ): boolean {
   if (hasGroundedAnchor(values)) return true;
+  if (shapes.some((shape) => shape.origin === "observed" || shape.origin === "student_provided")) {
+    return true;
+  }
 
   if (context.fit.challengeMode !== "inspired_math") return false;
 
@@ -312,6 +355,7 @@ export function objectConnectionCitesAnchor(
   connection: string,
   values: readonly UsedValue[],
   context?: ChallengeContext,
+  shapes: readonly UsedShape[] = [],
 ): boolean {
   const hay = connection.toLowerCase();
   const photoAnchors = values.filter(
@@ -321,6 +365,16 @@ export function objectConnectionCitesAnchor(
 
   if (
     photoAnchors.some((anchor) => connectionCitesValue(hay, anchor))
+  ) {
+    return true;
+  }
+
+  if (
+    shapes.some(
+      (shape) =>
+        hay.includes(shape.form.toLowerCase()) ||
+        hay.includes(shape.label.toLowerCase()),
+    )
   ) {
     return true;
   }
@@ -429,12 +483,13 @@ export function computationOperands(computation: Computation): UsedValue[] {
       return [computation.value, computation.factor];
     case "geometry":
       return computation.dimensions;
+    case "shape_identify":
+    case "shape_count":
+      return [];
   }
 }
 
 function parseValues(values: readonly WireOperand[]): UsedValue[] | null {
-  if (values.length === 0) return null;
-
   const parsed: UsedValue[] = [];
 
   for (const value of values) {
@@ -453,9 +508,39 @@ function parseValues(values: readonly WireOperand[]): UsedValue[] | null {
   return parsed;
 }
 
+function parseShapes(shapes: readonly WireShape[]): UsedShape[] | null {
+  const parsed: UsedShape[] = [];
+
+  for (const shape of shapes) {
+    const item = UsedShapeSchema.safeParse({
+      label: shape.label,
+      form: shape.form,
+      aspect: shape.aspect,
+      origin: shape.origin,
+    });
+    if (!item.success) return null;
+    parsed.push(item.data);
+  }
+
+  return parsed;
+}
+
 function parseCorrectAnswer(
   answer: WireChallenge["correctAnswer"],
 ): CorrectAnswer | null {
+  if (answer.type === "choice") {
+    const raw = cleanOptional(answer.label ?? null);
+    const set = cleanOptional(answer.set ?? null);
+    if (raw === undefined || set === undefined) return null;
+
+    const parsed = CorrectAnswerSchema.safeParse({
+      type: "choice",
+      value: raw,
+      set,
+    });
+    return parsed.success ? parsed.data : null;
+  }
+
   if (answer.type === "number") {
     if (answer.value === null || !Number.isFinite(answer.value)) return null;
 
@@ -565,6 +650,34 @@ function parseComputation(
         shape: wire.shape,
         dimensions: operands,
       });
+    case "shape_identify":
+      if (
+        !isGeometryAspect(wire.operation) ||
+        wire.shape === null ||
+        !isGeometryLabel(wire.shape) ||
+        !aspectAllowsLabel(wire.operation, wire.shape)
+      ) {
+        return null;
+      }
+      return parseUnion({
+        type: "shape_identify",
+        aspect: wire.operation,
+        label: wire.shape,
+      });
+    case "shape_count":
+      if (
+        wire.shape === null ||
+        !isGeometryLabel(wire.shape) ||
+        !isGeometryFeature(wire.operation) ||
+        structureCount(wire.shape, wire.operation) === null
+      ) {
+        return null;
+      }
+      return parseUnion({
+        type: "shape_count",
+        shape: wire.shape,
+        feature: wire.operation,
+      });
   }
 }
 
@@ -607,11 +720,46 @@ function valuesAreGrounded(
   return true;
 }
 
+function shapesAreGrounded(
+  shapes: readonly UsedShape[],
+  context: ChallengeContext,
+): boolean {
+  for (const shape of shapes) {
+    if (shape.origin !== "observed" && shape.origin !== "student_provided") {
+      return false;
+    }
+
+    if (!shapeSupports(context.analysis, shape.aspect, shape.form)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function computationUsesUsableAnchor(
   computation: Computation,
   values: readonly UsedValue[],
   context: ChallengeContext,
+  shapes: readonly UsedShape[],
 ): boolean {
+  if (computation.type === "shape_identify") {
+    return shapes.some(
+      (shape) =>
+        shape.form === computation.label &&
+        shape.aspect === computation.aspect &&
+        (shape.origin === "observed" || shape.origin === "student_provided"),
+    );
+  }
+
+  if (computation.type === "shape_count") {
+    return shapes.some(
+      (shape) =>
+        shape.form === computation.shape &&
+        (shape.origin === "observed" || shape.origin === "student_provided"),
+    );
+  }
+
   const operands = computationOperands(computation);
   const allowed =
     context.fit.challengeMode === "inspired_math"
@@ -692,7 +840,7 @@ function studentFacingTextInventedFacts(
       unit: fact.unit,
     })),
     ...values.map((value) => ({ value: value.value, unit: value.unit })),
-    answerNumber(answer),
+    ...(answerNumber(answer) === null ? [] : [answerNumber(answer)!]),
   ];
 
   for (const text of texts) {
@@ -722,7 +870,11 @@ type ObservedFact = {
   labels: string[];
 };
 
-function answerNumber(answer: CorrectAnswer): { value: number; unit?: string } {
+function answerNumber(
+  answer: CorrectAnswer,
+): { value: number; unit?: string } | null {
+  if (answer.type === "choice") return null;
+
   if (answer.type === "number") {
     return { value: answer.value, unit: answer.unit };
   }

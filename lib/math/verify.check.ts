@@ -712,6 +712,52 @@ const grade4Ok = verify(
 );
 check("Grade 4 appropriate perimeter passes", grade4Ok.ok);
 
+const bottleForm: ObjectAnalysis = {
+  objectName: "protein bottle",
+  category: "bottle",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["cylinder-like body", "circular top"],
+  observableProperties: [],
+};
+
+const bottleIdentify = challenge({
+  question: "What 3D shape is your protein bottle most like?",
+  skillCode: "geometry",
+  solution: "The bottle is most like a cylinder.",
+  objectConnection:
+    "Your protein bottle has a cylinder-like body, so that form is the 3D shape we name.",
+  valuesUsed: [],
+  shapesUsed: [
+    {
+      label: "bottle body",
+      form: "cylinder",
+      aspect: "solid",
+      origin: "observed",
+    },
+  ],
+  correctAnswer: { type: "choice", value: "cylinder", set: "solid" },
+  computation: {
+    type: "shape_identify",
+    aspect: "solid",
+    label: "cylinder",
+  },
+});
+
+const bottleIdentifyOk = verify(
+  bottleIdentify,
+  bottleForm,
+  "geometry",
+  "cylinder-like body",
+  3,
+);
+check(
+  "qualitative cylinder identification verifies without a measurement",
+  bottleIdentifyOk.ok,
+);
+
 const grade5Ok = verify(
   bottleSubtract,
   bottle,

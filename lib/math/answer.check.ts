@@ -133,6 +133,34 @@ check(
     studentAnswerMatches({ type: "number", value: 11 }, eleven),
 );
 
+const cylinder = parseStudentSubmission({
+  kind: "choice",
+  value: " Cylinder ",
+});
+const ballWord = parseStudentSubmission({ kind: "choice", value: "ball" });
+const expectedCylinder: CorrectAnswer = {
+  type: "choice",
+  value: "cylinder",
+  set: "solid",
+};
+
+check(
+  "a schema-controlled choice matches after normalisation",
+  cylinder.ok && studentAnswerMatches(cylinder.answer, expectedCylinder),
+);
+check(
+  "ball is not accepted as a stand-in for sphere",
+  ballWord.ok === false && ballWord.reason === "malformed",
+);
+check(
+  "revealed choice is the exact label",
+  formatRevealedAnswer(expectedCylinder) === "cylinder",
+);
+check(
+  "a number is not compared as a geometry choice",
+  seven.ok && !studentAnswerMatches(seven.answer, expectedCylinder),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} answer checks failed`);
   process.exit(1);

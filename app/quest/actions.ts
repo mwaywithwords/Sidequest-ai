@@ -51,5 +51,9 @@ function parseAnswer(value: unknown): AnswerSubmission | null {
     };
   }
 
+  if (record.kind === "choice" && typeof record.value === "string") {
+    return { kind: "choice", value: record.value };
+  }
+
   return null;
 }

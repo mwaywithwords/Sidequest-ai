@@ -203,11 +203,13 @@ function extraComputationNumbers(computation: Computation): number[] {
 
 function answerNumbers(answer: CorrectAnswer): number[] {
   if (answer.type === "number") return [answer.value];
+  if (answer.type === "choice") return [];
   return [answer.numerator, answer.denominator];
 }
 
 function answerIsNegative(answer: CorrectAnswer): boolean {
   if (answer.type === "number") return answer.value < 0;
+  if (answer.type === "choice") return false;
   return answer.numerator < 0;
 }
 

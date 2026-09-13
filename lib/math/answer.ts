@@ -1,5 +1,6 @@
 import type { CorrectAnswer } from "@/lib/ai/schemas";
 import { simplifyFraction } from "@/lib/math/evaluate";
+import { normaliseGeometryLabel } from "@/lib/math/geometry-forms";
 import { isFiniteNumber, sameUnit } from "@/lib/math/units";
 
 /**
@@ -20,7 +21,15 @@ export type FractionSubmission = {
   denominator: string;
 };
 
-export type AnswerSubmission = NumberSubmission | FractionSubmission;
+export type ChoiceSubmission = {
+  kind: "choice";
+  value: string;
+};
+
+export type AnswerSubmission =
+  | NumberSubmission
+  | FractionSubmission
+  | ChoiceSubmission;
 
 export type ParsedStudentAnswer =
   | { ok: true; answer: CorrectAnswer; display: string }
@@ -43,7 +52,22 @@ export function parseStudentSubmission(
     return parseNumberSubmission(submission.value);
   }
 
-  return parseFractionSubmission(submission.numerator, submission.denominator);
+  if (submission.kind === "fraction") {
+    return parseFractionSubmission(submission.numerator, submission.denominator);
+  }
+
+  return parseChoiceSubmission(submission.value);
+}
+
+export function parseChoiceSubmission(raw: string): ParsedStudentAnswer {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return { ok: false, reason: "blank" };
+
+  const label = normaliseGeometryLabel(trimmed);
+  if (label === null) return { ok: false, reason: "malformed" };
+
+  const answer: CorrectAnswer = { type: "choice", value: label, set: "solid" };
+  return { ok: true, answer, display: formatStoredSubmission(answer) };
 }
 
 export function parseNumberSubmission(raw: string): ParsedStudentAnswer {
@@ -126,6 +150,10 @@ export function studentAnswerMatches(
     return expected.unit !== undefined && sameUnit(submitted.unit, expected.unit);
   }
 
+  if (submitted.type === "choice" && expected.type === "choice") {
+    return submitted.value === expected.value;
+  }
+
   return false;
 }
 
@@ -142,6 +170,8 @@ export function numbersAgree(left: number, right: number): boolean {
 
 /** Student-facing figure shown only after a Sidequest is completed. */
 export function formatRevealedAnswer(answer: CorrectAnswer): string {
+  if (answer.type === "choice") return answer.value;
+
   if (answer.type === "number") {
     const amount = Number.isInteger(answer.value)
       ? String(answer.value)
@@ -158,6 +188,8 @@ export function formatRevealedAnswer(answer: CorrectAnswer): string {
 
 /** What we persist on attempts.submitted_answer — the student's own figure. */
 export function formatStoredSubmission(answer: CorrectAnswer): string {
+  if (answer.type === "choice") return answer.value;
+
   if (answer.type === "number") {
     const amount = Number.isInteger(answer.value)
       ? String(answer.value)
