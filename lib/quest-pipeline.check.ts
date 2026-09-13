@@ -20,6 +20,8 @@ import {
   runQuestPipeline,
   toClientCreateBody,
 } from "@/lib/quest-pipeline";
+import { isSupportedMission, parseMission } from "@/lib/skill-catalogue";
+import { GRADES, SKILL_IDS } from "@/lib/types";
 import type { GeneratedChallenge, ObjectAnalysis, ReadySkillFit } from "@/lib/ai/schemas";
 
 let failed = 0;
@@ -176,12 +178,13 @@ function recordingDeps(options?: {
       recentTrend: "insufficient_data",
     }),
     persist: {
-      async loadProfileAndSkill() {
-        calls.push("db:profile-skill");
-        return {
-          profileId: "profile-1",
-          skill: { id: "skill-1", description: "Grade 4 subtraction" },
-        };
+      async resolveSkill() {
+        calls.push("db:skill");
+        return { id: "skill-1", description: "Grade 4 subtraction" };
+      },
+      async loadProfile() {
+        calls.push("db:profile");
+        return { profileId: "profile-1" };
       },
       async uploadAndInsert() {
         calls.push("db:upload");
@@ -240,6 +243,13 @@ const happy = recordingDeps();
 const happyResult = await run(happy.deps);
 
 check(
+  "the selected skill is resolved before moderation or vision",
+  happy.calls.indexOf("db:skill") === 0 &&
+    happy.calls.indexOf("moderation") > happy.calls.indexOf("db:skill") &&
+    happy.calls.indexOf("vision") > happy.calls.indexOf("moderation"),
+);
+
+check(
   "moderation still happens before educational vision reasoning",
   happy.calls.indexOf("moderation") >= 0 &&
     happy.calls.indexOf("vision") > happy.calls.indexOf("moderation"),
@@ -264,7 +274,7 @@ const unsafeModerationResult = await run(unsafeModeration.deps);
 
 check(
   "if moderation fails, nothing downstream runs",
-  unsafeModeration.calls.join(",") === "moderation" &&
+  unsafeModeration.calls.join(",") === "db:skill,moderation" &&
     !unsafeModeration.calls.includes("vision") &&
     !unsafeModeration.calls.includes("generation") &&
     !unsafeModeration.calls.includes("db:upload") &&
@@ -379,6 +389,63 @@ check(
   clientRefused.kind === "unsafe" &&
     !serialized.includes("adult_content") &&
     !serialized.includes("sexual"),
+);
+
+const missingSkill = recordingDeps();
+missingSkill.deps.persist.resolveSkill = async () => {
+  missingSkill.calls.push("db:skill");
+  throw new Error("No skill row for grade 4 / geometry");
+};
+const missingSkillResult = await runQuestPipeline(
+  {
+    image: "data:image/jpeg;base64,AAA",
+    file: fileStub(),
+    grade: 4,
+    skillId: "geometry",
+  },
+  missingSkill.deps,
+);
+
+check(
+  "a missing Grade 4 / geometry row fails before any AI call",
+  missingSkillResult.kind === "failed" &&
+    missingSkill.calls.join(",") === "db:skill" &&
+    !missingSkill.calls.includes("moderation") &&
+    !missingSkill.calls.includes("vision") &&
+    !missingSkill.calls.includes("generation"),
+);
+
+for (const grade of GRADES) {
+  for (const skillId of SKILL_IDS) {
+    check(
+      `Grade ${grade} / ${skillId} is a supported mission`,
+      isSupportedMission(grade, skillId) &&
+        parseMission(grade, skillId)?.skillCode === skillId,
+    );
+  }
+}
+
+const geometryHappy = recordingDeps();
+const geometryResult = await runQuestPipeline(
+  {
+    image: "data:image/jpeg;base64,AAA",
+    file: fileStub(),
+    grade: 4,
+    skillId: "geometry",
+  },
+  geometryHappy.deps,
+);
+
+check(
+  "Grade 4 / geometry resolves as a supported mission and reaches the pipeline",
+  parseMission(4, "geometry")?.skillCode === "geometry" &&
+    geometryResult.kind === "ready" &&
+    geometryHappy.calls[0] === "db:skill",
+);
+
+check(
+  "an unsupported combination is rejected before createQuest",
+  parseMission(4, "algebra") === null && parseMission(6, "geometry") === null,
 );
 
 const timer = createPipelineTimer();
