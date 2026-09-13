@@ -6,7 +6,7 @@ import {
   DiscoverySchema,
   GenerationMetadataSchema,
   ObjectAnalysisSchema,
-  SkillFitAnalysisSchema,
+  parseSkillFitAnalysis,
 } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
 import {
@@ -164,14 +164,13 @@ async function presentReadyQuest({
   if (skillRef === null) return null;
 
   const analysis = ObjectAnalysisSchema.safeParse(objectMetadata);
-  const fit = SkillFitAnalysisSchema.safeParse(validationResult);
+  const fit = parseSkillFitAnalysis(validationResult);
   const fact = DiscoverySchema.safeParse(discovery);
 
   if (!analysis.success || !fit.success || !fact.success) return null;
 
   if (
-    fit.data.challengeMode !== "direct" &&
-    fit.data.challengeMode !== "grounded_scenario"
+    fit.data.challengeMode !== "object_math"
   ) {
     return null;
   }
@@ -296,7 +295,7 @@ function detourForRejected(
   skillRef: SkillRef | null,
 ): { presentation: DetourPresentation; offerSkillChange: boolean } {
   const skill = skillRef?.skill ?? getSkill("addition");
-  const fit = SkillFitAnalysisSchema.safeParse(validationResult);
+  const fit = parseSkillFitAnalysis(validationResult);
 
   if (fit.success && fit.data.challengeMode === "poor_fit") {
     return {

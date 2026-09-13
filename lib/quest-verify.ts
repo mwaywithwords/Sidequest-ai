@@ -10,7 +10,7 @@ import {
   type QuestGenerationFailure,
   QuestGenerationFailureSchema,
   type ReadySkillFit,
-  SkillFitAnalysisSchema,
+  parseSkillFitAnalysis,
 } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
 import {
@@ -143,7 +143,7 @@ async function loadVerificationContext(
   }
 
   const analysis = ObjectAnalysisSchema.safeParse(quest.object_metadata);
-  const fitParsed = SkillFitAnalysisSchema.safeParse(quest.validation_result);
+  const fitParsed = parseSkillFitAnalysis(quest.validation_result);
 
   if (!analysis.success || !fitParsed.success) {
     return mathFailed();
@@ -151,8 +151,7 @@ async function loadVerificationContext(
 
   const fit = fitParsed.data;
   if (
-    fit.challengeMode !== "direct" &&
-    fit.challengeMode !== "grounded_scenario"
+    fit.challengeMode !== "object_math"
   ) {
     return mathFailed();
   }

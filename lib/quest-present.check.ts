@@ -72,7 +72,7 @@ function readyInput(
     objectConnection:
       "Your can tells us exactly how much it holds: 12 fluid ounces.",
     valuesUsed: [observedVolume, hypotheticalCans],
-    challengeMode: "grounded_scenario",
+    challengeMode: "object_math",
     question:
       "A dispenser holds 128 fluid ounces. If each can holds 12 fluid ounces, how many whole cans fill it?",
     hint1: "Try dividing 128 by 12.",
@@ -112,15 +112,18 @@ check(
 );
 
 check(
-  "grounded_scenario becomes a boolean, not a mode name",
+  "object_math with a given-in-problem value becomes a boolean, not a mode name",
   presented.imaginedSituation === true &&
     !Object.keys(presented).includes("challengeMode"),
 );
 
 check(
-  "direct mode does not claim the challenge imagines a situation",
-  presentStudentQuest(readyInput({ challengeMode: "direct" }))
-    .imaginedSituation === false,
+  "object_math with only observed values does not claim an imagined situation",
+  presentStudentQuest(
+    readyInput({
+      valuesUsed: [observedVolume],
+    }),
+  ).imaginedSituation === false,
 );
 
 check(

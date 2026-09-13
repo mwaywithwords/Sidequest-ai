@@ -538,7 +538,7 @@ const bottle: ObjectAnalysis = {
 const bottleFit: ReadySkillFit = {
   selectedSkillCode: "subtraction",
   fitScore: 0.8,
-  challengeMode: "grounded_scenario",
+  challengeMode: "object_math",
   canGenerateChallenge: true,
   usableProperties,
   reason: "The printed volume can start a subtraction problem.",
@@ -546,6 +546,7 @@ const bottleFit: ReadySkillFit = {
   alternativeSkillCodes: [],
   anchors: [{ property: "printed bottle volume: 11 fl oz", origin: "observed" }],
   evidenceRequest: null,
+  inspirationContext: null,
 };
 
 const inventedAtTarget = finalizeChallenge(

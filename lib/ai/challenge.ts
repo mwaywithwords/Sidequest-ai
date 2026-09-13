@@ -98,7 +98,7 @@ const SKILL_PATTERNS: Record<SkillId, string> = {
     "perimeter or area only when the needed dimensions are already established; symmetry; angles; shape properties. Do not invent a length, width, or angle measure.",
 };
 
-const INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The vision stage has already read that object. The investigation stage has already decided this object can support the selected skill, as either "direct" or "grounded_scenario". Your job is to write ONE mathematically meaningful, grade-appropriate, object-grounded maths challenge.
+const INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The vision stage has already read that object. The investigation stage has already decided this object can support the selected skill as "object_math". Your job is to write ONE mathematically meaningful, grade-appropriate, object-grounded maths challenge.
 
 You do not see the photograph. Use only the reading and the investigation you are given.
 
@@ -117,9 +117,7 @@ VALUE ORIGINS — every number you use must declare one:
 - "student_provided": collected through a SIDEQUEST investigation. If no student-provided evidence is listed, do not invent one.
 - "given_in_problem": a hypothetical you introduce explicitly. Examples: "If 4 ounces are poured out…"; "If you had 3 of these…"; "If 5 people shared…". These must never masquerade as facts about the object.
 
-DIRECT mode: prefer deriving the challenge mostly from information already in the reading. A visible structure (12 eggs in 3 equal rows) may be enough.
-
-GROUNDED_SCENARIO mode: at least one observed property anchors the problem, and you introduce additional hypothetical values. A bottle showing 11 fl oz plus subtraction is valid as "11 minus 4 poured out". Do not reject that path because the 4 was not on the label.
+OBJECT_MATH: at least one observed property anchors the problem. You may introduce additional hypothetical values as given_in_problem. A bottle showing 11 fl oz plus subtraction is valid as "11 minus 4 poured out". Do not reject that path because the 4 was not on the label. A visible structure (12 eggs in 3 equal rows) may be enough on its own.
 
 Never invent object specifications: dimensions, weight, capacity, price, model number, shoe size, a quantity supposedly visible, product claims, or material. If a number is not in the reading or the student evidence, it is not an observed fact.
 
