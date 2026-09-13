@@ -65,13 +65,14 @@ export async function verifyQuestChallenge(
   questId: string,
 ): Promise<QuestVerificationResult> {
   const loaded = await loadVerificationContext(questId);
+  if (loaded.status === "already_ready") return { status: "ok" };
   if (loaded.status !== "ok") return loaded;
 
   const first = verifyLoaded(loaded);
 
   if (planAfterVerification(1, first) === "accept" && first.ok) {
-    await setQuestStatus(questId, "ready");
-    return { status: "ok" };
+    const marked = await setQuestStatus(questId, "ready");
+    return marked ? { status: "ok" } : mathFailed();
   }
 
   const firstReason = first.ok ? "invalid_values" : first.reason;
@@ -89,6 +90,7 @@ export async function verifyQuestChallenge(
   }
 
   const secondLoad = await loadVerificationContext(questId);
+  if (secondLoad.status === "already_ready") return { status: "ok" };
   if (secondLoad.status !== "ok") {
     await deleteQuestChallenges(questId);
     await setQuestStatus(questId, "failed");
@@ -98,8 +100,8 @@ export async function verifyQuestChallenge(
   const second = verifyLoaded(secondLoad);
 
   if (planAfterVerification(2, second) === "accept" && second.ok) {
-    await setQuestStatus(questId, "ready");
-    return { status: "ok" };
+    const marked = await setQuestStatus(questId, "ready");
+    return marked ? { status: "ok" } : mathFailed();
   }
 
   console.warn(
@@ -113,7 +115,11 @@ export async function verifyQuestChallenge(
 
 async function loadVerificationContext(
   questId: string,
-): Promise<LoadedContext | { status: "failed"; failure: QuestGenerationFailure }> {
+): Promise<
+  | LoadedContext
+  | { status: "already_ready" }
+  | { status: "failed"; failure: QuestGenerationFailure }
+> {
   const supabase = createAdminClient();
 
   const { data: quest, error: questError } = await supabase
@@ -126,6 +132,10 @@ async function loadVerificationContext(
     throw new Error(
       `No quest ${questId} to verify: ${questError?.message ?? "not found"}`,
     );
+  }
+
+  if (quest.status === "ready") {
+    return { status: "already_ready" };
   }
 
   if (quest.status === "failed" || quest.status === "rejected") {

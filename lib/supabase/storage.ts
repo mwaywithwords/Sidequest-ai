@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isUuid } from "@/lib/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** Private bucket. Nothing inside is reachable without a signed URL. */
@@ -24,12 +25,31 @@ export const QUEST_IMAGE_SIGNED_TTL_SECONDS = 60 * 15;
  * Only this path is stored, in `quests.image_path`. Never a URL, because a
  * signed URL expires, and never the bytes.
  */
+const STORED_EXTENSIONS = new Set(["jpg", "png", "webp", "heic", "heif"]);
+
 export function questImagePath(
   profileId: string,
   questId: string,
   extension: string,
 ): string {
+  if (!isUuid(profileId) || !isUuid(questId) || !STORED_EXTENSIONS.has(extension)) {
+    throw new Error("Refused to build a quest image path from untrusted parts.");
+  }
+
   return `${profileId}/${questId}/original.${extension}`;
+}
+
+/**
+ * The only path shape this app writes. Anything else is treated as
+ * unsignable so a poisoned `image_path` cannot mint a URL for another object.
+ */
+export function isQuestImagePath(path: string): boolean {
+  const match =
+    /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/original\.(jpg|png|webp|heic|heif)$/i.exec(
+      path,
+    );
+
+  return match !== null && isUuid(match[1] ?? "") && isUuid(match[2] ?? "");
 }
 
 /**
@@ -40,6 +60,11 @@ export function questImagePath(
  * thrown away when the response ends.
  */
 export async function signQuestImageUrl(path: string): Promise<string | null> {
+  if (!isQuestImagePath(path)) {
+    console.error("[storage] refused to sign unrecognised path");
+    return null;
+  }
+
   const { data, error } = await createAdminClient()
     .storage.from(QUEST_IMAGE_BUCKET)
     .createSignedUrl(path, QUEST_IMAGE_SIGNED_TTL_SECONDS);

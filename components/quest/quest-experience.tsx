@@ -152,6 +152,7 @@ function ConnectStage({
 
 function ChallengeStage({ quest }: { quest: StudentQuest }) {
   const startedAt = useRef(0);
+  const submitLock = useRef(false);
   const [value, setValue] = useState("");
   const [numerator, setNumerator] = useState("");
   const [denominator, setDenominator] = useState("");
@@ -184,9 +185,10 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!answerReady || submitting || finished) return;
+    if (!answerReady || submitting || finished || submitLock.current) return;
     if (quest.answer.kind === "unsupported") return;
 
+    submitLock.current = true;
     setSubmitting(true);
     setInvalid(null);
 
@@ -206,6 +208,7 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
 
     applyGrade(result);
     setSubmitting(false);
+    submitLock.current = false;
   }
 
   function applyGrade(result: StudentGradeView) {

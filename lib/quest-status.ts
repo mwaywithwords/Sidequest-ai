@@ -1,6 +1,14 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  canTransition,
+  QUEST_STATUSES,
+  type QuestStatus,
+} from "@/lib/quest-status-rules";
+
+export type { QuestStatus };
+export { canTransition, QUEST_STATUSES };
 
 /**
  * How a quest's progress through the pipeline is recorded.
@@ -18,30 +26,37 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *                the student's cue to photograph something else.
  * - 'failed'     the pipeline itself did not work.
  *
- * The last two are the distinction the schema was built around, and keeping them
- * apart is what stops a later stage treating a dead end as work to retry.
+ * Closed states (ready, rejected, failed) are terminal. The write filters
+ * on the current status so a late timeout or a retried stage cannot mark a
+ * dead quest ready, or un-ready a verified one.
  */
-export type QuestStatus =
-  | "pending"
-  | "processing"
-  | "ready"
-  | "rejected"
-  | "failed";
 
 /**
  * Best effort, deliberately.
  *
  * The status is how an outcome is remembered, but the typed result is what the
  * student is answered with, so a write that does not land must not turn into a
- * different outcome.
+ * different outcome. Returns false when the row is already closed in a
+ * different state, or when the write itself failed.
  */
-export async function setQuestStatus(questId: string, status: QuestStatus) {
-  const { error } = await createAdminClient()
+export async function setQuestStatus(
+  questId: string,
+  status: QuestStatus,
+): Promise<boolean> {
+  const allowedFrom = QUEST_STATUSES.filter((from) => canTransition(from, status));
+
+  const { data, error } = await createAdminClient()
     .from("quests")
     .update({ status })
-    .eq("id", questId);
+    .eq("id", questId)
+    .in("status", allowedFrom)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     console.error(`[quest-status] could not mark ${questId} ${status}`, error);
+    return false;
   }
+
+  return data !== null;
 }

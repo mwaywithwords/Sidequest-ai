@@ -11,6 +11,7 @@ import { recordQuestDiscovery } from "@/lib/quest-discovery";
 import { assessQuestSkillFit } from "@/lib/quest-fit";
 import { verifyQuestChallenge } from "@/lib/quest-verify";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { setQuestStatus } from "@/lib/quest-status";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
 import {
   detourKindFromReason,
@@ -23,7 +24,7 @@ import { parseGrade, parseSkillId } from "@/lib/types";
  * controlled regeneration if the first candidate fails verification. Each
  * call is bounded by the client timeout in lib/ai/openai.ts well before this.
  */
-export const maxDuration = 150;
+export const maxDuration = 300;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
@@ -79,6 +80,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unsupported" }, { status: 400 });
   }
 
+  let uploadedPath: string | null = null;
+  let insertedQuestId: string | null = null;
+
   try {
     // Before the profile, the bucket, and the row: a photo that does not pass
     // leaves nothing behind, and nothing downstream ever sees it. Screening
@@ -131,6 +135,8 @@ export async function POST(request: Request) {
       throw new Error(`Storage upload failed: ${uploadError.message}`);
     }
 
+    uploadedPath = path;
+
     const { error: insertError } = await supabase.from("quests").insert({
       id: questId,
       profile_id: profileId,
@@ -143,8 +149,11 @@ export async function POST(request: Request) {
       // Don't leave an object behind that no row points at. The client retries
       // with a fresh quest id, so this path cannot be resumed anyway.
       await supabase.storage.from(QUEST_IMAGE_BUCKET).remove([path]);
+      uploadedPath = null;
       throw new Error(`Quest insert failed: ${insertError.message}`);
     }
+
+    insertedQuestId = questId;
 
     // Last, because it needs both halves of what came before: a photo that
     // passed the gate, and a row to hang the reading on.
@@ -243,8 +252,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ questId }, { status: 201 });
   } catch (error) {
     // Logged in full, reported vaguely: the student gets something retryable
-    // and the internals stay on the server.
+    // and the internals stay on the server. A timeout after insert must not
+    // leave the row pending for a later stage to treat as work in progress.
     console.error("[POST /api/quests]", error);
+
+    if (insertedQuestId !== null) {
+      await setQuestStatus(insertedQuestId, "failed");
+    } else if (uploadedPath !== null) {
+      await createAdminClient().storage.from(QUEST_IMAGE_BUCKET).remove([
+        uploadedPath,
+      ]);
+    }
 
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }

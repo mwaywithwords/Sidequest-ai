@@ -1,4 +1,4 @@
-import type { Quest, SkillId } from "./types";
+import type { Quest } from "./types";
 
 /**
  * Hand-written stand-ins for what the AI pipeline will return. Each one obeys
@@ -184,19 +184,5 @@ export const MOCK_QUESTS: Quest[] = [
     },
   },
 ];
-
-const QUESTS_BY_ID = new Map(MOCK_QUESTS.map((quest) => [quest.id, quest]));
-
-export function getMockQuest(id: string): Quest | undefined {
-  return QUESTS_BY_ID.get(id);
-}
-
-/**
- * Stands in for the analyze endpoint: the mock scan returns whichever quest
- * matches the chosen skill so the flow feels coherent end to end.
- */
-export function mockQuestIdForSkill(skillId: SkillId): string {
-  return MOCK_QUESTS.find((quest) => quest.skillId === skillId)?.id ?? "soda-can";
-}
 
 export const FEATURED_QUEST = MOCK_QUESTS[0];

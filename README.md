@@ -29,8 +29,28 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Environment
+
+Copy `.env.example` to `.env.local` and fill in values there. `.env.local` is gitignored.
+
+Public (inlined into the browser at build time):
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+Server-only (never import these from a Client Component):
+
+- `SUPABASE_SECRET_KEY`
+- `OPENAI_API_KEY`
+
+Missing public vars fail when a page first talks to Supabase. Missing server secrets fail only on the server path that reads them (upload, grading, progress). Do not print secret values in logs or diagnostics.
+
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`POST /api/quests` runs the full AI pipeline in one request and sets `maxDuration` to 300 seconds. Deploy on a plan that allows at least that function duration. Hobby-plan defaults will time out mid-pipeline.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Each OpenAI call is capped at 20 seconds with one retry. That bound is intentional; do not raise retries without also raising `maxDuration`.
+
+The easiest way to deploy is the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme).
+
+Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
