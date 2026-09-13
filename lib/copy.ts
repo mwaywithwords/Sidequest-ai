@@ -189,6 +189,17 @@ export const copy = {
   },
 
   /**
+   * What verification says when neither candidate's maths can be trusted.
+   *
+   * The student is not told which number was wrong. A failed check is a
+   * dead end like the other pipeline stages: one next step, no internals.
+   */
+  verify: {
+    failure:
+      "Something went wrong checking the math in that photo, so no Sidequest came out of it. Take another one and try again.",
+  },
+
+  /**
    * What a student sees when a photograph does not become a Sidequest.
    *
    * These are not errors. A detour is the product saying "not this object,

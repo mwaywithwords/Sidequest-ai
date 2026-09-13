@@ -4,6 +4,7 @@ import {
   CHALLENGE_MODEL,
   generateChallenge,
   type ChallengeGenerationResult,
+  type RegenerationHint,
 } from "@/lib/ai/challenge";
 import type { SkillProgressInput } from "@/lib/ai/challenge-grounding";
 import {
@@ -32,6 +33,7 @@ import { parseGrade, parseSkillId } from "@/lib/types";
 
 export async function generateQuestChallenge(
   questId: string,
+  options?: { regeneration?: RegenerationHint },
 ): Promise<ChallengeGenerationResult> {
   const supabase = createAdminClient();
 
@@ -111,6 +113,7 @@ export async function generateQuestChallenge(
     skillDescription: skill.description,
     grade,
     progress,
+    regeneration: options?.regeneration,
   });
 
   if (result.status === "failed") {

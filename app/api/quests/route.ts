@@ -13,6 +13,7 @@ import { analyzeQuestObject } from "@/lib/quest-analysis";
 import { generateQuestChallenge } from "@/lib/quest-challenge";
 import { recordQuestDiscovery } from "@/lib/quest-discovery";
 import { assessQuestSkillFit } from "@/lib/quest-fit";
+import { verifyQuestChallenge } from "@/lib/quest-verify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
 import {
@@ -22,18 +23,19 @@ import {
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Six model calls now sit inside this request, one of them reading small print,
- * so it needs longer than a platform's default ten seconds. Each call is bounded
- * by the client timeout in lib/ai/openai.ts well before this.
+ * Up to seven model calls now sit inside this request — the seventh is one
+ * controlled regeneration if the first candidate fails verification. Each
+ * call is bounded by the client timeout in lib/ai/openai.ts well before this.
  */
-export const maxDuration = 120;
+export const maxDuration = 150;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
  * validate the file, screen it for safety and suitability, store it in the
  * private bucket, record the row that points at it, read the object in it,
  * investigate whether that object can support the mission the student chose,
- * write one short discovery about it, then generate a candidate challenge.
+ * write one short discovery about it, generate a candidate challenge, then
+ * verify that candidate deterministically.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
@@ -42,8 +44,8 @@ export const maxDuration = 120;
  *
  * The stages run here for the same reason: this is the one point every photo
  * must pass through, and each stage is a gate the next one depends on.
- * A generated challenge is a candidate only. The quest stays 'pending' until
- * deterministic verification exists to make it displayable.
+ * Only verification may mark a quest ready. The response still does not
+ * include the question or the answer.
  */
 export async function POST(request: Request) {
   let form: FormData;
@@ -234,6 +236,14 @@ export async function POST(request: Request) {
       console.warn("[POST /api/quests] no challenge", challenge.failure.reason);
 
       return refused(challenge.failure.reason);
+    }
+
+    const verified = await verifyQuestChallenge(questId);
+
+    if (verified.status !== "ok") {
+      console.warn("[POST /api/quests] no verified math", verified.failure.reason);
+
+      return refused(verified.failure.reason);
     }
 
     return NextResponse.json(

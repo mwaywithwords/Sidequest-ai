@@ -30,6 +30,7 @@ import { SKILL_IDS, type Grade, type SkillId } from "@/lib/types";
  * It does not see the photograph. It may invent a scenario. It may not
  * invent a fact about the object. A candidate that survives this stage is
  * still not displayable — verification has to recompute the answer first.
+ * This function may be called a second time with a short regeneration hint.
  */
 
 export const CHALLENGE_MODEL = "gpt-5.4";
@@ -160,6 +161,11 @@ export type ChallengeGenerationResult =
   | { status: "poorFit"; failure: QuestGenerationFailure }
   | { status: "failed"; failure: QuestGenerationFailure };
 
+export type RegenerationHint = {
+  reason: string;
+  guidance: string;
+};
+
 export async function generateChallenge({
   analysis,
   fit,
@@ -168,6 +174,7 @@ export async function generateChallenge({
   grade,
   progress = null,
   studentEvidence = [],
+  regeneration,
 }: {
   analysis: ObjectAnalysis;
   fit: ReadySkillFit;
@@ -176,6 +183,7 @@ export async function generateChallenge({
   grade: Grade;
   progress?: SkillProgressInput;
   studentEvidence?: readonly StudentEvidenceValue[];
+  regeneration?: RegenerationHint;
 }): Promise<ChallengeGenerationResult> {
   const skill = getSkill(skillId);
   const difficulty = targetDifficulty(grade, progress);
@@ -204,6 +212,15 @@ export async function generateChallenge({
                 studentEvidence.length > 0
                   ? `Student-provided evidence:\n${JSON.stringify(studentEvidence, null, 2)}`
                   : "Student-provided evidence: none. Do not invent any.",
+                regeneration
+                  ? [
+                      "",
+                      "A previous candidate failed deterministic verification.",
+                      `Reason: ${regeneration.reason}`,
+                      regeneration.guidance,
+                      "Write a new challenge. Do not repeat the previous mistake.",
+                    ].join("\n")
+                  : "",
                 "",
                 "The reading of the object:",
                 JSON.stringify(analysis, null, 2),
