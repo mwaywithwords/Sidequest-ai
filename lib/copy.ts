@@ -349,15 +349,22 @@ export const copy = {
   progress: {
     eyebrow: "Your explorer log",
     heading: "What you've found so far",
-    body: "Every object you photograph teaches SIDEQUEST a little more about which challenges to hand you next.",
-    solvedStat: "Sidequests solved",
-    scannedStat: "Objects scanned",
-    streakStat: "Day streak",
-    skillsLabel: "Skill by skill",
-    recentLabel: "Recent sidequests",
-    comingNextLabel: "Coming next",
-    comingNextBody:
-      "These numbers are a preview. Once your attempts are being saved, SIDEQUEST will use them to nudge each new challenge easier or harder without you having to ask.",
+    body: "Every Sidequest you finish fills in your math map — one skill, one object, one little win at a time.",
+    emptyBody:
+      "Your math map is ready. Complete a Sidequest to start filling it in.",
+    explorerStat: "Math Explorer Level",
+    completedStat: "Sidequests Completed",
+    discoveredStat: "Objects Discovered",
+    skillsLabel: "Your skills",
+    nextCta: "Find My Next Sidequest",
+    firstCta: "Find My First Sidequest",
+    skillStatus: {
+      unpracticed: (skill: string) => `${skill} is waiting to be explored.`,
+      needsPractice: (skill: string) =>
+        `${skill} could use another Sidequest.`,
+      growing: (skill: string) => `${skill} is getting stronger.`,
+      strong: (skill: string) => `${skill} is looking strong.`,
+    },
   },
 
   notFound: {

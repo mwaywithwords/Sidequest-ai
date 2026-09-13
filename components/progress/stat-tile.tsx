@@ -10,14 +10,16 @@ export function StatTile({
   accent: string;
 }) {
   return (
-    <Card className="p-5">
+    <Card className="p-4 sm:p-5">
       <p
-        className="font-display text-4xl font-extrabold leading-none tracking-tight"
+        className="font-display text-3xl font-extrabold leading-none tracking-tight sm:text-4xl"
         style={{ color: accent }}
       >
         {value}
       </p>
-      <p className="mt-2 text-xs text-muted">{label}</p>
+      <p className="mt-2 text-[0.7rem] leading-snug text-muted sm:text-xs">
+        {label}
+      </p>
     </Card>
   );
 }
