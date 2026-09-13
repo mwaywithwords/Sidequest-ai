@@ -79,15 +79,15 @@ const CATALOG: readonly CatalogEntry[] = [
     ],
   },
   {
-    match: ["sneaker", "shoe", "trainer"],
-    topic: "pairs and shoe sizing",
+    match: ["sneaker", "shoe", "trainer", "sandal", "footwear"],
+    topic: "walking, steps, and pairs",
     reason:
-      "Sneakers come in pairs, which gives a reliable grouping number without inventing a shoe size.",
+      "Shoes are used for walking and come in pairs, which can inspire step and grouping maths without inventing a shoe size.",
     facts: [
       {
         label: "shoes in a pair",
         value: 2,
-        statement: "Sneakers are sold as a pair of 2 shoes.",
+        statement: "Shoes are sold as a pair of 2.",
       },
     ],
   },
@@ -96,6 +96,20 @@ const CATALOG: readonly CatalogEntry[] = [
     topic: "pages and chapters",
     reason:
       "Books are organised into pages and chapters, which can inspire counting and grouping.",
+    facts: [],
+  },
+  {
+    match: ["cup", "mug", "tumbler"],
+    topic: "liquid, pouring, and servings",
+    reason:
+      "A cup is used for drinking and pouring, so servings and amounts can inspire maths without inventing this cup's capacity.",
+    facts: [],
+  },
+  {
+    match: ["backpack", "knapsack", "rucksack"],
+    topic: "carrying items and school supplies",
+    reason:
+      "A backpack is used to carry items, so groups of supplies can inspire maths without inventing this bag's weight.",
     facts: [],
   },
 ];

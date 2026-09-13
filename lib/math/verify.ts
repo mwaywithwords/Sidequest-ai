@@ -1,3 +1,4 @@
+import { challengeMatchesObjectPurpose } from "@/lib/ai/semantic-purpose";
 import type {
   Computation,
   ContextualPayload,
@@ -61,7 +62,7 @@ export type VerificationInput = {
   contextualGrounding?: ContextualPayload | null;
 };
 
-const HYPOTHETICAL = /\b(if|suppose|imagine|what if)\b/i;
+const HYPOTHETICAL = /\b(if|suppose|imagine|what if|let'?s say)\b/i;
 
 const GENERIC_CONNECTION =
   /\bthis (question|problem|challenge|sidequest) is about your\b/i;
@@ -468,15 +469,20 @@ function computationMatchesSkill(
   switch (skillId) {
     case "addition":
       return (
-        computation.type === "arithmetic" && computation.operation === "add"
+        (computation.type === "arithmetic" && computation.operation === "add") ||
+        lastMultiStepOperation(computation) === "add"
       );
     case "subtraction":
       return (
-        computation.type === "arithmetic" && computation.operation === "subtract"
+        (computation.type === "arithmetic" &&
+          computation.operation === "subtract") ||
+        lastMultiStepOperation(computation) === "subtract"
       );
     case "multiplication":
       return (
-        computation.type === "arithmetic" && computation.operation === "multiply"
+        (computation.type === "arithmetic" &&
+          computation.operation === "multiply") ||
+        lastMultiStepOperation(computation) === "multiply"
       );
     case "division":
       return computation.type === "division";
@@ -488,6 +494,7 @@ function computationMatchesSkill(
     case "measurement":
       return (
         computation.type === "arithmetic" ||
+        computation.type === "multi_step_arithmetic" ||
         computation.type === "conversion" ||
         computation.type === "division"
       );
@@ -498,6 +505,13 @@ function computationMatchesSkill(
         computation.type === "shape_count"
       );
   }
+}
+
+function lastMultiStepOperation(
+  computation: Computation,
+): "add" | "subtract" | "multiply" | null {
+  if (computation.type !== "multi_step_arithmetic") return null;
+  return computation.steps.at(-1)?.operation ?? null;
 }
 
 function isShapeComputation(
@@ -599,6 +613,19 @@ function objectConnectionHolds(
   });
 
   if (fit.challengeMode === "inspired_math") {
+    if (
+      !challengeMatchesObjectPurpose(
+        challenge.question,
+        challenge.objectConnection,
+        analysis,
+        payload
+          ? { topic: payload.topic, reason: payload.reason }
+          : fit.inspirationContext,
+      )
+    ) {
+      return false;
+    }
+
     const worldAnchors = operands.filter(
       (operand) =>
         operand.origin === "contextual" ||

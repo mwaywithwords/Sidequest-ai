@@ -116,17 +116,6 @@ const measurementAsk = (
   reason: `A real measurement from your ${objectName} lets us do this mission.`,
 });
 
-const countAsk = (
-  objectName: string,
-  target: string,
-  prompt: string,
-): EvidenceRequest => ({
-  type: "student_count",
-  prompt,
-  targetProperty: target,
-  reason: `A real count from your ${objectName} lets us do this mission.`,
-});
-
 const inspired = (topic: string, reason: string): InspirationContext => ({
   topic,
   reason,
@@ -195,27 +184,24 @@ const MATRIX: Record<ObjectKey, Record<SkillId, ExpectedPath>> = {
   },
   sneaker: {
     addition: {
-      mode: "investigation_math",
-      evidence: countAsk(
-        "sneaker",
-        "eyelets on one side",
-        "Count the eyelets on one side.",
+      mode: "inspired_math",
+      inspiration: inspired(
+        "walking and steps",
+        "A sneaker is used for walking, so steps can inspire addition without a printed size.",
       ),
     },
     subtraction: {
-      mode: "investigation_math",
-      evidence: measurementAsk(
-        "sneaker",
-        "shoe size or length",
-        "Find the size label or measure the shoe from heel to toe.",
+      mode: "inspired_math",
+      inspiration: inspired(
+        "walking and steps",
+        "Steps across walks can inspire subtraction without inventing a shoe size.",
       ),
     },
     multiplication: {
-      mode: "investigation_math",
-      evidence: countAsk(
-        "sneaker",
-        "eyelets on one side",
-        "Count the eyelets on one side.",
+      mode: "inspired_math",
+      inspiration: inspired(
+        "steps and laps",
+        "Repeated steps or pairs can inspire multiplication without counting eyelets.",
       ),
     },
     division: {

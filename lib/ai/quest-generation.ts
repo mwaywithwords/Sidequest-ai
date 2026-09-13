@@ -52,11 +52,11 @@ function generationInstructions(): string {
 
 You are doing up to three jobs in one response. Keep the sections distinct. Validate each against the reading. Do not invent a fact about the photographed object.
 
-You MUST be able to return any of these four outcomes:
-A. object_math — investigation ready, plus discovery, plus one challenge.
-B. investigation_math — one evidence request. Set discovery and challenge to null.
-C. inspired_math — investigation ready with inspirationContext, plus discovery, plus one challenge.
-D. genuine poor_fit — last resort. Set discovery and challenge to null.
+You MUST be able to return any of these four outcomes. Prefer them in this order:
+A. object_math — a visible number or visible form already supports the skill. Plus discovery and one challenge.
+B. inspired_math — no useful number, but the object's ordinary real-world use can honestly anchor the skill. Plus inspirationContext, discovery, and one challenge that may introduce given_in_problem numbers with suppose / imagine / if / let's say.
+C. investigation_math — interacting with the actual object would produce a BETTER lesson, not merely because the photo lacks a number. One evidence request. Set discovery and challenge to null.
+D. genuine poor_fit — last resort. A safe identifiable ordinary object is not poor_fit just because it has no printed number. Set discovery and challenge to null.
 
 Discovery is required only when a challenge path proceeds (object_math or inspired_math). Do not write discovery or a challenge for investigation_math or poor_fit.
 

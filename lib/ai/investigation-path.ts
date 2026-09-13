@@ -5,6 +5,10 @@ import {
   type InvestigationAnchor,
   type ObjectAnalysis,
 } from "@/lib/ai/schemas";
+import {
+  buildSemanticInspiration,
+  canAnchorSemantically,
+} from "@/lib/ai/semantic-purpose";
 import { looksGeometric } from "@/lib/math/geometry-forms";
 import type { SkillId } from "@/lib/types";
 
@@ -15,9 +19,10 @@ import type { SkillId } from "@/lib/types";
  * here is something the photograph actually showed. This module decides what
  * SIDEQUEST is allowed to do with that reading. It does not invent facts.
  *
- * Paths are exhausted in order: object math, then one student observation,
- * then inspired real-world context. `poor_fit` is last. A missing printed
- * number is not, by itself, a reason to stop.
+ * Paths are exhausted in order: observed math, visible form, semantic
+ * real-world context, then investigation only when touching the object
+ * is the better lesson. `poor_fit` is last. A missing printed number is
+ * not, by itself, a reason to stop.
  */
 
 /**
@@ -46,10 +51,12 @@ export type ResolvedInvestigation = {
  * support. The model proposes; this function decides.
  *
  * OBJECT_MATH needs at least one grounded property from the reading.
- * INVESTIGATION_MATH needs a well-formed request, and may have no grounded
- * property yet.
  * INSPIRED_MATH needs a structured real-world context, not a fact invented
- * about the object.
+ * about the object. A missing number prefers this path over a forced
+ * investigation.
+ * INVESTIGATION_MATH needs a well-formed request. It is kept when the
+ * model asked for it, because measuring this object may be the better
+ * lesson. It is not the default recovery for a numberless photograph.
  * POOR_FIT is last. A valid earlier path always wins.
  */
 export function resolveInvestigation(
@@ -123,6 +130,36 @@ export function recoverInvestigation(
     };
   }
 
+  if (investigationIsBetter(analysis, skillId)) {
+    const evidenceRequest = fallbackEvidenceRequest(analysis, skillId);
+    if (evidenceRequest !== null) {
+      return {
+        resolved: {
+          challengeMode: "investigation_math",
+          reason:
+            "Interacting with this object produces a better measurement lesson than a hypothetical situation.",
+          evidenceRequest,
+          inspirationContext: null,
+        },
+        usableProperties: [],
+      };
+    }
+  }
+
+  const inspirationContext = fallbackInspirationContext(analysis, skillId);
+  if (inspirationContext !== null) {
+    return {
+      resolved: {
+        challengeMode: "inspired_math",
+        reason:
+          "The object's ordinary real-world use can honestly anchor this skill without a visible number.",
+        evidenceRequest: null,
+        inspirationContext,
+      },
+      usableProperties: [],
+    };
+  }
+
   const evidenceRequest = fallbackEvidenceRequest(analysis, skillId);
   if (evidenceRequest !== null) {
     return {
@@ -170,9 +207,32 @@ export function readingAnchors(
 }
 
 /**
- * One generic next observation when the model declined every path but the
- * object is still identifiable. Ordinary objects should usually get this
- * rather than poor_fit.
+ * Semantic recovery when the photograph has no useful number. Built from
+ * the object's ordinary purpose, not from a hardcoded object → path table.
+ */
+export function fallbackInspirationContext(
+  analysis: ObjectAnalysis,
+  skillId: SkillId,
+): InspirationContext | null {
+  if (!canAnchorSemantically(analysis)) return null;
+  return buildSemanticInspiration(analysis, skillId);
+}
+
+/**
+ * Measuring this object is the better lesson. Do not use this merely
+ * because the photograph has no printed number.
+ */
+function investigationIsBetter(
+  analysis: ObjectAnalysis,
+  skillId: SkillId,
+): boolean {
+  return skillId === "measurement" && analysis.visibleMeasurements.length === 0;
+}
+
+/**
+ * One extra observation when measuring this object is the better lesson,
+ * or when no semantic path can be formed. Not the default for a
+ * numberless ordinary object.
  */
 export function fallbackEvidenceRequest(
   analysis: ObjectAnalysis,
@@ -221,8 +281,8 @@ function resolveMode(
   switch (requested) {
     case "object_math":
       if (hasAnchor) return "object_math";
-      if (hasEvidence) return "investigation_math";
       if (hasInspiration) return "inspired_math";
+      if (hasEvidence) return "investigation_math";
       return "poor_fit";
 
     case "investigation_math":
@@ -239,8 +299,8 @@ function resolveMode(
 
     case "poor_fit":
       if (hasAnchor) return "object_math";
-      if (hasEvidence) return "investigation_math";
       if (hasInspiration) return "inspired_math";
+      if (hasEvidence) return "investigation_math";
       return "poor_fit";
   }
 }
