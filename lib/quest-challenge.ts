@@ -177,6 +177,9 @@ export async function generateQuestChallenge(
     object_connection: result.challenge.objectConnection,
     generation_metadata: {
       valuesUsed: result.challenge.valuesUsed,
+      ...(result.challenge.shapesUsed === undefined
+        ? {}
+        : { shapesUsed: result.challenge.shapesUsed }),
       computation: result.challenge.computation,
       verificationStrategy: result.challenge.verificationStrategy,
       model: CHALLENGE_MODEL,

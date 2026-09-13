@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  GEOMETRY_ASPECTS,
+  GEOMETRY_CHOICE_SETS,
+  GEOMETRY_FEATURES,
+  GEOMETRY_LABELS,
+} from "@/lib/math/geometry-forms";
 import { SKILL_IDS } from "@/lib/types";
 
 /**
@@ -345,6 +351,9 @@ export const ComputationOperandSchema = UsedValueSchema;
 /**
  * What the student is asked to produce. Structured so grading can compare
  * parts rather than a free-text string. Matches challenges.correct_answer.
+ *
+ * `choice` is a schema-controlled geometry label, not free text. The
+ * student picks from `set`; grading compares the normalised label only.
  */
 export const CorrectAnswerSchema = z.discriminatedUnion("type", [
   z.strictObject({
@@ -358,7 +367,23 @@ export const CorrectAnswerSchema = z.discriminatedUnion("type", [
     denominator: z.int().positive(),
     unit: text.optional(),
   }),
+  z.strictObject({
+    type: z.literal("choice"),
+    value: z.enum(GEOMETRY_LABELS),
+    set: z.enum(GEOMETRY_CHOICE_SETS),
+  }),
 ]);
+
+/**
+ * A visible 2D shape, 3D form, or geometric relation taken from the
+ * photograph. It is not a measurement.
+ */
+export const UsedShapeSchema = z.strictObject({
+  label: text,
+  form: z.enum(GEOMETRY_LABELS),
+  aspect: z.enum(GEOMETRY_ASPECTS),
+  origin: z.enum(INVESTIGATION_VALUE_ORIGINS),
+});
 
 /**
  * A constrained computation the next verification stage can evaluate
@@ -401,27 +426,56 @@ export const ComputationSchema = z.discriminatedUnion("type", [
     shape: z.enum(["rectangle", "square", "triangle"]),
     dimensions: z.array(ComputationOperandSchema).min(1).max(4),
   }),
+  z.strictObject({
+    type: z.literal("shape_identify"),
+    aspect: z.enum(GEOMETRY_ASPECTS),
+    label: z.enum(GEOMETRY_LABELS),
+  }),
+  z.strictObject({
+    type: z.literal("shape_count"),
+    shape: z.enum(GEOMETRY_LABELS),
+    feature: z.enum(GEOMETRY_FEATURES),
+  }),
 ]);
 
-export const ChallengeSchema = z.strictObject({
-  question: text,
-  skillCode,
-  correctAnswer: CorrectAnswerSchema,
-  solution: text,
-  hint1: text,
-  hint2: text,
-  difficulty: z.int().min(1).max(5),
-  objectConnection: text,
-  /** At least one: a challenge that used nothing from the object is a generic worksheet problem. */
-  valuesUsed: z.array(UsedValueSchema).min(1),
-  /** How the answer should be checked — the instruction the grading stage follows. */
-  verificationStrategy: text,
-  /**
-   * Everything a deterministic verifier needs to recompute the answer.
-   * Not an expression language: only the union above.
-   */
-  computation: ComputationSchema,
-});
+export const ChallengeSchema = z
+  .strictObject({
+    question: text,
+    skillCode,
+    correctAnswer: CorrectAnswerSchema,
+    solution: text,
+    hint1: text,
+    hint2: text,
+    difficulty: z.int().min(1).max(5),
+    objectConnection: text,
+    /**
+     * Numeric figures the challenge uses. Empty only when `shapesUsed`
+     * carries the object connection for qualitative or structure geometry.
+     */
+    valuesUsed: z.array(UsedValueSchema),
+    /**
+     * Observed forms. Absent on older numeric challenges. Never a
+     * measurement.
+     */
+    shapesUsed: z.array(UsedShapeSchema).optional(),
+    /** How the answer should be checked — the instruction the grading stage follows. */
+    verificationStrategy: text,
+    /**
+     * Everything a deterministic verifier needs to recompute the answer.
+     * Not an expression language: only the union above.
+     */
+    computation: ComputationSchema,
+  })
+  .refine(
+    (challenge) =>
+      challenge.valuesUsed.length > 0 ||
+      (challenge.shapesUsed !== undefined && challenge.shapesUsed.length > 0),
+    {
+      error:
+        "A challenge must use at least one numeric value or one observed shape.",
+      path: ["valuesUsed"],
+    },
+  );
 
 /**
  * What Challenge Generation stores on challenges.generation_metadata for
@@ -447,7 +501,8 @@ export const AdaptiveProfileSchema = z.strictObject({
 });
 
 export const GenerationMetadataSchema = z.strictObject({
-  valuesUsed: z.array(UsedValueSchema).min(1),
+  valuesUsed: z.array(UsedValueSchema),
+  shapesUsed: z.array(UsedShapeSchema).optional(),
   computation: ComputationSchema,
   verificationStrategy: text,
   model: z.string().optional(),
@@ -533,6 +588,7 @@ export type Discovery = z.infer<typeof DiscoverySchema>;
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];
 
 export type UsedValue = z.infer<typeof UsedValueSchema>;
+export type UsedShape = z.infer<typeof UsedShapeSchema>;
 export type ComputationOperand = z.infer<typeof ComputationOperandSchema>;
 export type CorrectAnswer = z.infer<typeof CorrectAnswerSchema>;
 export type Computation = z.infer<typeof ComputationSchema>;

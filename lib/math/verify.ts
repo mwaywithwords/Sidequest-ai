@@ -16,6 +16,7 @@ import {
   type StudentEvidenceValue,
   valuesMatch,
 } from "@/lib/math/grounding";
+import { shapeSupports } from "@/lib/math/geometry-forms";
 import { isFiniteNumber, sameUnit, unitsCompatible } from "@/lib/math/units";
 import type { Grade, SkillId } from "@/lib/types";
 
@@ -194,6 +195,10 @@ export function solutionAgreesWithAnswer(
 ): boolean {
   const text = solution.toLowerCase();
 
+  if (answer.type === "choice") {
+    return text.includes(answer.value.toLowerCase());
+  }
+
   if (answer.type === "number") {
     if (!numberAppears(text, answer.value)) return false;
     if (answer.unit && !text.includes(answer.unit.toLowerCase())) {
@@ -229,6 +234,10 @@ export function answersAgree(
   computed: CorrectAnswer,
   stored: CorrectAnswer,
 ): boolean {
+  if (computed.type === "choice" && stored.type === "choice") {
+    return computed.value === stored.value && computed.set === stored.set;
+  }
+
   if (computed.type === "number" && stored.type === "number") {
     if (!numbersEqual(computed.value, stored.value)) return false;
     return answerUnitsAgree(computed.unit, stored.unit);
@@ -417,6 +426,10 @@ function verifyOrigins(
     return null;
   }
 
+  if (isShapeComputation(challenge.computation)) {
+    return verifyShapeComputation(challenge, analysis);
+  }
+
   const groundedOperands = operands.filter(
     (operand) =>
       operand.origin === "observed" || operand.origin === "student_provided",
@@ -476,8 +489,80 @@ function computationMatchesSkill(
         computation.type === "division"
       );
     case "geometry":
-      return computation.type === "geometry";
+      return (
+        computation.type === "geometry" ||
+        computation.type === "shape_identify" ||
+        computation.type === "shape_count"
+      );
   }
+}
+
+function isShapeComputation(
+  computation: Computation,
+): computation is Extract<
+  Computation,
+  { type: "shape_identify" | "shape_count" }
+> {
+  return (
+    computation.type === "shape_identify" || computation.type === "shape_count"
+  );
+}
+
+function verifyShapeComputation(
+  challenge: GeneratedChallenge,
+  analysis: ObjectAnalysis,
+): VerificationResult | null {
+  const shapes = challenge.shapesUsed ?? [];
+  if (shapes.length === 0) {
+    return fail(
+      "ungrounded_value",
+      "A shape challenge has no observed form to stand on.",
+    );
+  }
+
+  const observed = shapes.filter((shape) => shape.origin === "observed");
+  if (observed.length === 0) {
+    return fail(
+      "ungrounded_value",
+      "A shape challenge must use an observed form from the reading.",
+    );
+  }
+
+  const computation = challenge.computation;
+  if (computation.type === "shape_identify") {
+    const matched = observed.some(
+      (shape) =>
+        shape.form === computation.label &&
+        shape.aspect === computation.aspect &&
+        shapeSupports(analysis, computation.aspect, computation.label),
+    );
+
+    if (!matched) {
+      return fail(
+        "ungrounded_value",
+        `The label "${computation.label}" is not supported by the object reading.`,
+      );
+    }
+
+    return null;
+  }
+
+  if (computation.type === "shape_count") {
+    const matched = observed.some(
+      (shape) =>
+        shape.form === computation.shape &&
+        shapeSupports(analysis, shape.aspect, shape.form),
+    );
+
+    if (!matched) {
+      return fail(
+        "ungrounded_value",
+        `The form "${computation.shape}" is not supported by the object reading.`,
+      );
+    }
+  }
+
+  return null;
 }
 
 function objectConnectionHolds(
@@ -503,6 +588,12 @@ function objectConnectionHolds(
     return false;
   });
 
+  const citesShape = (challenge.shapesUsed ?? []).some((shape) => {
+    if (hay.includes(shape.form.toLowerCase())) return true;
+    if (hay.includes(shape.label.toLowerCase())) return true;
+    return false;
+  });
+
   if (fit.challengeMode === "inspired_math") {
     const worldAnchors = operands.filter(
       (operand) =>
@@ -521,12 +612,16 @@ function objectConnectionHolds(
       .filter((token) => token.length >= 4)
       .some((token) => hay.includes(token));
 
-    if (!citesPhoto && !citesWorld && !citesTopic) return false;
-  } else if (!citesPhoto) {
+    if (!citesPhoto && !citesWorld && !citesTopic && !citesShape) return false;
+  } else if (!citesPhoto && !citesShape) {
     return false;
   }
 
-  if (GENERIC_CONNECTION.test(connection) && photoAnchors.length === 0) {
+  if (
+    GENERIC_CONNECTION.test(connection) &&
+    photoAnchors.length === 0 &&
+    !citesShape
+  ) {
     return false;
   }
 
@@ -538,7 +633,8 @@ function objectConnectionHolds(
   return (
     (objectName.length > 0 && hay.includes(objectName)) ||
     tokens.some((token) => hay.includes(token)) ||
-    citesPhoto
+    citesPhoto ||
+    citesShape
   );
 }
 

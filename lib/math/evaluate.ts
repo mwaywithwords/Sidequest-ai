@@ -4,6 +4,11 @@ import type {
   UsedValue,
 } from "@/lib/ai/schemas";
 import {
+  aspectAllowsLabel,
+  choiceSetForAspect,
+  structureCount,
+} from "@/lib/math/geometry-forms";
+import {
   isFiniteNumber,
   sharedUnit,
   unitFamily,
@@ -45,6 +50,9 @@ export function computationOperands(computation: Computation): UsedValue[] {
       return [computation.value, computation.factor];
     case "geometry":
       return computation.dimensions;
+    case "shape_identify":
+    case "shape_count":
+      return [];
   }
 }
 
@@ -64,6 +72,10 @@ export function evaluateComputation(
       return evaluateConversion(computation);
     case "geometry":
       return evaluateGeometry(computation);
+    case "shape_identify":
+      return evaluateShapeIdentify(computation);
+    case "shape_count":
+      return evaluateShapeCount(computation);
     default:
       return fail(
         "unsupported_computation",
@@ -319,6 +331,40 @@ function evaluateGeometry(
     return numberResult(values[0]! * values[0]!, unit);
   }
   return numberResult((values[0]! * values[1]!) / 2, unit);
+}
+
+function evaluateShapeIdentify(
+  computation: Extract<Computation, { type: "shape_identify" }>,
+): EvaluationResult {
+  if (!aspectAllowsLabel(computation.aspect, computation.label)) {
+    return fail(
+      "invalid_values",
+      `The label "${computation.label}" is not valid for ${computation.aspect}.`,
+    );
+  }
+
+  return {
+    ok: true,
+    answer: {
+      type: "choice",
+      value: computation.label,
+      set: choiceSetForAspect(computation.aspect),
+    },
+  };
+}
+
+function evaluateShapeCount(
+  computation: Extract<Computation, { type: "shape_count" }>,
+): EvaluationResult {
+  const count = structureCount(computation.shape, computation.feature);
+  if (count === null) {
+    return fail(
+      "invalid_values",
+      `No established ${computation.feature} count for ${computation.shape}.`,
+    );
+  }
+
+  return numberResult(count, undefined);
 }
 
 export function simplifyFraction(

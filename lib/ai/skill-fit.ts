@@ -72,7 +72,7 @@ const SKILL_INVESTIGATION: Record<SkillId, string> = {
   measurement:
     "visible measurements; student measurement of length, width, height, volume, capacity, or time; comparisons. If no number is printed, asking the student to measure one side is investigation_math, not poor_fit.",
   geometry:
-    "recognisable 2D shapes; recognisable 3D forms; angles; symmetry; curves; circular tops; spheres; rectangles; parallel or perpendicular lines; repeated geometric structures. Observable shape is enough. Do not require printed dimensions. A basketball, bottle, sneaker, or window is object_math when its shape is visible.",
+    "recognisable 2D shapes; recognisable 3D forms; angles; symmetry; curves; circular tops; spheres; rectangles; parallel or perpendicular lines; faces, edges, vertices; repeated geometric structures. Observable shape is enough for qualitative or structure geometry. Do not require printed dimensions and do not ask for a measurement when a visible form can support the skill. A basketball, bottle, sneaker, book, box, or clock is object_math when its shape is visible.",
 };
 
 /**
@@ -136,7 +136,7 @@ Exhaust three paths, in this order. Only after all three fail may you return poo
    Examples:
    - Basketball + measurement: "Measure around the widest part of the basketball."
    - Sneaker + subtraction: "Find the size label or measure the shoe from heel to toe."
-   - Pillow + geometry: "Measure the long side and short side."
+   - Pillow + geometry: name the rectangular face first. Ask for a measurement only if the mission needs perimeter or area.
    - Sneaker + multiplication: "Count the eyelets on one side."
    - Book + fractions: "How many chapters are in the book?"
    Choose the simplest legitimate request for this grade.
