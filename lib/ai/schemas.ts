@@ -327,6 +327,19 @@ export const ChallengeSchema = z.strictObject({
   computation: ComputationSchema,
 });
 
+/**
+ * What Challenge Generation stores on challenges.generation_metadata for
+ * the verifier. Extra fields are rejected so a raw model dump cannot hide
+ * here.
+ */
+export const GenerationMetadataSchema = z.strictObject({
+  valuesUsed: z.array(UsedValueSchema).min(1),
+  computation: ComputationSchema,
+  verificationStrategy: text,
+  model: z.string().optional(),
+  challengeMode: z.enum(["direct", "grounded_scenario"]).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Stage 5 — giving up, on purpose
 // ---------------------------------------------------------------------------
@@ -398,6 +411,7 @@ export type UsedValue = z.infer<typeof UsedValueSchema>;
 export type ComputationOperand = z.infer<typeof ComputationOperandSchema>;
 export type CorrectAnswer = z.infer<typeof CorrectAnswerSchema>;
 export type Computation = z.infer<typeof ComputationSchema>;
+export type GenerationMetadata = z.infer<typeof GenerationMetadataSchema>;
 /** The generated problem. Distinct from the mock `Challenge` in lib/types.ts, which is UI shape. */
 export type GeneratedChallenge = z.infer<typeof ChallengeSchema>;
 

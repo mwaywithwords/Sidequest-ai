@@ -9,8 +9,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * - 'pending'    work is still waiting to happen: the photo has not been
  *                learned from yet, an investigation is waiting for one more
- *                observation, or a candidate challenge has been stored and
- *                is waiting for deterministic verification.
+ *                observation, or a candidate challenge is waiting for
+ *                deterministic verification.
  * - 'processing' picked up by a stage.
  * - 'ready'      a verified challenge exists. Only the verification stage
  *                may set this. Generation must not.
