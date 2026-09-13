@@ -30,7 +30,7 @@ export default function LandingPage() {
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
             <ButtonLink href="/setup" size="lg" className="w-full sm:w-auto">
-              Start a sidequest
+              Start a mission
               <ArrowRightIcon className="size-5" />
             </ButtonLink>
             <ButtonLink

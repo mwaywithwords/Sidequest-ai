@@ -29,8 +29,8 @@ import type { Grade, Skill } from "@/lib/types";
 
 type Stage = "idle" | "preview" | "processing";
 
-/** Roughly the cadence the real pipeline runs at. */
-const STEP_MS = 750;
+/** How often the caption advances while the pipeline is still working. */
+const STEP_MS = 2200;
 
 const STEPS = copy.scan.processingSteps;
 
@@ -86,6 +86,7 @@ export function ScanStage({
     status: "idle",
   });
   const [uploadFailed, setUploadFailed] = useState(false);
+  const [cluePhotoFailed, setCluePhotoFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
   const revokeCluePreview = useCallback(() => {
@@ -112,6 +113,7 @@ export function ScanStage({
       setRejection(reason);
       setDetour(null);
       setClue(null);
+      setCluePhotoFailed(false);
       setUploadFailed(false);
       setStage("idle");
     },
@@ -128,6 +130,7 @@ export function ScanStage({
     setDetour(request);
     setClue(null);
     revokeCluePreview();
+    setCluePhotoFailed(false);
     setUploadFailed(false);
     setStage("preview");
   }, [revokeCluePreview]);
@@ -141,6 +144,7 @@ export function ScanStage({
     setDetour(null);
     setClue(request);
     revokeCluePreview();
+    setCluePhotoFailed(false);
     setUploadFailed(false);
     setStage("preview");
   }, [revokeCluePreview]);
@@ -150,6 +154,7 @@ export function ScanStage({
     setDetour(null);
     setClue(null);
     setRejection(null);
+    setCluePhotoFailed(false);
     setUploadFailed(false);
     setStage("idle");
   }, [clearPicked]);
@@ -170,6 +175,7 @@ export function ScanStage({
     setRejection(null);
     setDetour(null);
     setClue(null);
+    setCluePhotoFailed(false);
     setUploadFailed(false);
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
@@ -191,9 +197,11 @@ export function ScanStage({
     if (problem) {
       // The original investigation photo is still the one on screen. A bad
       // supporting shot should not wipe it.
+      setCluePhotoFailed(true);
       return;
     }
 
+    setCluePhotoFailed(false);
     setClueCollection((current) => {
       if (current.status === "photo") URL.revokeObjectURL(current.previewUrl);
       return { status: "photo", previewUrl: URL.createObjectURL(picked) };
@@ -210,14 +218,12 @@ export function ScanStage({
     setDetour(null);
     setClue(null);
     revokeCluePreview();
+    setCluePhotoFailed(false);
     setUploadFailed(false);
     setStepIndex(0);
     setStage("processing");
 
-    const [outcome] = await Promise.all([
-      uploadQuestImage(file, grade, skill.id),
-      new Promise((resolve) => setTimeout(resolve, STEP_MS * STEPS.length)),
-    ]);
+    const outcome = await uploadQuestImage(file, grade, skill.id);
 
     if (outcome.status === "ok") {
       router.push(`/quest/${outcome.questId}`);
@@ -316,7 +322,16 @@ export function ScanStage({
         </div>
       )}
 
-      <div className="viewfinder relative flex min-h-[19rem] items-center justify-center overflow-hidden rounded-tile bg-void/60 ring-1 ring-hair sm:min-h-[24rem]">
+      {cluePhotoFailed ? (
+        <p role="alert" className="text-sm leading-relaxed text-muted sm:text-base">
+          {copy.scan.cluePhotoFailed}
+        </p>
+      ) : null}
+
+      <div
+        className="viewfinder relative flex min-h-[19rem] items-center justify-center overflow-hidden rounded-tile bg-void/60 ring-1 ring-hair sm:min-h-[24rem]"
+        aria-busy={stage === "processing"}
+      >
         {previewUrl ? (
           <>
             {/* A blob URL from the local camera: nothing for next/image to optimise. */}
@@ -357,6 +372,8 @@ export function ScanStage({
         accept="image/*"
         capture="environment"
         onChange={handlePick}
+        aria-hidden
+        tabIndex={-1}
         className="hidden"
       />
       <input
@@ -364,6 +381,8 @@ export function ScanStage({
         type="file"
         accept="image/*"
         onChange={handlePick}
+        aria-hidden
+        tabIndex={-1}
         className="hidden"
       />
       <input
@@ -372,6 +391,8 @@ export function ScanStage({
         accept="image/*"
         capture="environment"
         onChange={handleCluePhoto}
+        aria-hidden
+        tabIndex={-1}
         className="hidden"
       />
 

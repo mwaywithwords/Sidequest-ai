@@ -6,8 +6,12 @@ import { QuestPhotoFrame } from "@/components/quest/quest-photo";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, SectionLabel } from "@/components/ui/card";
 import { ArrowRightIcon, CheckIcon, SparkIcon } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
-import type { ChallengeProgress, GradeView } from "@/lib/progress/outcome";
+import type {
+  ChallengeProgress,
+  StudentGradeView,
+} from "@/lib/progress/outcome";
 import type { StudentQuest } from "@/lib/quest-present";
 
 type Stage = "discover" | "connect" | "challenge";
@@ -24,6 +28,8 @@ export function QuestExperience({ quest }: { quest: StudentQuest }) {
       {quest.missionLabel ? (
         <SectionLabel accent={quest.accent}>{quest.missionLabel}</SectionLabel>
       ) : null}
+
+      <StageTrail stage={stage} accent={quest.accent} />
 
       {stage === "discover" ? (
         <DiscoverStage quest={quest} onContinue={() => setStage("connect")} />
@@ -48,8 +54,8 @@ function DiscoverStage({
       <QuestPhotoFrame photo={quest.photo} accent={quest.accent} size="hero" />
 
       <div>
-        <div className="flex items-center gap-2">
-          <SparkIcon className="size-4 text-amber" />
+        <div className="flex items-center gap-2.5">
+          <SparkIcon className="size-6 text-amber" />
           <SectionLabel>{copy.quest.experience.discoverEyebrow}</SectionLabel>
         </div>
         <p className="mt-3 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
@@ -164,6 +170,10 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
   const finished = progress.status === "correct" || progress.status === "complete";
   const shownHint =
     progress.status === "incorrect" ? progress.hint : hintOpen ? quest.hint : null;
+  const hintLabel =
+    progress.status === "incorrect" && progress.attemptNumber >= 2
+      ? copy.quest.experience.hint2
+      : copy.quest.experience.hint1;
 
   const answerReady =
     quest.answer.kind === "number"
@@ -198,7 +208,7 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
     setSubmitting(false);
   }
 
-  function applyGrade(result: GradeView) {
+  function applyGrade(result: StudentGradeView) {
     if (result.status === "invalid") {
       setInvalid(
         quest.answer.kind === "fraction"
@@ -278,28 +288,35 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
             </div>
 
             {invalid ? (
-              <p className="mt-5 animate-rise text-sm leading-relaxed text-muted">
+              <p
+                role="alert"
+                className="mt-5 animate-rise text-sm leading-relaxed text-muted"
+              >
                 {invalid}
               </p>
             ) : null}
 
             {progress.status === "incorrect" ? (
-              <div className="mt-5 animate-rise rounded-tile bg-void/50 p-4 ring-1 ring-hair">
+              <div
+                role="status"
+                className="mt-5 animate-rise rounded-tile bg-void/50 p-4 ring-1 ring-hair"
+              >
                 <p className="text-sm font-medium text-cream sm:text-base">
                   {copy.quest.experience.incorrectTrail}
                 </p>
                 {progress.hint ? (
                   <p className="mt-2.5 text-sm leading-relaxed text-muted sm:text-base">
-                    <span className="text-amber">
-                      {copy.quest.experience.hint}:{" "}
-                    </span>
+                    <span className="font-medium text-amber">{hintLabel}: </span>
                     {progress.hint}
                   </p>
                 ) : null}
               </div>
             ) : shownHint ? (
-              <p className="mt-5 animate-rise text-sm leading-relaxed text-muted sm:text-base">
-                <span className="text-amber">{copy.quest.experience.hint}: </span>
+              <p
+                role="status"
+                className="mt-5 animate-rise text-sm leading-relaxed text-muted sm:text-base"
+              >
+                <span className="font-medium text-amber">{hintLabel}: </span>
                 {shownHint}
               </p>
             ) : null}
@@ -335,9 +352,10 @@ function FinishedState({
 
       {solved ? (
         <p
-          className="mt-4 inline-flex items-center rounded-full px-3 py-1.5 font-mono text-sm font-semibold"
-          style={{ color: quest.accent, background: `${quest.accent}1f` }}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 font-mono text-sm font-semibold"
+          style={{ color: quest.accent, background: `${quest.accent}24` }}
         >
+          <SparkIcon className="size-4" />
           {copy.quest.experience.xp(progress.xp)}
         </p>
       ) : (
@@ -396,10 +414,10 @@ function AnswerFields({
 
   if (quest.answer.kind === "fraction") {
     return (
-      <div>
-        <p className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
+      <fieldset className="min-w-0 border-0 p-0">
+        <legend className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
           {label}
-        </p>
+        </legend>
         <div className="mt-2.5 flex items-center gap-3">
           <input
             id="numerator"
@@ -427,7 +445,7 @@ function AnswerFields({
             className="min-h-14 w-full rounded-full bg-void/60 px-5 text-base text-cream ring-1 ring-hair transition placeholder:text-faint focus:ring-2 focus:ring-lime focus:outline-none"
           />
         </div>
-      </div>
+      </fieldset>
     );
   }
 
@@ -450,5 +468,48 @@ function AnswerFields({
         className="mt-2.5 min-h-14 w-full rounded-full bg-void/60 px-5 text-base text-cream ring-1 ring-hair transition placeholder:text-faint focus:ring-2 focus:ring-lime focus:outline-none"
       />
     </div>
+  );
+}
+
+const QUEST_STAGES: Stage[] = ["discover", "connect", "challenge"];
+
+function StageTrail({ stage, accent }: { stage: Stage; accent: string }) {
+  const current = QUEST_STAGES.indexOf(stage);
+  const labels = {
+    discover: copy.quest.experience.stageDiscover,
+    connect: copy.quest.experience.stageConnect,
+    challenge: copy.quest.experience.stageChallenge,
+  };
+
+  return (
+    <ol className="flex flex-wrap items-center gap-2">
+      {QUEST_STAGES.map((id, index) => {
+        const isActive = index === current;
+        const isDone = index < current;
+
+        return (
+          <li key={id} className="flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex min-h-8 items-center rounded-full px-3 text-xs font-semibold",
+                isActive && "text-void",
+                isDone && "text-cream ring-1 ring-hair",
+                !isActive && !isDone && "text-faint ring-1 ring-hair",
+              )}
+              style={isActive ? { background: accent } : undefined}
+              aria-current={isActive ? "step" : undefined}
+            >
+              {labels[id]}
+            </span>
+            {index < QUEST_STAGES.length - 1 ? (
+              <span
+                aria-hidden
+                className={cn("h-px w-4 sm:w-6", isDone ? "bg-muted" : "bg-hair")}
+              />
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
   );
 }

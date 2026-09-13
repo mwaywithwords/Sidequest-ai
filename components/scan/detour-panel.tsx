@@ -32,7 +32,7 @@ export function DetourPanel({
     <Card accent={accent ?? "#c8ff4d"} className="animate-rise p-5 sm:p-8">
       <div className="flex items-center gap-2">
         <CompassIcon
-          className="size-4"
+          className="size-6"
           style={{ color: accent ?? "#c8ff4d" }}
         />
         <SectionLabel accent={accent ?? "#c8ff4d"}>

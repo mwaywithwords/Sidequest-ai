@@ -99,7 +99,7 @@
   background:
     radial-gradient(60rem 40rem at 12% -10%, rgba(199, 155, 255, 0.16), transparent 70%),
     radial-gradient(50rem 34rem at 92% 6%, rgba(87, 226, 255, 0.12), transparent 68%),
-    radial-gradient(44rem 30rem at 50% 108%, rgba(200, 255, 77, 0.08), transparent 72%);
+    radial-gradient(44rem 30rem at 50% 108%, rgba(200, 255, 77, 0.12), transparent 72%);
 }
 
 .dot-grid {

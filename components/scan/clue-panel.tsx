@@ -46,7 +46,7 @@ export function CluePanel({
     <Card accent={accent} className="animate-rise p-5 sm:p-8">
       <span hidden data-quest-id={questId} />
       <div className="flex items-center gap-2">
-        <SparkIcon className="size-4" style={{ color: accent }} />
+        <SparkIcon className="size-6" style={{ color: accent }} />
         <SectionLabel accent={accent}>{presentation.title}</SectionLabel>
       </div>
 
@@ -114,7 +114,7 @@ function ClueAction({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={collection.previewUrl}
-          alt=""
+          alt={copy.scan.previewAlt}
           className="size-16 shrink-0 rounded-xl object-cover ring-1 ring-hair"
         />
         <Button

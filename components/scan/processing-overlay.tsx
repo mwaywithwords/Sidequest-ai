@@ -10,7 +10,12 @@ export function ProcessingOverlay({
   accent: string;
 }) {
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-tile bg-void/85 backdrop-blur-sm">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-tile bg-void/85 backdrop-blur-sm"
+    >
       <div className="relative flex size-16 items-center justify-center">
         <span
           aria-hidden
@@ -24,7 +29,7 @@ export function ProcessingOverlay({
         />
       </div>
 
-      <p aria-live="polite" className="px-6 text-center text-sm text-cream">
+      <p className="px-6 text-center text-sm font-medium text-cream">
         {message}
       </p>
 

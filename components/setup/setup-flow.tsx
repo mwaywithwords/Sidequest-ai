@@ -31,9 +31,9 @@ export function SetupFlow({
     <div className="flex flex-col gap-10">
       <section>
         <SectionLabel>{copy.setup.gradeLabel}</SectionLabel>
-        <h2 className="mt-3 font-display text-2xl font-bold tracking-tight text-cream sm:text-3xl">
+        <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
           {copy.setup.gradeHeading}
-        </h2>
+        </h1>
         <div className="mt-5 grid grid-cols-3 gap-3">
           {GRADES.map((option) => (
             <OptionTile
@@ -56,7 +56,7 @@ export function SetupFlow({
       ) : (
         <section className="animate-rise">
           <SectionLabel>{copy.setup.skillLabel}</SectionLabel>
-          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight text-cream sm:text-3xl">
+          <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
             {copy.setup.skillHeading}
           </h2>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -95,7 +95,7 @@ export function SetupFlow({
             disabled={!ready}
             className="w-full sm:w-auto"
           >
-            Find an object
+            {copy.setup.launch}
             <ArrowRightIcon className="size-5" />
           </Button>
         </div>

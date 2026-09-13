@@ -3,11 +3,7 @@ import {
   MODEL_READABLE_IMAGE_TYPES,
   screenImage,
 } from "@/lib/ai/image-safety";
-import {
-  imageExtension,
-  MAX_UPLOAD_BYTES,
-  validateImageFile,
-} from "@/lib/image-capture";
+import { inspectUploadedImage } from "@/lib/image-capture";
 import { getOrCreateProfileId } from "@/lib/profile";
 import { analyzeQuestObject } from "@/lib/quest-analysis";
 import { generateQuestChallenge } from "@/lib/quest-challenge";
@@ -64,20 +60,18 @@ export async function POST(request: Request) {
   }
 
   const image = form.get("image");
-  const file = image instanceof File ? image : null;
+  const incoming = image instanceof File ? image : null;
 
   // Still the trust boundary. The browser normalises to well under this, but
-  // this handler has no way to know a request came from the browser at all,
-  // and the budget is what keeps a body inside the platform's own limit.
-  const problem = validateImageFile(file, MAX_UPLOAD_BYTES);
-  if (problem !== null || file === null) {
-    return NextResponse.json({ error: problem ?? "missing" }, { status: 400 });
+  // this handler has no way to know a request came from the browser at all.
+  // Magic bytes decide the real type so a renamed document cannot continue.
+  const inspected = await inspectUploadedImage(incoming);
+  if (!inspected.ok) {
+    return NextResponse.json({ error: inspected.reason }, { status: 400 });
   }
 
-  const extension = imageExtension(file.type);
-  if (extension === null) {
-    return NextResponse.json({ error: "unsupported" }, { status: 400 });
-  }
+  const file = inspected.file;
+  const extension = inspected.extension;
 
   // A format the safety gate cannot read is a photo we cannot screen, so it
   // gets the same answer as a file that was never a readable photo.
@@ -184,7 +178,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           questId,
-          challengeMode: fit.fit.challengeMode,
+          needsEvidence: true,
           objectName: reading.analysis.objectName,
           evidenceRequest: fit.fit.evidenceRequest,
         },
@@ -246,10 +240,7 @@ export async function POST(request: Request) {
       return refused(verified.failure.reason);
     }
 
-    return NextResponse.json(
-      { questId, challengeMode: fit.fit.challengeMode },
-      { status: 201 },
-    );
+    return NextResponse.json({ questId }, { status: 201 });
   } catch (error) {
     // Logged in full, reported vaguely: the student gets something retryable
     // and the internals stay on the server.

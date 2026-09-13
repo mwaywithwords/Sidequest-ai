@@ -23,6 +23,7 @@ import {
   progressAfterAttempt,
   progressFromAttempts,
   questIsGradeable,
+  toStudentGradeView,
   VISUAL_XP,
 } from "@/lib/progress/outcome";
 
@@ -369,6 +370,11 @@ check(
 );
 
 check("max attempts is the centralized three", MAX_ANSWER_ATTEMPTS === 3);
+
+check(
+  "student grade view hides invalid reason codes",
+  !("reason" in toStudentGradeView({ status: "invalid", reason: "malformed" })),
+);
 
 const replayA = skillProgressFromAttempts(firstSuccess);
 const replayB = skillProgressFromAttempts(firstSuccess);

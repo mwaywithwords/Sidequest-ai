@@ -41,7 +41,7 @@ export function SectionLabel({
   return (
     <p
       className={cn(
-        "font-mono text-[0.7rem] uppercase tracking-[0.22em] text-faint",
+        "font-mono text-[0.72rem] font-medium uppercase tracking-[0.2em] text-faint",
         className,
       )}
       style={accent ? { color: accent } : undefined}
