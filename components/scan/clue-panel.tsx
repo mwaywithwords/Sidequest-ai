@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, SectionLabel } from "@/components/ui/card";
 import { SparkIcon } from "@/components/ui/icons";
 import type { EvidenceRequestType } from "@/lib/ai/schemas";
 import type { CluePresentation } from "@/lib/clue";
@@ -17,7 +16,7 @@ export type ClueCollection =
 /**
  * The student-facing face of a live investigation.
  *
- * This is progress, not a detour: lime accent, spark, and the same card
+ * This is progress, not a detour: lime accent, spark, and the same game
  * language as the rest of the product. It never receives a reason code.
  */
 export function CluePanel({
@@ -43,30 +42,28 @@ export function CluePanel({
   onChangeObject: () => void;
 }) {
   return (
-    <Card accent={accent} className="animate-rise p-5 sm:p-8">
+    <div className="animate-rise text-center">
       <span hidden data-quest-id={questId} />
-      <div className="flex items-center gap-2">
-        <SparkIcon className="size-6" style={{ color: accent }} />
-        <SectionLabel accent={accent}>{presentation.title}</SectionLabel>
+      <div className="flex items-center justify-center gap-2">
+        <SparkIcon className="size-5" style={{ color: accent }} />
+        <p className="game-moment" style={{ color: accent }}>
+          {presentation.title}
+        </p>
       </div>
 
-      <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-        {presentation.heading}
-      </h1>
+      <h1 className="game-title mt-3">{presentation.heading}</h1>
 
-      <p className="mt-4 max-w-lg text-base leading-relaxed text-cream/90 sm:text-lg">
+      <p className="mx-auto mt-3 game-support text-cream">
         {presentation.investigate}
       </p>
 
-      <p className="mt-5 max-w-lg text-lg font-medium leading-relaxed text-cream sm:text-xl">
+      <p className="mx-auto mt-4 max-w-sm text-lg font-extrabold leading-snug text-cream">
         {presentation.prompt}
       </p>
 
-      <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
-        {presentation.reason}
-      </p>
+      <p className="mx-auto mt-2 game-support">{presentation.reason}</p>
 
-      <div className="mt-8 flex flex-col gap-3">
+      <div className="game-actions mt-6">
         <ClueAction
           type={type}
           presentation={presentation}
@@ -79,14 +76,14 @@ export function CluePanel({
         <Button
           type="button"
           variant="ghost"
-          size="lg"
-          className="w-full sm:w-auto"
+          size="md"
+          className="w-full"
           onClick={onChangeObject}
         >
           {copy.clue.anotherObject}
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -107,22 +104,21 @@ function ClueAction({
 }) {
   if (collection.status === "photo") {
     return (
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <p className="flex-1 text-sm leading-relaxed text-cream sm:text-base">
-          {copy.clue.photoReady}
-        </p>
+      <div className="flex flex-col items-center gap-3">
+        <p className="game-support">{copy.clue.photoReady}</p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={collection.previewUrl}
           alt={copy.scan.previewAlt}
-          className="size-16 shrink-0 rounded-xl object-cover ring-1 ring-hair"
+          className="h-24 w-24 rounded-2xl object-cover"
+          style={{ boxShadow: "0 6px 0 #07060d" }}
         />
         <Button
           type="button"
           variant="secondary"
           size="lg"
           onClick={onAddPhoto}
-          className="w-full sm:w-auto"
+          className="w-full"
         >
           {presentation.replaceCta}
         </Button>
@@ -132,9 +128,9 @@ function ClueAction({
 
   if (collection.status === "value") {
     return (
-      <p className="text-sm leading-relaxed text-cream sm:text-base">
+      <p className="game-support text-cream">
         {copy.clue.valueReady}
-        <span className="mt-1 block font-medium text-cream">
+        <span className="mt-1 block font-display text-xl font-extrabold text-cream">
           {collection.value}
         </span>
       </p>
@@ -190,7 +186,7 @@ function ClueEntry({
         inputMode={type === "student_count" ? "numeric" : "text"}
         placeholder={placeholderFor(type)}
         autoComplete="off"
-        className="min-h-14 w-full rounded-tile bg-void/60 px-5 text-base text-cream ring-1 ring-hair placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime"
+        className="game-input text-base"
       />
       <Button
         type="button"

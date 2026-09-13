@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CameraIcon } from "@/components/ui/icons";
+import { ViewfinderCorners } from "@/components/ui/play";
 import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
 import type { QuestPhoto } from "@/lib/quest-present";
@@ -9,14 +10,14 @@ import type { QuestPhoto } from "@/lib/quest-present";
 type PhotoSize = "hero" | "companion" | "remnant";
 
 const SIZES: Record<PhotoSize, string> = {
-  hero: "min-h-[19rem] sm:min-h-[24rem] md:min-h-[28rem]",
-  companion: "min-h-[12rem] sm:min-h-[16rem] md:min-h-full",
-  remnant: "min-h-[7.5rem] sm:min-h-[9rem]",
+  hero: "min-h-[16rem] max-h-[min(22rem,52dvh)] sm:min-h-[20rem] sm:max-h-[26rem]",
+  companion: "min-h-[10rem] max-h-[16rem] sm:min-h-[13rem] sm:max-h-[18rem]",
+  remnant: "min-h-[4.75rem] w-24 sm:min-h-[5.5rem] sm:w-28",
 };
 
 /**
- * The student's photograph, framed with the same viewfinder the scan
- * screen uses. Signed URL in, no storage credentials. An expired or
+ * The student's photograph, framed with SIDEQUEST corners.
+ * Signed URL in, no storage credentials. An expired or
  * broken URL falls back to the empty frame instead of a dead image.
  */
 export function QuestPhotoFrame({
@@ -36,12 +37,13 @@ export function QuestPhotoFrame({
   return (
     <div
       className={cn(
-        "viewfinder relative flex items-center justify-center overflow-hidden rounded-tile bg-void/60 ring-1 ring-hair",
+        "photo-frame relative flex items-center justify-center",
+        size === "hero" && "animate-discover",
         SIZES[size],
         className,
       )}
-      style={{ ["--color-lime" as string]: accent }}
     >
+      <ViewfinderCorners accent={accent} />
       {visible ? (
         // Signed URL from the private bucket: short-lived, not a next/image host.
         // eslint-disable-next-line @next/next/no-img-element
@@ -53,8 +55,8 @@ export function QuestPhotoFrame({
         />
       ) : (
         <div className="px-8 text-center">
-          <CameraIcon className="mx-auto size-9 text-faint" />
-          <p className="mt-4 text-sm text-faint">
+          <CameraIcon className="mx-auto size-10 text-faint" />
+          <p className="mt-3 text-sm font-bold text-faint">
             {copy.quest.experience.photoMissing}
           </p>
         </div>

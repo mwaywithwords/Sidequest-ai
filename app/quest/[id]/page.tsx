@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { FlowSteps } from "@/components/layout/flow-steps";
 import { QuestExperience } from "@/components/quest/quest-experience";
 import { QuestNotReady } from "@/components/quest/quest-not-ready";
 import { loadQuestExperience } from "@/lib/quest-experience";
@@ -49,8 +48,7 @@ export default async function QuestPage(props: PageProps<"/quest/[id]">) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <FlowSteps current="quest" />
+    <div className="game-page game-page-tight">
       {experience.kind === "ready" ? (
         <QuestExperience quest={experience.quest} />
       ) : (

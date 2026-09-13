@@ -1,25 +1,24 @@
-import { Card } from "@/components/ui/card";
-
 export function StatTile({
   value,
   label,
   accent,
+  mark,
 }: {
   value: number | string;
   label: string;
   accent: string;
+  mark?: string;
 }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <p
-        className="font-display text-3xl font-extrabold leading-none tracking-tight sm:text-4xl"
-        style={{ color: accent }}
-      >
-        {value}
-      </p>
-      <p className="mt-2 text-[0.7rem] leading-snug text-muted sm:text-xs">
+    <p
+      className="token min-h-12"
+      style={{ color: accent }}
+    >
+      {mark ? <span aria-hidden>{mark}</span> : null}
+      <span className="text-cream">{value}</span>
+      <span className="text-sm font-bold tracking-wide text-muted normal-case">
         {label}
-      </p>
-    </Card>
+      </span>
+    </p>
   );
 }

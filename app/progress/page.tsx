@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { SkillCard } from "@/components/progress/skill-card";
 import { StatTile } from "@/components/progress/stat-tile";
 import { ButtonLink } from "@/components/ui/button";
-import { SectionLabel } from "@/components/ui/card";
-import { ArrowRightIcon } from "@/components/ui/icons";
 import { copy } from "@/lib/copy";
 import { loadProgressSummary } from "@/lib/progress/summary";
 
@@ -15,52 +13,50 @@ export default async function ProgressPage() {
   const progress = await loadProgressSummary();
 
   return (
-    <div className="flex flex-col gap-10">
-      <div>
-        <SectionLabel>{copy.progress.eyebrow}</SectionLabel>
-        <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-          {progress.hasProgress
-            ? copy.progress.heading
-            : copy.progress.emptyHeading}
-        </h1>
-        <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
-          {progress.hasProgress ? copy.progress.body : copy.progress.emptyBody}
+    <div className="game-page">
+      <div className="text-center">
+        <h1 className="game-title uppercase">{copy.progress.heading}</h1>
+        <p className="mt-2 font-display text-2xl font-extrabold text-lime">
+          {copy.progress.explorerStat} {progress.explorerLevel}
         </p>
+        {!progress.hasProgress ? (
+          <p className="mx-auto mt-3 game-support">{copy.progress.emptyBody}</p>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile
-          value={progress.explorerLevel}
-          label={copy.progress.explorerStat}
-          accent="#c8ff4d"
-        />
+      <div className="flex flex-wrap justify-center gap-3">
         <StatTile
           value={progress.sidequestsCompleted}
           label={copy.progress.completedStat}
-          accent="#57e2ff"
+          accent="#ffc94d"
+          mark="⚡"
         />
         <StatTile
           value={progress.objectsDiscovered}
           label={copy.progress.discoveredStat}
-          accent="#ffc94d"
+          accent="#57e2ff"
+          mark="🔎"
         />
       </div>
 
       <section>
-        <SectionLabel>{copy.progress.skillsLabel}</SectionLabel>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <h2 className="game-moment text-cream">
+          {copy.progress.skillsLabel}
+        </h2>
+        <div className="mt-4 flex flex-col gap-4">
           {progress.skills.map((skill) => (
             <SkillCard key={skill.skillId} skill={skill} />
           ))}
         </div>
       </section>
 
-      <ButtonLink href="/setup" size="lg" className="w-full sm:w-auto">
-        {progress.hasProgress
-          ? copy.progress.nextCta
-          : copy.progress.firstCta}
-        <ArrowRightIcon className="size-5" />
-      </ButtonLink>
+      <div className="game-actions">
+        <ButtonLink href="/setup" size="lg" className="w-full">
+          {progress.hasProgress
+            ? copy.progress.nextCta
+            : copy.progress.firstCta}
+        </ButtonLink>
+      </div>
     </div>
   );
 }

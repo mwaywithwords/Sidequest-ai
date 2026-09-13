@@ -9,13 +9,12 @@ import {
 import { DetourPanel } from "@/components/scan/detour-panel";
 import { ProcessingOverlay } from "@/components/scan/processing-overlay";
 import { Button } from "@/components/ui/button";
-import { SectionLabel } from "@/components/ui/card";
 import {
-  ArrowRightIcon,
   CameraIcon,
   ImageIcon,
   RetryIcon,
 } from "@/components/ui/icons";
+import { ViewfinderCorners } from "@/components/ui/play";
 import { type ClueRequest, presentClue } from "@/lib/clue";
 import { copy } from "@/lib/copy";
 import { type DetourRequest, presentDetour } from "@/lib/detour";
@@ -295,7 +294,7 @@ export function ScanStage({
   const investigating = clue !== null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {investigating ? (
         <CluePanel
           questId={clue.questId}
@@ -327,26 +326,28 @@ export function ScanStage({
           }
         />
       ) : (
-        <div>
-          <SectionLabel accent={skill.accent}>
-            Grade {grade} · {skill.label}
-          </SectionLabel>
-          <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-cream sm:text-4xl">
-            {notice ? notice.heading : copy.scan.heading}
-          </h1>
-          <p
-            role={notice ? "alert" : undefined}
-            className="mt-3 max-w-lg text-sm leading-relaxed text-muted sm:text-base"
-          >
-            {notice ? (
-              notice.body
-            ) : (
-              <>
-                {copy.scan.lookForLead(skill.label.toLowerCase())}
-                <span className="text-cream">{skill.lookFor}</span>.
-              </>
-            )}
+        <div className="text-center">
+          <p className="game-moment">{copy.scan.missionLabel}</p>
+          <p className="mt-1 font-display text-lg font-extrabold" style={{ color: skill.accent }}>
+            {skill.label}
           </p>
+          {notice ? (
+            <>
+              <h1 className="game-title mx-auto mt-3 text-balance">
+                {notice.heading}
+              </h1>
+              <p
+                role="alert"
+                className={`mx-auto mt-2 game-support ${generationFailed ? "text-cream" : ""}`}
+              >
+                {notice.body}
+              </p>
+            </>
+          ) : stage === "preview" || stage === "processing" ? null : (
+            <h1 className="game-title mx-auto mt-2 max-w-[14rem] text-balance sm:max-w-none">
+              {copy.scan.heading}
+            </h1>
+          )}
         </div>
       )}
 
@@ -357,33 +358,29 @@ export function ScanStage({
       ) : null}
 
       <div
-        className="viewfinder relative flex min-h-[19rem] items-center justify-center overflow-hidden rounded-tile bg-void/60 ring-1 ring-hair sm:min-h-[24rem]"
+        className={
+          previewUrl
+            ? "photo-frame scan-frame is-hero"
+            : "photo-frame scan-frame"
+        }
         aria-busy={stage === "processing"}
       >
+        {stage !== "processing" ? (
+          <ViewfinderCorners accent={skill.accent} />
+        ) : null}
         {previewUrl ? (
-          <>
-            {/* A blob URL from the local camera: nothing for next/image to optimise. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt={copy.scan.previewAlt}
-              onError={() => reject("unsupported")}
-              className="max-h-[24rem] w-full object-contain"
-            />
-            {stage === "processing" ? (
-              <span
-                aria-hidden
-                className="absolute inset-x-0 top-0 h-24 animate-sweep"
-                style={{
-                  background: `linear-gradient(180deg, transparent, ${skill.accent}2e, transparent)`,
-                }}
-              />
-            ) : null}
-          </>
+          // A blob URL from the local camera: nothing for next/image to optimise.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={copy.scan.previewAlt}
+            onError={() => reject("unsupported")}
+            className="h-full w-full object-contain"
+          />
         ) : (
           <div className="px-8 text-center">
-            <CameraIcon className="mx-auto size-9 text-faint" />
-            <p className="mt-4 text-sm text-faint">
+            <CameraIcon className="mx-auto size-11 text-faint" />
+            <p className="mt-3 text-sm font-bold text-faint">
               {rejection ? copy.scan.rejectedPreview : copy.scan.emptyPreview}
             </p>
           </div>
@@ -425,7 +422,7 @@ export function ScanStage({
       />
 
       {investigating || detour ? (
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="game-actions">
           <Button
             variant="secondary"
             size="lg"
@@ -446,7 +443,7 @@ export function ScanStage({
           </Button>
         </div>
       ) : stage === "preview" ? (
-        <div className="flex flex-col gap-3">
+        <div className="game-actions">
           <Button size="lg" onClick={findTheMath} className="w-full">
             {uploadFailed || generationFailed ? (
               <>
@@ -454,52 +451,49 @@ export function ScanStage({
                 <RetryIcon className="size-5" />
               </>
             ) : (
-              <>
-                Find the math
-                <ArrowRightIcon className="size-5" />
-              </>
+              copy.scan.usePhoto
             )}
-          </Button>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => cameraInput.current?.click()}
-              className="w-full sm:flex-1"
-            >
-              <RetryIcon className="size-5" />
-              Retake
-            </Button>
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => libraryInput.current?.click()}
-              className="w-full sm:flex-1"
-            >
-              <ImageIcon className="size-5" />
-              Choose another
-            </Button>
-          </div>
-        </div>
-      ) : stage === "processing" ? null : (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button
-            size="lg"
-            onClick={() => cameraInput.current?.click()}
-            className="w-full sm:flex-1"
-          >
-            <CameraIcon className="size-5" />
-            Take a photo
           </Button>
           <Button
             variant="secondary"
             size="lg"
+            onClick={() => cameraInput.current?.click()}
+            className="w-full"
+          >
+            <RetryIcon className="size-5" />
+            Retake
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
             onClick={() => libraryInput.current?.click()}
-            className="w-full sm:w-auto"
+            className="w-full"
           >
             <ImageIcon className="size-5" />
-            Choose a photo
+            {copy.scan.choosePhoto}
           </Button>
+        </div>
+      ) : stage === "processing" ? null : (
+        <div className="game-actions">
+          <Button
+            size="lg"
+            onClick={() => cameraInput.current?.click()}
+            className="w-full"
+          >
+            <CameraIcon className="size-6" />
+            {copy.scan.takePhoto}
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={() => libraryInput.current?.click()}
+            className="w-full"
+          >
+            {copy.scan.choosePhoto}
+          </Button>
+          {!notice ? (
+            <p className="text-center text-sm text-muted">{copy.scan.tip}</p>
+          ) : null}
         </div>
       )}
     </div>

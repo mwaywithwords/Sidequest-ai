@@ -20,7 +20,7 @@ export default async function ScanPage(props: PageProps<"/scan">) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="game-page game-page-tight">
       <FlowSteps current="scan" />
       <ScanStage grade={grade} skill={getSkill(skillId)} />
     </div>
