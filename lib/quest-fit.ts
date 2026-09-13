@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ObjectAnalysis } from "@/lib/ai/schemas";
+import type { ObjectAnalysis, SkillFitAnalysis } from "@/lib/ai/schemas";
 import { analyzeSkillFit, type SkillFitResult } from "@/lib/ai/skill-fit";
 import { setQuestStatus } from "@/lib/quest-status";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -71,4 +71,20 @@ export async function assessQuestSkillFit({
   // stay pending until verification accepts a challenge.
 
   return result;
+}
+
+export async function persistQuestSkillFit(
+  questId: string,
+  fit: SkillFitAnalysis,
+): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("quests")
+    .update({ validation_result: fit })
+    .eq("id", questId);
+
+  if (error) {
+    throw new Error(
+      `Could not store the skill fit for quest ${questId}: ${error.message}`,
+    );
+  }
 }

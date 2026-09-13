@@ -39,7 +39,7 @@ const SUITABILITY_MODEL = "gpt-5.4-mini";
  * are enough for the only decision that depends on it — whether a 'usable'
  * verdict is trusted.
  */
-const SuitabilityVerdictSchema = z.strictObject({
+export const SuitabilityVerdictSchema = z.strictObject({
   verdict: z.enum(SUITABILITY_VERDICTS),
   confidence: z.enum(["high", "medium", "low"]),
   /** A line for the server log. Never shown to a student, never returned. */

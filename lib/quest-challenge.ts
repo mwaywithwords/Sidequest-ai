@@ -9,10 +9,13 @@ import {
 import { buildContextualPayload } from "@/lib/ai/inspired-context";
 import {
   ObjectAnalysisSchema,
+  type GeneratedChallenge,
   type ReadySkillFit,
   QuestGenerationFailureSchema,
   parseSkillFitAnalysis,
 } from "@/lib/ai/schemas";
+import type { ContextualPayload } from "@/lib/ai/schemas";
+import type { AdaptiveProfile } from "@/lib/progress/adaptation";
 import { copy } from "@/lib/copy";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
 import { loadAdaptationState } from "@/lib/progress/load";
@@ -165,41 +168,64 @@ export async function generateQuestChallenge(
     return result;
   }
 
-  const { error: insertError } = await supabase.from("challenges").insert({
-    quest_id: questId,
-    skill_id: skill.id,
-    question: result.challenge.question,
-    correct_answer: result.challenge.correctAnswer,
-    solution: result.challenge.solution,
-    hint_1: result.challenge.hint1,
-    hint_2: result.challenge.hint2,
-    difficulty: result.challenge.difficulty,
-    object_connection: result.challenge.objectConnection,
-    generation_metadata: {
-      valuesUsed: result.challenge.valuesUsed,
-      ...(result.challenge.shapesUsed === undefined
-        ? {}
-        : { shapesUsed: result.challenge.shapesUsed }),
-      computation: result.challenge.computation,
-      verificationStrategy: result.challenge.verificationStrategy,
-      model: CHALLENGE_MODEL,
-      challengeMode: readyFit.challengeMode,
-      ...(contextualGrounding === null
-        ? {}
-        : { contextualGrounding }),
-      adaptation,
-    },
+  await persistQuestChallenge({
+    questId,
+    skillRowId: skill.id,
+    challenge: result.challenge,
+    fit: readyFit,
+    contextualGrounding,
+    adaptation,
   });
+
+  return result;
+}
+
+export async function persistQuestChallenge({
+  questId,
+  skillRowId,
+  challenge,
+  fit,
+  contextualGrounding,
+  adaptation,
+}: {
+  questId: string;
+  skillRowId: string;
+  challenge: GeneratedChallenge;
+  fit: ReadySkillFit;
+  contextualGrounding: ContextualPayload | null;
+  adaptation: AdaptiveProfile;
+}): Promise<void> {
+  const { error: insertError } = await createAdminClient()
+    .from("challenges")
+    .insert({
+      quest_id: questId,
+      skill_id: skillRowId,
+      question: challenge.question,
+      correct_answer: challenge.correctAnswer,
+      solution: challenge.solution,
+      hint_1: challenge.hint1,
+      hint_2: challenge.hint2,
+      difficulty: challenge.difficulty,
+      object_connection: challenge.objectConnection,
+      generation_metadata: {
+        valuesUsed: challenge.valuesUsed,
+        ...(challenge.shapesUsed === undefined
+          ? {}
+          : { shapesUsed: challenge.shapesUsed }),
+        computation: challenge.computation,
+        verificationStrategy: challenge.verificationStrategy,
+        model: CHALLENGE_MODEL,
+        challengeMode: fit.challengeMode,
+        ...(contextualGrounding === null ? {} : { contextualGrounding }),
+        adaptation,
+      },
+    });
 
   if (insertError) {
     throw new Error(
       `Could not store the challenge for quest ${questId}: ${insertError.message}`,
     );
   }
-
-  // Status stays pending. A stored candidate is not a verified challenge.
-
-  return result;
 }
 
 function closed(): ChallengeGenerationResult {

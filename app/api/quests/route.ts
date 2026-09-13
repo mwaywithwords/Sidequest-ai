@@ -1,46 +1,28 @@
 import { NextResponse } from "next/server";
-import {
-  MODEL_READABLE_IMAGE_TYPES,
-  screenImage,
-} from "@/lib/ai/image-safety";
+import { MODEL_READABLE_IMAGE_TYPES } from "@/lib/ai/image-safety";
 import { inspectUploadedImage } from "@/lib/image-capture";
-import { getOrCreateProfileId } from "@/lib/profile";
-import { analyzeQuestObject } from "@/lib/quest-analysis";
-import { generateQuestChallenge } from "@/lib/quest-challenge";
-import { recordQuestDiscovery } from "@/lib/quest-discovery";
-import { assessQuestSkillFit } from "@/lib/quest-fit";
-import { verifyQuestChallenge } from "@/lib/quest-verify";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { setQuestStatus } from "@/lib/quest-status";
-import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
-import {
-  detourKindFromReason,
-  sanitiseSuggestions,
-} from "@/lib/detour";
+import { createQuest } from "@/lib/quest-create";
+import { toClientCreateBody } from "@/lib/quest-pipeline";
 import { parseGrade, parseSkillId } from "@/lib/types";
 
 /**
- * Up to seven model calls now sit inside this request — the seventh is one
- * controlled regeneration if the first candidate fails verification. Each
- * call is bounded by the client timeout in lib/ai/openai.ts well before this.
+ * Up to four model calls now sit inside this request — moderation, combined
+ * vision, combined quest generation, and one controlled regeneration if the
+ * first candidate fails verification. Each call is bounded by the client
+ * timeout in lib/ai/openai.ts well before this.
  */
 export const maxDuration = 300;
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
- * validate the file, screen it for safety and suitability, store it in the
- * private bucket, record the row that points at it, read the object in it,
- * investigate whether that object can support the mission the student chose,
- * write one short discovery about it, generate a candidate challenge, then
- * verify that candidate deterministically.
+ * validate the file, moderate it, run combined vision analysis, store it,
+ * generate the educational quest, then verify the candidate deterministically.
  *
  * This is the trusted half of the upload. The browser never holds the secret
  * key, and never gets to choose the profile, the quest id, or the storage
  * path. Everything it does send is validated again here, because a request can
  * reach this handler without having gone through the UI at all.
  *
- * The stages run here for the same reason: this is the one point every photo
- * must pass through, and each stage is a gate the next one depends on.
  * Only verification may mark a quest ready. The response still does not
  * include the question or the answer.
  */
@@ -52,8 +34,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "missing" }, { status: 400 });
   }
 
-  // The mission is re-parsed against the same tuples the UI uses, so an
-  // unknown grade or skill cannot reach the database.
   const grade = parseGrade(form.get("grade"));
   const skillId = parseSkillId(form.get("skill"));
   if (grade === null || skillId === null) {
@@ -63,230 +43,36 @@ export async function POST(request: Request) {
   const image = form.get("image");
   const incoming = image instanceof File ? image : null;
 
-  // Still the trust boundary. The browser normalises to well under this, but
-  // this handler has no way to know a request came from the browser at all.
-  // Magic bytes decide the real type so a renamed document cannot continue.
   const inspected = await inspectUploadedImage(incoming);
   if (!inspected.ok) {
     return NextResponse.json({ error: inspected.reason }, { status: 400 });
   }
 
   const file = inspected.file;
-  const extension = inspected.extension;
 
-  // A format the safety gate cannot read is a photo we cannot screen, so it
-  // gets the same answer as a file that was never a readable photo.
   if (!MODEL_READABLE_IMAGE_TYPES.includes(file.type)) {
     return NextResponse.json({ error: "unsupported" }, { status: 400 });
   }
 
-  let uploadedPath: string | null = null;
-  let insertedQuestId: string | null = null;
-
   try {
-    // Before the profile, the bucket, and the row: a photo that does not pass
-    // leaves nothing behind, and nothing downstream ever sees it. Screening
-    // throws if it could not reach a verdict, which lands in the catch below
-    // as a retryable failure rather than as permission to continue.
-    const safety = await screenImage(file);
-
-    if (!safety.allowed) {
-      // The normalised reason, for the log and for the client to carry; the
-      // categories and scores behind it stayed inside lib/ai.
-      console.warn("[POST /api/quests] image refused", safety.reason);
-
-      return refused(safety.reason);
-    }
-
-    const supabase = createAdminClient();
-
-    // Ordered so the cheap failures happen before the expensive upload.
-    const profileId = await getOrCreateProfileId(grade);
-
-    // `description` is the grade's own wording for the skill, which the seed
-    // migration keeps as prompt material: it is what tells the skill-fit stage
-    // how much a grade-3 division problem is allowed to ask for.
-    const { data: skill, error: skillError } = await supabase
-      .from("skills")
-      .select("id, description")
-      .eq("grade_level", grade)
-      .eq("skill_code", skillId)
-      .single();
-
-    if (skillError !== null || skill === null) {
-      throw new Error(
-        `No skill row for grade ${grade} / ${skillId}: ${skillError?.message ?? "not found"}`,
-      );
-    }
-
-    const questId = crypto.randomUUID();
-    const path = questImagePath(profileId, questId, extension);
-
-    const { error: uploadError } = await supabase.storage
-      .from(QUEST_IMAGE_BUCKET)
-      .upload(path, file, {
-        contentType: file.type,
-        // The path contains a fresh uuid, so a collision would mean something
-        // is wrong rather than something to overwrite.
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(`Storage upload failed: ${uploadError.message}`);
-    }
-
-    uploadedPath = path;
-
-    const { error: insertError } = await supabase.from("quests").insert({
-      id: questId,
-      profile_id: profileId,
-      selected_skill_id: skill.id,
-      image_path: path,
-      status: "pending",
-    });
-
-    if (insertError) {
-      // Don't leave an object behind that no row points at. The client retries
-      // with a fresh quest id, so this path cannot be resumed anyway.
-      await supabase.storage.from(QUEST_IMAGE_BUCKET).remove([path]);
-      uploadedPath = null;
-      throw new Error(`Quest insert failed: ${insertError.message}`);
-    }
-
-    insertedQuestId = questId;
-
-    // Last, because it needs both halves of what came before: a photo that
-    // passed the gate, and a row to hang the reading on.
-    const reading = await analyzeQuestObject(questId);
-
-    if (reading.status === "failed") {
-      // The quest row stays, marked with what happened. The student gets the
-      // sentence and a new photo to take; nothing downstream can pick this
-      // quest up as something to teach from.
-      console.warn("[POST /api/quests] no reading", reading.failure.reason);
-
-      return refused(reading.failure.reason);
-    }
-
-    // Then whether that reading supports the mission the student picked. The
-    // analysis is passed straight through: it has already been validated in this
-    // request, and this stage is not allowed to learn anything new about the
-    // object.
-    const fit = await assessQuestSkillFit({
-      questId,
-      analysis: reading.analysis,
+    const result = await createQuest({
+      file,
+      extension: inspected.extension,
       grade,
       skillId,
-      skillDescription: skill.description,
     });
 
-    if (fit.status === "needsEvidence") {
-      // Progress, not a refusal. The quest stays pending with the original
-      // image and reading intact. Discovery waits until the investigation is
-      // ready; this is the hand-off to the client for one more observation.
-      return NextResponse.json(
-        {
-          questId,
-          needsEvidence: true,
-          objectName: reading.analysis.objectName,
-          evidenceRequest: fit.fit.evidenceRequest,
-        },
-        { status: 201 },
-      );
+    if (result.kind === "failed") {
+      return NextResponse.json(toClientCreateBody(result), { status: 500 });
     }
 
-    if (fit.status !== "ok") {
-      // A poor fit and a broken stage are both refusals here, and both leave the
-      // quest marked so nothing downstream treats it as teachable. Which of the
-      // two it was is in the reason, and in the row. Discovery does not run.
-      console.warn("[POST /api/quests] no challenge", fit.failure.reason);
-
-      return refused(fit.failure.reason, {
-        suggestions:
-          fit.status === "poorFit"
-            ? fit.fit.suggestedObjectCharacteristics
-            : [],
-        offerSkillChange:
-          fit.status === "poorFit" && fit.fit.alternativeSkillCodes.length > 0,
-      });
+    if (result.kind === "refused") {
+      return NextResponse.json(toClientCreateBody(result), { status: 422 });
     }
 
-    const discovery = await recordQuestDiscovery({
-      questId,
-      analysis: reading.analysis,
-      fit: fit.fit,
-      grade,
-    });
-
-    if (discovery.status !== "ok") {
-      console.warn("[POST /api/quests] no discovery", discovery.failure.reason);
-
-      return refused(discovery.failure.reason);
-    }
-
-    // A candidate only. Reloads the stored reading and investigation; does
-    // not fetch the photograph again. The response does not include the
-    // question or the answer — verification has not run.
-    const challenge = await generateQuestChallenge(questId);
-
-    if (challenge.status === "poorFit") {
-      console.warn("[POST /api/quests] no challenge", challenge.failure.reason);
-
-      return refused(challenge.failure.reason);
-    }
-
-    if (challenge.status !== "ok") {
-      console.warn("[POST /api/quests] no challenge", challenge.failure.reason);
-
-      return refused(challenge.failure.reason);
-    }
-
-    const verified = await verifyQuestChallenge(questId);
-
-    if (verified.status !== "ok") {
-      console.warn("[POST /api/quests] no verified math", verified.failure.reason);
-
-      return refused(verified.failure.reason);
-    }
-
-    return NextResponse.json({ questId }, { status: 201 });
+    return NextResponse.json(toClientCreateBody(result), { status: 201 });
   } catch (error) {
-    // Logged in full, reported vaguely: the student gets something retryable
-    // and the internals stay on the server. A timeout after insert must not
-    // leave the row pending for a later stage to treat as work in progress.
     console.error("[POST /api/quests]", error);
-
-    if (insertedQuestId !== null) {
-      await setQuestStatus(insertedQuestId, "failed");
-    } else if (uploadedPath !== null) {
-      await createAdminClient().storage.from(QUEST_IMAGE_BUCKET).remove([
-        uploadedPath,
-      ]);
-    }
-
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
-}
-
-/**
- * The one shape a stage uses to turn a photo away.
- *
- * The internal reason is mapped to a student-safe kind here, so the browser
- * never sees a moderation category or a pipeline code. Suggestions and the
- * skill-change offer are optional extras for poor fit; everything else the
- * student reads is assembled from centralized copy on the client.
- */
-function refused(
-  reason: string,
-  extras?: { suggestions?: readonly string[]; offerSkillChange?: boolean },
-) {
-  return NextResponse.json(
-    {
-      error: "refused",
-      kind: detourKindFromReason(reason),
-      suggestions: sanitiseSuggestions(extras?.suggestions ?? []),
-      offerSkillChange: extras?.offerSkillChange === true,
-    },
-    { status: 422 },
-  );
 }

@@ -40,14 +40,14 @@ const DISCOVERY_MODEL = "gpt-5.4";
  * tell a confident well-known fact from an observation; it is stripped
  * before anything is persisted.
  */
-const WireDiscoverySchema = z.strictObject({
+export const WireDiscoverySchema = z.strictObject({
   title: z.string(),
   text: z.string(),
   category: z.enum(DISCOVERY_CATEGORIES),
   factSupport: z.enum(FACT_SUPPORTS),
 });
 
-const INSTRUCTIONS = `You are the discovery stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The vision stage has already read that object, and the investigation stage has already decided the object can support a maths challenge. Your job is to write ONE brief, interesting piece of age-appropriate context about the photographed object, so the student is curious before the challenge appears.
+export const DISCOVERY_INSTRUCTIONS = `You are the discovery stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The vision stage has already read that object, and the investigation stage has already decided the object can support a maths challenge. Your job is to write ONE brief, interesting piece of age-appropriate context about the photographed object, so the student is curious before the challenge appears.
 
 You do not see the photograph. You may use only the reading and the investigation you are given. Do not re-analyse the object. Do not introduce a measurement, quantity, dimension, capacity, material, inventor, date, location, or product claim that is not already in the reading, unless it is a broad, well-known fact you can state confidently.
 
@@ -121,7 +121,7 @@ export async function generateDiscovery({
   try {
     const response = await openai().responses.parse({
       model: DISCOVERY_MODEL,
-      instructions: INSTRUCTIONS,
+      instructions: DISCOVERY_INSTRUCTIONS,
       input: [
         {
           role: "user",

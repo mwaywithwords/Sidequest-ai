@@ -2,30 +2,17 @@ import "server-only";
 
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import {
-  buildAnchors,
-  canGenerateFromMode,
-  MIN_FIT_SCORE,
-  recoverInvestigation,
-  resolveInvestigation,
-} from "@/lib/ai/investigation-path";
 import { openai } from "@/lib/ai/openai";
 import {
   CHALLENGE_MODES,
   EVIDENCE_REQUEST_TYPES,
-  type EvidenceRequest,
-  EvidenceRequestSchema,
-  type InspirationContext,
-  InspirationContextSchema,
-  type InvestigationMathFit,
   type ObjectAnalysis,
-  type QuestGenerationFailure,
-  QuestGenerationFailureSchema,
-  type ReadySkillFit,
-  type SkillFitAnalysis,
-  SkillFitAnalysisSchema,
 } from "@/lib/ai/schemas";
-import { copy } from "@/lib/copy";
+import {
+  finalizeSkillFit,
+  type SkillFitResult,
+  skillFitFailed,
+} from "@/lib/ai/skill-fit-finalize";
 import { getSkill, SKILLS } from "@/lib/skills";
 import { type Grade, SKILL_IDS, type SkillId } from "@/lib/types";
 
@@ -50,8 +37,6 @@ import { type Grade, SKILL_IDS, type SkillId } from "@/lib/types";
  * JSON, so it is cheap to do properly.
  */
 const FIT_MODEL = "gpt-5.4";
-
-export { MIN_FIT_SCORE };
 
 /**
  * What each skill has a natural claim on, including paths that need one more
@@ -83,19 +68,19 @@ const SKILL_INVESTIGATION: Record<SkillId, string> = {
  * asked of the model. `evidenceRequest` is nullable on the wire so structured
  * outputs can return null when the path does not need one.
  */
-const WireEvidenceRequestSchema = z.strictObject({
+export const WireEvidenceRequestSchema = z.strictObject({
   type: z.enum(EVIDENCE_REQUEST_TYPES),
   prompt: z.string(),
   targetProperty: z.string(),
   reason: z.string(),
 });
 
-const WireInspirationContextSchema = z.strictObject({
+export const WireInspirationContextSchema = z.strictObject({
   topic: z.string(),
   reason: z.string(),
 });
 
-const WireSkillFitSchema = z.strictObject({
+export const WireSkillFitSchema = z.strictObject({
   challengeMode: z.enum(CHALLENGE_MODES),
   fitScore: z.number(),
   usableProperties: z.array(z.string()),
@@ -106,7 +91,7 @@ const WireSkillFitSchema = z.strictObject({
   inspirationContext: WireInspirationContextSchema.nullable(),
 });
 
-const INSTRUCTIONS = `You are the math-investigation stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student chose a maths skill, then photographed an object. The vision stage has already read that object. Its reading is given to you as JSON. Your job is to decide whether this real-world object can support a legitimate, grade-appropriate mathematical investigation for the selected skill.
+export const SKILL_FIT_INSTRUCTIONS = `You are the math-investigation stage of SIDEQUEST, a maths app for children in grades 3 to 5. A student chose a maths skill, then photographed an object. The vision stage has already read that object. Its reading is given to you as JSON. Your job is to decide whether this real-world object can support a legitimate, grade-appropriate mathematical investigation for the selected skill.
 
 Do not ask: "Does this single photograph already contain every number needed to make a math problem?"
 Ask: "Can this object meaningfully ANCHOR a mathematical exploration for this skill?"
@@ -182,11 +167,7 @@ Grade matters. A property can support a skill in principle and still be wrong fo
  * A path ready for a future challenge, a path waiting on one more observation,
  * a path that is honestly poor, or a stage that did not work.
  */
-export type SkillFitResult =
-  | { status: "ok"; fit: ReadySkillFit }
-  | { status: "needsEvidence"; fit: InvestigationMathFit }
-  | { status: "poorFit"; fit: Extract<SkillFitAnalysis, { challengeMode: "poor_fit" }>; failure: QuestGenerationFailure }
-  | { status: "failed"; failure: QuestGenerationFailure };
+export type { SkillFitResult };
 
 /**
  * Judges one object against one skill for one grade.
@@ -210,7 +191,10 @@ export async function analyzeSkillFit({
 
   const response = await openai().responses.parse({
     model: FIT_MODEL,
-    instructions: INSTRUCTIONS.replace("{skills}", skillInvestigationList()),
+    instructions: SKILL_FIT_INSTRUCTIONS.replace(
+      "{skills}",
+      skillInvestigationList(),
+    ),
     input: [
       {
         role: "user",
@@ -236,223 +220,14 @@ export async function analyzeSkillFit({
   if (!wire) {
     console.warn("[skill-fit] no parsed judgement");
 
-    return failed();
+    return skillFitFailed();
   }
 
-  // Grounding, enforced rather than requested: each property the model listed
-  // is looked up in the reading, and what survives is the reading's own wording.
-  const grounded = groundProperties(wire.usableProperties, analysis);
-
-  if (grounded.length < wire.usableProperties.length) {
-    console.warn("[skill-fit] discarded properties absent from the reading", {
-      listed: wire.usableProperties.length,
-      grounded: grounded.length,
-    });
-  }
-
-  const evidenceRequest = parseEvidenceRequest(wire.evidenceRequest);
-  const inspirationContext = parseInspirationContext(wire.inspirationContext);
-
-  const resolvedWire = resolveInvestigation(
-    {
-      challengeMode: wire.challengeMode,
-      fitScore: wire.fitScore,
-      reason: wire.reason,
-      evidenceRequest,
-      inspirationContext,
-    },
-    grounded,
-  );
-
-  const recovered = recoverInvestigation(resolvedWire, analysis, skillId);
-  const resolved = recovered.resolved;
-  const usableProperties = uniqueProperties([
-    ...grounded,
-    ...recovered.usableProperties,
-  ]);
-
-  const parsed = SkillFitAnalysisSchema.safeParse({
-    selectedSkillCode: skillId,
-    fitScore: wire.fitScore,
-    challengeMode: resolved.challengeMode,
-    canGenerateChallenge: canGenerateFromMode(resolved.challengeMode),
-    usableProperties,
-    reason: resolved.reason,
-    suggestedObjectCharacteristics:
-      resolved.challengeMode === "poor_fit"
-        ? wire.suggestedObjectCharacteristics
-        : [],
-    alternativeSkillCodes: [
-      ...new Set(wire.alternativeSkillCodes.filter((code) => code !== skillId)),
-    ],
-    anchors: buildAnchors(usableProperties, resolved.evidenceRequest),
-    evidenceRequest: resolved.evidenceRequest,
-    inspirationContext: resolved.inspirationContext,
-  });
-
-  if (!parsed.success) {
-    console.warn(
-      "[skill-fit] judgement failed validation",
-      parsed.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        code: issue.code,
-      })),
-    );
-
-    return failed();
-  }
-
-  const fit = parsed.data;
-
-  if (fit.challengeMode === "investigation_math") {
-    return { status: "needsEvidence", fit };
-  }
-
-  if (fit.challengeMode === "poor_fit") {
-    return {
-      status: "poorFit",
-      fit,
-      failure: QuestGenerationFailureSchema.parse({
-        reason: "poor_skill_fit",
-        studentMessage: poorFitMessage(skillId, fit.alternativeSkillCodes),
-        recommendedNextAction:
-          fit.alternativeSkillCodes.length > 0
-            ? "choose_different_skill"
-            : "find_different_object",
-      }),
-    };
-  }
-
-  return { status: "ok", fit };
-}
-
-/**
- * The evidence request is student-facing, so it has to pass the same schema
- * the rest of the application uses. A request the model shaped badly is
- * treated as absent, which may downgrade the path.
- */
-function parseEvidenceRequest(value: unknown): EvidenceRequest | null {
-  if (typeof value !== "object" || value === null) return null;
-
-  const record = value as Record<string, unknown>;
-  const clip = (field: unknown, max: number) =>
-    typeof field === "string" ? field.trim().slice(0, max) : field;
-
-  const parsed = EvidenceRequestSchema.safeParse({
-    ...record,
-    prompt: clip(record.prompt, 200),
-    targetProperty: clip(record.targetProperty, 80),
-    reason: clip(record.reason, 200),
-  });
-
-  return parsed.success ? parsed.data : null;
-}
-
-function parseInspirationContext(value: unknown): InspirationContext | null {
-  if (typeof value !== "object" || value === null) return null;
-
-  const record = value as Record<string, unknown>;
-  const clip = (field: unknown, max: number) =>
-    typeof field === "string" ? field.trim().slice(0, max) : field;
-
-  const parsed = InspirationContextSchema.safeParse({
-    topic: clip(record.topic, 120),
-    reason: clip(record.reason, 280),
-  });
-
-  return parsed.success ? parsed.data : null;
-}
-
-function uniqueProperties(values: readonly string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
-
-/**
- * Matches the model's list against the reading, and returns the reading's
- * wording for everything that matched.
- *
- * Comparison is loose about punctuation, case, and spacing, and strict about
- * everything else. A measurement can be cited three ways — the full
- * "label: value unit", the label alone, or the value and unit — because all
- * three name the same recorded fact, and none of them is a new one.
- */
-function groundProperties(
-  listed: readonly string[],
-  analysis: ObjectAnalysis,
-): string[] {
-  const recorded = new Map<string, string>();
-
-  const record = (canonical: string, ...spellings: string[]) => {
-    for (const spelling of [canonical, ...spellings]) {
-      const key = normalise(spelling);
-      if (key && !recorded.has(key)) recorded.set(key, canonical);
-    }
-  };
-
-  for (const text of analysis.visibleText) record(text);
-
-  for (const measurement of analysis.visibleMeasurements) {
-    const { label, value, unit } = measurement;
-    record(`${label}: ${value} ${unit}`, label, `${value} ${unit}`);
-  }
-
-  for (const property of [
-    ...analysis.countableProperties,
-    ...analysis.shapeProperties,
-    ...analysis.observableProperties,
-  ]) {
-    record(property);
-  }
-
-  const grounded = listed
-    .map((property) => recorded.get(normalise(property)))
-    .filter((property): property is string => property !== undefined);
-
-  return [...new Set(grounded)];
-}
-
-function normalise(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[.,;:]+$/, "");
-}
-
-/**
- * The student's side of a poor fit: what could not be found, what to look for
- * instead, and — only when the object really suits one — which other mission
- * would work.
- */
-function poorFitMessage(skillId: SkillId, alternatives: readonly SkillId[]) {
-  const skill = getSkill(skillId);
-  const alternative = alternatives[0];
-
-  return [
-    copy.fit.noChallenge(skill.label.toLowerCase()),
-    copy.fit.tryInstead(skill.lookFor),
-    alternative
-      ? copy.fit.alternative(getSkill(alternative).label.toLowerCase())
-      : null,
-  ]
-    .filter((sentence) => sentence !== null)
-    .join(" ");
-}
-
-/** The stage misbehaved, which is not the student's photograph's fault. */
-function failed(): SkillFitResult {
-  return {
-    status: "failed",
-    failure: QuestGenerationFailureSchema.parse({
-      reason: "generation_failure",
-      studentMessage: copy.fit.failure,
-      recommendedNextAction: "retry",
-    }),
-  };
+  return finalizeSkillFit(wire, analysis, skillId);
 }
 
 /** The investigation table as prompt text, in the order the setup screen offers. */
-function skillInvestigationList(): string {
+export function skillInvestigationList(): string {
   return SKILLS.map(
     (skill) => `- ${skill.id} (${skill.label}): ${SKILL_INVESTIGATION[skill.id]}`,
   ).join("\n");
