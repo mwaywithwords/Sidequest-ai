@@ -17,7 +17,6 @@ import {
   EvidenceRequestSchema,
   type InspirationContext,
   InspirationContextSchema,
-  type InspiredMathFit,
   type InvestigationMathFit,
   type ObjectAnalysis,
   type QuestGenerationFailure,
@@ -186,7 +185,6 @@ Grade matters. A property can support a skill in principle and still be wrong fo
 export type SkillFitResult =
   | { status: "ok"; fit: ReadySkillFit }
   | { status: "needsEvidence"; fit: InvestigationMathFit }
-  | { status: "inspiredMath"; fit: InspiredMathFit }
   | { status: "poorFit"; fit: Extract<SkillFitAnalysis, { challengeMode: "poor_fit" }>; failure: QuestGenerationFailure }
   | { status: "failed"; failure: QuestGenerationFailure };
 
@@ -308,10 +306,6 @@ export async function analyzeSkillFit({
 
   if (fit.challengeMode === "investigation_math") {
     return { status: "needsEvidence", fit };
-  }
-
-  if (fit.challengeMode === "inspired_math") {
-    return { status: "inspiredMath", fit };
   }
 
   if (fit.challengeMode === "poor_fit") {

@@ -151,7 +151,8 @@ async function loadVerificationContext(
 
   const fit = fitParsed.data;
   if (
-    fit.challengeMode !== "object_math"
+    fit.challengeMode !== "object_math" &&
+    fit.challengeMode !== "inspired_math"
   ) {
     return mathFailed();
   }
@@ -249,6 +250,7 @@ function verifyLoaded(loaded: LoadedContext): VerificationResult {
     fit: loaded.fit,
     skillId: loaded.skillId,
     grade: loaded.grade,
+    contextualGrounding: metadata.data.contextualGrounding ?? null,
   });
 }
 

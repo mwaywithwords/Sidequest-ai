@@ -60,6 +60,26 @@ const MASS: Record<string, string> = {
   ounces: "oz",
 };
 
+/**
+ * Count labels that appear on Inspired Math facts. They are not SI units.
+ * Singular and plural must still be the same unit so 1 point + 3 points
+ * can add. Different count words stay incompatible.
+ */
+const COUNT: Record<string, string> = {
+  point: "point",
+  points: "point",
+  dollar: "dollar",
+  dollars: "dollar",
+  cent: "cent",
+  cents: "cent",
+  page: "page",
+  pages: "page",
+  pair: "pair",
+  pairs: "pair",
+  shot: "shot",
+  shots: "shot",
+};
+
 export function isFiniteNumber(value: number): boolean {
   return Number.isFinite(value);
 }
@@ -79,6 +99,7 @@ export function normaliseUnit(unit: string): string {
     VOLUME[folded] ??
     LENGTH[folded] ??
     MASS[folded] ??
+    COUNT[folded] ??
     folded
   );
 }

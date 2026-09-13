@@ -66,9 +66,9 @@ export async function assessQuestSkillFit({
     await setQuestStatus(questId, "rejected");
   }
 
-  // object_math, investigation_math, and inspired_math all stay 'pending'.
-  // investigation_math waits for one more observation. inspired_math is a
-  // valid path stored for a later stage; this step does not generate from it.
+  // object_math, investigation_math, and inspired_math all stay 'pending'
+  // here. investigation_math waits for one more observation. Ready paths
+  // stay pending until verification accepts a challenge.
 
   return result;
 }

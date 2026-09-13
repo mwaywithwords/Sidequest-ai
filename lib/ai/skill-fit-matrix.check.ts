@@ -346,7 +346,8 @@ function fitRecord(
     selectedSkillCode: skillId,
     fitScore: 0.7,
     challengeMode: expected.mode,
-    canGenerateChallenge: expected.mode === "object_math",
+    canGenerateChallenge:
+      expected.mode === "object_math" || expected.mode === "inspired_math",
     usableProperties: properties,
     reason: `A ${expected.mode} path exists for this object.`,
     suggestedObjectCharacteristics: [],

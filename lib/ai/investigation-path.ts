@@ -301,8 +301,8 @@ export function buildAnchors(
 
 export function canGenerateFromMode(
   mode: ChallengeMode,
-): mode is "object_math" {
-  return mode === "object_math";
+): mode is "object_math" | "inspired_math" {
+  return mode === "object_math" || mode === "inspired_math";
 }
 
 function hasAnyObservedFeature(analysis: ObjectAnalysis): boolean {

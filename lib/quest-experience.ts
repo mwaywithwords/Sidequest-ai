@@ -170,7 +170,8 @@ async function presentReadyQuest({
   if (!analysis.success || !fit.success || !fact.success) return null;
 
   if (
-    fit.data.challengeMode !== "object_math"
+    fit.data.challengeMode !== "object_math" &&
+    fit.data.challengeMode !== "inspired_math"
   ) {
     return null;
   }
@@ -226,6 +227,10 @@ async function presentReadyQuest({
     objectConnection: connection,
     valuesUsed: metadata.data.valuesUsed,
     challengeMode: fit.data.challengeMode,
+    inspirationTopic:
+      fit.data.challengeMode === "inspired_math"
+        ? fit.data.inspirationContext.topic
+        : null,
     question,
     hint1: row.hint_1,
     answer: answer.data,

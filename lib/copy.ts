@@ -6,6 +6,13 @@
  * What stays inline: short conventional control labels — buttons, field labels,
  * nav items, and status words like "Retake", "Solved", or "Continue".
  */
+function topicSentence(topic: string): string {
+  const trimmed = topic.trim();
+  if (trimmed.length === 0) return "This kind of object";
+
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 export const copy = {
   brand: {
     metaTitle: "SIDEQUEST — Find the math hiding in your world",
@@ -319,10 +326,16 @@ export const copy = {
       hint2: "Hint 2",
       lookClosely: (objectName: string, value: string) =>
         `Look closely — your ${objectName} shows ${value}.`,
+      inspiredTrail: (objectName: string, topic: string) =>
+        `Your ${objectName} sent us on another trail. ${topicSentence(topic)} gives us numbers to explore from the wider world, not from a label in your photo.`,
       thatMeasurement: (skill: string) =>
         `That real measurement gives us a starting point for ${skill}.`,
+      inspiredPractice: (skill: string) =>
+        `Those real-world numbers give us a starting point for ${skill}.`,
       imaginedSituation:
         "Your object gives us the real number to start from. The challenge may set up a situation around it.",
+      inspiredSituation:
+        "These extra numbers come from the world around your object, or from a situation the challenge imagines. They were not read off your photo.",
       processingHeading: "Still looking closely.",
       processingBody:
         "SIDEQUEST is still finding the math in your photo. This usually takes just a moment.",

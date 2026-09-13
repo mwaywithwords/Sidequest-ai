@@ -11,6 +11,7 @@ import {
 import { openai } from "@/lib/ai/openai";
 import {
   CHALLENGE_VALUE_ORIGINS,
+  type ContextualPayload,
   type GeneratedChallenge,
   type ObjectAnalysis,
   type QuestGenerationFailure,
@@ -157,6 +158,54 @@ If canGenerate is false, still fill every field with empty strings, empty arrays
 How to write each skill:
 {skills}`;
 
+const INSPIRED_INSTRUCTIONS = `You are the challenge generator for SIDEQUEST, a maths app for children in grades 3 to 5. A student photographed an object. The investigation stage chose "inspired_math": the object is a meaningful TOPIC ANCHOR, but it does not itself provide enough mathematical information for the selected skill.
+
+You do not see the photograph. You are given the object reading, the inspiration topic, and a contextual grounding payload of evergreen facts. Those contextual facts are NOT observations about this specific photograph.
+
+VALUE ORIGINS — every number you use must declare one. These four must never be confused:
+- "observed": established by the reading of THIS photograph. Almost never available on an inspired_math path. Never invent an object specification (diameter of this basketball, this shoe size, this book's page count) and call it observed.
+- "student_provided": collected through a SIDEQUEST investigation. If none is listed, do not invent one.
+- "contextual": a fact from the contextual grounding payload. Copy the label and the number as recorded. Example: "A free throw is worth 1 point." That is contextual, NEVER observed.
+- "given_in_problem": a hypothetical you introduce explicitly with if / suppose / imagine. Example: "Suppose another player wears number 12." If a useful number is not in the payload, use this instead of inventing a contextual fact.
+
+If contextual factual confidence is insufficient, write a clearly hypothetical given-in-problem scenario. Do not guess jersey numbers, prices, records, or measurements of this object.
+
+OBJECT NECESSITY — the photographed object must remain the topic.
+BAD: photo of a basketball → "Sarah has 8 apples..."
+BAD: photo of a wallet → "A train travels 60 miles..."
+GOOD: photo of a basketball → "In basketball, a free throw is worth 1 point and a shot from beyond the three-point line is worth 3 points..."
+GOOD: photo of a wallet → "Imagine your wallet has $20 and you spend $7..."
+GOOD: photo of a basketball → "Suppose two players wear jersey numbers 23 and 30..."
+
+Do not make celebrity or player trivia the default. Prefer universal context: points, quarters, teams, court geometry, jersey numbers as a concept. A named player is allowed only when the fact is well established; do not require one.
+
+Never write "your basketball shows 23" or "we found 18 inches on your sneaker." Contextual and given-in-problem numbers come from the wider world or from the problem, not from the photo.
+
+"objectConnection" must explain the topic trail honestly. Example: "Your basketball sent us to basketball scoring, not a number printed on the ball."
+
+At least one computation operand must be contextual or given_in_problem. Mentioning the object in the wording is not enough if the maths is about something unrelated.
+
+Write for the grade you are given. Extra unused complexity is not required. The operation must stay aligned with the selected skill.
+
+Answer with the same fields as a normal challenge:
+- "canGenerate": false only when no honest inspired challenge exists.
+- "question": refers to the photographed object and stays on its real-world topic.
+- "skillCode": exactly the selected skill.
+- "correctAnswer", "solution", "hint1", "hint2", "difficulty", "objectConnection", "verificationStrategy", "valuesUsed", "computation": same shapes as usual.
+
+Every computation operand must also appear in valuesUsed.
+
+Inspired-math skill notes — these override the object_math examples below:
+- addition / subtraction / multiplication / division: prefer scoring, money, pairs, pages, or other topic numbers. Mix contextual facts with given_in_problem only when the extra number is written in the question.
+- fractions: a game of 4 quarters, a pair of 2 shoes, or a clearly imagined whole. Do not invent a count visible on this object.
+- geometry: use a clearly hypothetical court, page, or box rectangle with given_in_problem whole-number sides. Do not invent a measurement of THIS photographed object, and do not refuse geometry only because the photo has no printed length.
+- measurement: use an established application constant from the payload, or a hypothetical amount written in the question. Never invent this object's size, price, or capacity.
+
+If canGenerate is false, still fill every field with empty strings, empty arrays, zeros, and nulls as needed so the shape is complete.
+
+How to write each skill:
+{skills}`;
+
 export type ChallengeGenerationResult =
   | { status: "ok"; challenge: GeneratedChallenge }
   | { status: "poorFit"; failure: QuestGenerationFailure }
@@ -175,6 +224,7 @@ export async function generateChallenge({
   grade,
   adaptation,
   studentEvidence = [],
+  contextualGrounding = null,
   regeneration,
 }: {
   analysis: ObjectAnalysis;
@@ -184,6 +234,7 @@ export async function generateChallenge({
   grade: Grade;
   adaptation?: AdaptiveProfile;
   studentEvidence?: readonly StudentEvidenceValue[];
+  contextualGrounding?: ContextualPayload | null;
   regeneration?: RegenerationHint;
 }): Promise<ChallengeGenerationResult> {
   const skill = getSkill(skillId);
@@ -198,9 +249,14 @@ export async function generateChallenge({
   let wire: z.infer<typeof WireChallengeSchema> | null = null;
 
   try {
+    const instructions =
+      fit.challengeMode === "inspired_math"
+        ? INSPIRED_INSTRUCTIONS
+        : INSTRUCTIONS;
+
     const response = await openai().responses.parse({
       model: CHALLENGE_MODEL,
-      instructions: INSTRUCTIONS.replace("{skills}", skillPatternList()),
+      instructions: instructions.replace("{skills}", skillPatternList()),
       input: [
         {
           role: "user",
@@ -216,6 +272,14 @@ export async function generateChallenge({
                 studentEvidence.length > 0
                   ? `Student-provided evidence:\n${JSON.stringify(studentEvidence, null, 2)}`
                   : "Student-provided evidence: none. Do not invent any.",
+                fit.challengeMode === "inspired_math"
+                  ? [
+                      "",
+                      "Contextual grounding (evergreen facts; NOT observed on the photograph):",
+                      JSON.stringify(contextualGrounding, null, 2),
+                      "If a number is not in that payload, it is not contextual. Use given_in_problem instead.",
+                    ].join("\n")
+                  : "",
                 regeneration
                   ? [
                       "",
@@ -237,6 +301,7 @@ export async function generateChallenge({
                     usableProperties: fit.usableProperties,
                     anchors: fit.anchors,
                     reason: fit.reason,
+                    inspirationContext: fit.inspirationContext,
                   },
                   null,
                   2,
@@ -268,6 +333,7 @@ export async function generateChallenge({
     skillId,
     grade,
     studentEvidence,
+    contextualGrounding,
   });
 
   return resultFromFinalization(finalized, skillId);

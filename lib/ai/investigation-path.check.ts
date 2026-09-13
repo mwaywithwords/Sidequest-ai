@@ -123,11 +123,11 @@ schemaFails("inspired_math without context is invalid", {
   inspirationContext: null,
 });
 
-schemaFails("inspired_math cannot generate a challenge in this step", {
+schemaFails("inspired_math cannot set canGenerateChallenge false", {
   ...base,
   selectedSkillCode: "addition",
   challengeMode: "inspired_math",
-  canGenerateChallenge: true,
+  canGenerateChallenge: false,
   usableProperties: [],
   anchors: [],
   evidenceRequest: null,
@@ -174,7 +174,7 @@ schemaOk("inspired_math with structured context is valid", {
   ...base,
   selectedSkillCode: "addition",
   challengeMode: "inspired_math",
-  canGenerateChallenge: false,
+  canGenerateChallenge: true,
   usableProperties: [],
   anchors: [],
   evidenceRequest: null,

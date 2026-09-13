@@ -126,6 +126,31 @@ check(
   ).imaginedSituation === false,
 );
 
+const inspiredPresented = presentStudentQuest(
+  readyInput({
+    challengeMode: "inspired_math",
+    inspirationTopic: "basketball scores",
+    objectName: "Basketball",
+    valuesUsed: [
+      {
+        label: "free throw points",
+        value: 1,
+        unit: "point",
+        origin: "contextual",
+      },
+    ],
+  }),
+);
+
+check(
+  "inspired_math does not claim a contextual number was on the object",
+  inspiredPresented.lookClosely !== null &&
+    inspiredPresented.lookClosely.includes("another trail") &&
+    !inspiredPresented.lookClosely.includes("shows 1") &&
+    inspiredPresented.worldContext === true &&
+    inspiredPresented.highlightedValues.length === 0,
+);
+
 check(
   "number answers keep the unit and drop the value",
   presented.answer.kind === "number" &&

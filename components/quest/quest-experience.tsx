@@ -136,7 +136,9 @@ function ConnectStage({
           </p>
           {quest.imaginedSituation ? (
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-faint sm:text-base">
-              {copy.quest.experience.imaginedSituation}
+              {quest.worldContext
+                ? copy.quest.experience.inspiredSituation
+                : copy.quest.experience.imaginedSituation}
             </p>
           ) : null}
         </div>
