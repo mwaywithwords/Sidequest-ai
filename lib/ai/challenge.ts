@@ -77,6 +77,7 @@ export const WireChallengeSchema = z.strictObject({
   computation: z.strictObject({
     type: z.enum([
       "arithmetic",
+      "multi_step_arithmetic",
       "division",
       "fraction_of",
       "fraction_remaining",
@@ -91,22 +92,35 @@ export const WireChallengeSchema = z.strictObject({
     denominator: z.number().nullable(),
     simplify: z.boolean().nullable(),
     operands: z.array(WireOperandSchema),
+    steps: z
+      .array(
+        z.strictObject({
+          operation: z.enum(["add", "subtract", "multiply"]),
+          operands: z.array(
+            WireOperandSchema.extend({
+              kind: z.enum(["value", "step_result"]),
+              step: z.number().nullable(),
+            }),
+          ),
+        }),
+      )
+      .nullable(),
   }),
 });
 
 const SKILL_PATTERNS: Record<SkillId, string> = {
   addition:
-    "adding to an observed count; combining related quantities; increasing an observed measurement; totals. Example: 8 visible eyelets → 'if 3 more were added, how many would there be?'",
+    "adding to an observed count; combining related quantities; hypothetical totals from the object's ordinary use. Example: 8 visible eyelets → 'if 3 more were added, how many would there be?' Wallet with no printed total → 'Suppose your wallet has $35 and you add $40.'",
   subtraction:
-    "amount remaining; removing from an observed quantity; differences; capacity remaining. Example: bottle labelled 11 fl oz → 'If 4 fluid ounces are poured out, how many remain?' 11 is observed. 4 is given_in_problem.",
+    "amount remaining; differences; hypothetical remaining amounts from the object's ordinary use. Example: bottle labelled 11 fl oz → 'If 4 fluid ounces are poured out, how many remain?' Wallet → 'Suppose your wallet has $20. How much more would you need to reach $125?'",
   multiplication:
-    "repeated groups; multiple identical objects; rows and columns; scaling an observed quantity. Example: one sneaker with 8 eyelets → 'If 4 sneakers had the same number, how many eyelets is that?'",
+    "repeated groups; scaling an observed quantity; hypothetical repeated groups from the object's ordinary use. Example: 8 visible eyelets on one sneaker. Numberless sneaker → 'Imagine you walk 12 steps in each of 3 laps.' Numberless wallet → 'Imagine your wallet contains 6 five-dollar bills.'",
   division:
-    "equal sharing; equal groups; how many groups fit; quantities per group; whole groups or remainder when the grade allows. Example: 12 visible eggs shared among 3 cartons.",
+    "equal sharing; quantities per group; hypothetical sharing from the object's ordinary use. Example: 12 visible eggs shared among 3 cartons. Numberless cup → 'Suppose 80 mL is poured equally into 4 cups.'",
   fractions:
-    "equal parts; portions of an observed whole; fractional use of an observed quantity. Example: pizza cut into 8 equal slices, 3 eaten, what fraction remains.",
+    "equal parts; portions of an observed whole; hypothetical parts from the object's ordinary use. Example: pizza cut into 8 equal slices. Numberless book → 'Suppose your book has 12 pages and you read 1/3 of them.' Numberless wallet → 'Suppose your wallet has $80 and you spend 1/4 of it.'",
   measurement:
-    "comparing measurements; converting only when the conversion factor is written in the problem; remaining capacity; differences in length or volume.",
+    "comparing measurements; converting only when the conversion factor is written in the problem; remaining capacity; differences in length or volume. Never invent this object's capacity or length as observed.",
   geometry:
     "Prefer qualitative or structure geometry from visible shape: name a 2D shape or 3D form, or count faces/edges/vertices/sides of an identified form. Use perimeter or area only when those dimensions are already observed or student-provided. Do not invent a length, width, or angle measure merely to make a geometry question.",
 };
@@ -128,7 +142,7 @@ Every challenge must use at least one validated real property from the reading (
 VALUE ORIGINS — every number you use must declare one:
 - "observed": established by the reading. Copy the label and the number as recorded. Examples: 11 fl oz printed on a bottle; 8 visible eyelets; 12 visible eggs.
 - "student_provided": collected through a SIDEQUEST investigation. If no student-provided evidence is listed, do not invent one.
-- "given_in_problem": a hypothetical you introduce explicitly. Examples: "If 4 ounces are poured out…"; "If you had 3 of these…"; "If 5 people shared…". These must never masquerade as facts about the object.
+- "given_in_problem": a hypothetical you introduce explicitly with if / suppose / imagine / let's say. Examples: "Suppose 4 ounces are poured out…"; "Imagine you had 3 of these…". These must never masquerade as facts about the object. BAD: "Your wallet contains $20." GOOD: "Suppose your wallet contains $20."
 
 OBJECT_MATH: at least one observed property anchors the problem. You may introduce additional hypothetical values as given_in_problem. A bottle showing 11 fl oz plus subtraction is valid as "11 minus 4 poured out". Do not reject that path because the 4 was not on the label. A visible structure (12 eggs in 3 equal rows) may be enough on its own.
 
@@ -154,10 +168,11 @@ Answer with:
 - "valuesUsed": every number in the challenge, each with label, value, optional unit, and origin. Empty only for qualitative or structure geometry that uses shapesUsed instead. Copy observed labels from the reading.
 - "shapesUsed": observed 2D/3D forms from the reading. Each has label, form, aspect (solid | plane | cross_section | symmetry), and origin observed or student_provided. Required for shape_identify and shape_count. Empty array otherwise.
 - "computation": a structured representation a later stage will evaluate. Not JavaScript. Not a free expression.
-  { "type": "arithmetic" | "division" | "fraction_of" | "fraction_remaining" | "conversion" | "geometry" | "shape_identify" | "shape_count", "operation": string, "shape": string or null, "numerator": number or null, "denominator": number or null, "simplify": boolean or null, "operands": [values] }
+  { "type": "arithmetic" | "multi_step_arithmetic" | "division" | "fraction_of" | "fraction_remaining" | "conversion" | "geometry" | "shape_identify" | "shape_count", "operation": string, "shape": string or null, "numerator": number or null, "denominator": number or null, "simplify": boolean or null, "operands": [values], "steps": array or null }
 
 Computation shapes:
 - arithmetic: operation is add, subtract, or multiply. operands are the values in order.
+- multi_step_arithmetic: two to four ordered steps. Each step is add, subtract, or multiply. An operand is either a declared value (kind "value") or an earlier step result (kind "step_result", step = 0-based index). The last step must be the selected skill's operation. Use this only when one operation cannot represent the problem. Example: add 50 and 20, then subtract that result from 125. Set top-level operands to the declared values and fill steps. Never use eval or a free expression.
 - division: operation is quotient, whole_groups, or remainder. operands[0] is the dividend, operands[1] is the divisor.
 - fraction_of: operands[0] is the whole quantity. numerator and denominator are the fraction.
 - fraction_remaining: operands[0] is the total parts, operands[1] is the parts used. simplify is whether to reduce.
@@ -181,7 +196,7 @@ VALUE ORIGINS — every number you use must declare one. These four must never b
 - "observed": established by the reading of THIS photograph. Almost never available on an inspired_math path. Never invent an object specification (diameter of this basketball, this shoe size, this book's page count) and call it observed.
 - "student_provided": collected through a SIDEQUEST investigation. If none is listed, do not invent one.
 - "contextual": a fact from the contextual grounding payload. Copy the label and the number as recorded. Example: "A free throw is worth 1 point." That is contextual, NEVER observed.
-- "given_in_problem": a hypothetical you introduce explicitly with if / suppose / imagine. Example: "Suppose another player wears number 12." If a useful number is not in the payload, use this instead of inventing a contextual fact.
+- "given_in_problem": the PRIMARY mechanism when no real number is available. Introduce it explicitly with if / suppose / imagine / let's say. Example: "Suppose your wallet contains $20." BAD: "Your wallet contains $20." If a useful number is not in the payload, use this instead of inventing a contextual fact. Semantic association is NOT an observed number.
 
 If contextual factual confidence is insufficient, write a clearly hypothetical given-in-problem scenario. Do not guess jersey numbers, prices, records, or measurements of this object.
 
@@ -211,8 +226,8 @@ Answer with the same fields as a normal challenge:
 Every computation operand must also appear in valuesUsed.
 
 Inspired-math skill notes — these override the object_math examples below:
-- addition / subtraction / multiplication / division: prefer scoring, money, pairs, pages, or other topic numbers. Mix contextual facts with given_in_problem only when the extra number is written in the question.
-- fractions: a game of 4 quarters, a pair of 2 shoes, or a clearly imagined whole. Do not invent a count visible on this object.
+- addition / subtraction / multiplication / division: prefer the object's ordinary purpose — money for a wallet, steps for shoes, liquid for a cup, scoring for a basketball, pages for a book. Mix contextual facts with given_in_problem only when the extra number is written in the question. For advancing students, a richer multi-step application is allowed when multi_step_arithmetic can represent every step.
+- fractions: a game of 4 quarters, a pair of 2 shoes, a fraction of money, or a clearly imagined whole. Do not invent a count visible on this object.
 - geometry: if the photograph already shows a form, prefer shape_identify or shape_count. Otherwise use a clearly hypothetical court, page, or box rectangle with given_in_problem whole-number sides. Do not invent a measurement of THIS photographed object, and do not refuse geometry only because the photo has no printed length.
 - measurement: use an established application constant from the payload, or a hypothetical amount written in the question. Never invent this object's size, price, or capacity.
 

@@ -464,6 +464,62 @@ check(
       "student_measurement",
 );
 
+const wallet: ObjectAnalysis = {
+  objectName: "wallet",
+  category: "personal accessory",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["rectangular form"],
+  observableProperties: ["card slots", "billfold"],
+};
+
+const recoveredWalletAddition = recoverInvestigation(
+  truePoorFit,
+  wallet,
+  "addition",
+);
+
+check(
+  "wallet + addition recovers as inspired_math, not poor_fit or a forced count",
+  recoveredWalletAddition.resolved.challengeMode === "inspired_math" &&
+    recoveredWalletAddition.resolved.inspirationContext !== null,
+);
+
+const cup: ObjectAnalysis = {
+  objectName: "cup",
+  category: "kitchen tool",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["cylinder-like body", "circular rim"],
+  observableProperties: ["open top"],
+};
+
+const recoveredCupMultiply = recoverInvestigation(
+  truePoorFit,
+  cup,
+  "multiplication",
+);
+
+check(
+  "cup + multiplication recovers as inspired_math without inventing capacity",
+  recoveredCupMultiply.resolved.challengeMode === "inspired_math",
+);
+
+const recoveredSneakerAddition = recoverInvestigation(
+  truePoorFit,
+  sneaker,
+  "addition",
+);
+
+check(
+  "sneaker + addition recovers as inspired_math instead of a forced count",
+  recoveredSneakerAddition.resolved.challengeMode === "inspired_math",
+);
+
 // --- investigation anchors are only observed or student_provided -------
 
 const readyAnchors = buildAnchors([bottleProperty], null);

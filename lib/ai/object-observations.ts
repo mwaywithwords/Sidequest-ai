@@ -26,6 +26,7 @@ export type WireObservations = {
   countableProperties: readonly string[];
   shapeProperties: readonly string[];
   observableProperties: readonly string[];
+  typicalUses?: readonly string[];
 };
 
 export type SanitizedObservations = {
@@ -38,6 +39,7 @@ export type SanitizedObservations = {
   countableProperties: string[];
   shapeProperties: string[];
   observableProperties: string[];
+  typicalUses: string[];
 };
 
 export type WireObjectReading = WireObservations & {
@@ -69,6 +71,7 @@ export function sanitizeObservations(
     countableProperties: cleanStrings(wire.countableProperties),
     shapeProperties: cleanStrings(wire.shapeProperties),
     observableProperties: cleanStrings(wire.observableProperties),
+    typicalUses: cleanStrings(wire.typicalUses ?? []),
   };
 }
 
@@ -107,13 +110,15 @@ export function finalizeObjectReading(
   }
 
   const brand = cleanOptional(wire.brand);
+  const { typicalUses, ...visible } = observations;
 
   const parsed = ObjectAnalysisSchema.safeParse({
     objectName: wire.objectName,
     category: wire.category,
     ...(brand === undefined ? {} : { brand }),
     confidence: wire.confidence,
-    ...observations,
+    ...visible,
+    ...(typicalUses.length > 0 ? { typicalUses } : {}),
   });
 
   if (!parsed.success) {

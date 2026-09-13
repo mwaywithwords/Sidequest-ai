@@ -88,6 +88,11 @@ export const ObjectAnalysisSchema = z.strictObject({
   countableProperties: z.array(text),
   shapeProperties: z.array(text),
   observableProperties: z.array(text),
+  /**
+   * Ordinary real-world uses and related activities of this kind of
+   * object. Not an observed measurement, count, or printed value.
+   */
+  typicalUses: z.array(text).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -134,12 +139,14 @@ export const InvestigationAnchorSchema = z.strictObject({
 /**
  * The four investigation paths, in the order SIDEQUEST must try them.
  *
- * `object_math` uses properties already in the reading.
- * `investigation_math` keeps the quest alive for one more observation.
- * `inspired_math` uses the object as a topic anchor plus contextual or
- * given-in-problem values. Challenge Generation may run for both ready
- * paths.
- * `poor_fit` is last, after all three paths have been considered.
+ * `object_math` uses a visible/validated property or visible form.
+ * `inspired_math` uses the object's ordinary real-world purpose plus
+ * contextual or given-in-problem values. A missing printed number is
+ * not, by itself, a reason to skip this path.
+ * `investigation_math` is used when interacting with the actual object
+ * would produce a better educational experience, not merely because
+ * the first photograph lacks a number.
+ * `poor_fit` is last, after the earlier paths have been considered.
  */
 export const CHALLENGE_MODES = [
   "object_math",
@@ -390,11 +397,35 @@ export const UsedShapeSchema = z.strictObject({
  * without executing arbitrary expressions. Small on purpose: only the
  * Grade 3–5 operations SIDEQUEST actually generates.
  */
+/**
+ * One input to a multi-step arithmetic step. A `value` is a declared
+ * used value. A `step_result` is the independently computed result of
+ * an earlier step, never a guessed number.
+ */
+export const ComputationStepOperandSchema = z.discriminatedUnion("kind", [
+  ComputationOperandSchema.extend({
+    kind: z.literal("value"),
+  }),
+  z.strictObject({
+    kind: z.literal("step_result"),
+    step: z.int().min(0).max(3),
+  }),
+]);
+
+export const ArithmeticStepSchema = z.strictObject({
+  operation: z.enum(["add", "subtract", "multiply"]),
+  operands: z.array(ComputationStepOperandSchema).min(2).max(4),
+});
+
 export const ComputationSchema = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("arithmetic"),
     operation: z.enum(["add", "subtract", "multiply"]),
     operands: z.array(ComputationOperandSchema).min(2).max(4),
+  }),
+  z.strictObject({
+    type: z.literal("multi_step_arithmetic"),
+    steps: z.array(ArithmeticStepSchema).min(2).max(4),
   }),
   z.strictObject({
     type: z.literal("division"),
@@ -590,6 +621,8 @@ export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];
 export type UsedValue = z.infer<typeof UsedValueSchema>;
 export type UsedShape = z.infer<typeof UsedShapeSchema>;
 export type ComputationOperand = z.infer<typeof ComputationOperandSchema>;
+export type ComputationStepOperand = z.infer<typeof ComputationStepOperandSchema>;
+export type ArithmeticStep = z.infer<typeof ArithmeticStepSchema>;
 export type CorrectAnswer = z.infer<typeof CorrectAnswerSchema>;
 export type Computation = z.infer<typeof ComputationSchema>;
 export type GenerationMetadata = z.infer<typeof GenerationMetadataSchema>;

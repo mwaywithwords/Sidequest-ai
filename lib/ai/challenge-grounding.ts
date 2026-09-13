@@ -1,7 +1,9 @@
 import { isContextualFact } from "@/lib/ai/inspired-context";
 import {
+  type ArithmeticStep,
   type ChallengeValueOrigin,
   type Computation,
+  type ComputationStepOperand,
   ComputationSchema,
   type ContextualPayload,
   type CorrectAnswer,
@@ -15,6 +17,7 @@ import {
   type UsedValue,
   UsedValueSchema,
 } from "@/lib/ai/schemas";
+import { challengeMatchesObjectPurpose } from "@/lib/ai/semantic-purpose";
 import {
   aspectAllowsLabel,
   geometryCitationTokens,
@@ -45,10 +48,10 @@ const HINT_MAX = 280;
 const SOLUTION_MAX = 600;
 const CONNECTION_MAX = 280;
 
-const HYPOTHETICAL = /\b(if|suppose|imagine|what if)\b/i;
+const HYPOTHETICAL = /\b(if|suppose|imagine|what if|let'?s say)\b/i;
 
 const MEASUREMENT =
-  /\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.?|feet|foot|ft|lbs?|pounds?)\b/gi;
+  /\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.(?=\s|$)|in(?!\s+(?:it|the|your|this|a|an|my|his|her|their|our))|feet|foot|ft|lbs?|pounds?)\b/gi;
 
 export type StudentEvidenceValue = {
   property: string;
@@ -68,6 +71,13 @@ export type WireOperand = {
   value: number;
   unit: string | null;
   origin: ChallengeValueOrigin;
+  kind?: "value" | "step_result" | null;
+  step?: number | null;
+};
+
+export type WireArithmeticStep = {
+  operation: "add" | "subtract" | "multiply" | string;
+  operands: WireOperand[];
 };
 
 export type WireShape = {
@@ -101,6 +111,7 @@ export type WireChallenge = {
   computation: {
     type:
       | "arithmetic"
+      | "multi_step_arithmetic"
       | "division"
       | "fraction_of"
       | "fraction_remaining"
@@ -114,6 +125,7 @@ export type WireChallenge = {
     denominator: number | null;
     simplify: boolean | null;
     operands: WireOperand[];
+    steps?: WireArithmeticStep[] | null;
   };
 };
 
@@ -250,7 +262,7 @@ export function finalizeChallenge(
     return generationFailure("objectConnection", "missing_anchor_citation");
   }
 
-  if (!inspiredStaysOnTopic(question, context)) {
+  if (!inspiredStaysOnTopic(question, objectConnection, context)) {
     return generationFailure("question", "inspired_off_topic");
   }
 
@@ -262,7 +274,7 @@ export function finalizeChallenge(
     return generationFailure("question", "unframed_hypothetical");
   }
 
-  if (attributesUnobservedMeasurement(question, context.analysis)) {
+  if (attributesUnobservedMeasurement(question, context.analysis, valuesUsed)) {
     return generationFailure("question", "invented_measurement");
   }
 
@@ -453,29 +465,24 @@ function connectionCitesShape(hay: string, shape: UsedShape): boolean {
 
 function inspiredStaysOnTopic(
   question: string,
+  objectConnection: string,
   context: ChallengeContext,
 ): boolean {
   if (context.fit.challengeMode !== "inspired_math") return true;
   if (!refersToObject(question, context.analysis)) return false;
 
   const payload = context.contextualGrounding;
-  const topic =
-    payload?.topic ?? context.fit.inspirationContext?.topic ?? "";
-  const extra = (payload?.facts ?? [])
-    .flatMap((fact) => [fact.label, fact.statement])
-    .join(" ");
-  const tokens = topicTokens(`${topic} ${extra}`).filter(
-    (token) => !context.analysis.objectName.toLowerCase().includes(token),
+  const inspiration =
+    payload !== undefined && payload !== null
+      ? { topic: payload.topic, reason: payload.reason }
+      : context.fit.inspirationContext;
+
+  return challengeMatchesObjectPurpose(
+    question,
+    objectConnection,
+    context.analysis,
+    inspiration,
   );
-
-  if (tokens.length === 0) return true;
-
-  const hay = question.toLowerCase();
-  return tokens.some((token) => {
-    if (hay.includes(token)) return true;
-    if (token.endsWith("s") && hay.includes(token.slice(0, -1))) return true;
-    return false;
-  });
 }
 
 const ATTRIBUTED_TO_OBJECT =
@@ -518,6 +525,12 @@ export function computationOperands(computation: Computation): UsedValue[] {
   switch (computation.type) {
     case "arithmetic":
       return computation.operands;
+    case "multi_step_arithmetic":
+      return computation.steps.flatMap((step) =>
+        step.operands.flatMap((operand) =>
+          operand.kind === "value" ? [stepValue(operand)] : [],
+        ),
+      );
     case "division":
       return [computation.dividend, computation.divisor];
     case "fraction_of":
@@ -532,6 +545,14 @@ export function computationOperands(computation: Computation): UsedValue[] {
     case "shape_count":
       return [];
   }
+}
+
+function stepValue(
+  operand: Extract<ComputationStepOperand, { kind: "value" }>,
+): UsedValue {
+  const { kind: _kind, ...value } = operand;
+  void _kind;
+  return value;
 }
 
 function parseValues(values: readonly WireOperand[]): UsedValue[] | null {
@@ -650,6 +671,14 @@ function parseComputation(
         operation: wire.operation,
         operands,
       });
+    case "multi_step_arithmetic": {
+      const steps = parseArithmeticSteps(wire.steps ?? []);
+      if (steps === null) return null;
+      return parseUnion({
+        type: "multi_step_arithmetic",
+        steps,
+      });
+    }
     case "division":
       if (!isDivisionOp(wire.operation) || operands.length < 2) return null;
       return parseUnion({
@@ -738,6 +767,58 @@ function parseComputation(
       });
     }
   }
+}
+
+function parseArithmeticSteps(
+  wires: readonly WireArithmeticStep[],
+): ArithmeticStep[] | null {
+  if (wires.length < 2 || wires.length > 4) return null;
+
+  const steps: ArithmeticStep[] = [];
+
+  for (const [index, wire] of wires.entries()) {
+    if (!isArithmeticOp(wire.operation)) return null;
+
+    const operands: ComputationStepOperand[] = [];
+    for (const operand of wire.operands) {
+      const parsed = parseStepOperand(operand, index);
+      if (parsed === null) return null;
+      operands.push(parsed);
+    }
+
+    if (operands.length < 2 || operands.length > 4) return null;
+
+    steps.push({
+      operation: wire.operation,
+      operands,
+    });
+  }
+
+  return steps;
+}
+
+function parseStepOperand(
+  operand: WireOperand,
+  stepIndex: number,
+): ComputationStepOperand | null {
+  if (operand.kind === "step_result") {
+    if (
+      operand.step === null ||
+      operand.step === undefined ||
+      !Number.isInteger(operand.step) ||
+      operand.step < 0 ||
+      operand.step >= stepIndex
+    ) {
+      return null;
+    }
+
+    return { kind: "step_result", step: operand.step };
+  }
+
+  const values = parseValues([operand]);
+  if (values === null || values[0] === undefined) return null;
+
+  return { kind: "value", ...values[0] };
 }
 
 function parseUnion(value: unknown): Computation | null {
@@ -866,8 +947,10 @@ const ATTRIBUTED_MEASUREMENT =
 function attributesUnobservedMeasurement(
   question: string,
   analysis: ObjectAnalysis,
+  values: readonly UsedValue[] = [],
 ): boolean {
   const observed = catalogObserved(analysis);
+  const given = values.filter((value) => value.origin === "given_in_problem");
 
   for (const match of question.matchAll(ATTRIBUTED_MEASUREMENT)) {
     const rawValue = match[1];
@@ -881,10 +964,58 @@ function attributesUnobservedMeasurement(
         (fact.unit === undefined || unitsLooselyMatch(fact.unit, rawUnit)),
     );
 
-    if (!ok) return true;
+    if (ok) continue;
+    if (
+      given.some((entry) => entry.value === value) &&
+      sentenceIsHypothetical(sentenceAt(question, match.index ?? 0))
+    ) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return attributedUnobservedAmount(question, observed, given);
+}
+
+const ATTRIBUTED_AMOUNT =
+  /\b(?:your|the)\s+[\w-]+\s+(?:shows|showed|has printed|is labelled|is labeled|contains|holds|has)\s+\$?(\d+(?:\.\d+)?)/gi;
+
+function attributedUnobservedAmount(
+  question: string,
+  observed: readonly ObservedFact[],
+  given: readonly UsedValue[],
+): boolean {
+  for (const match of question.matchAll(ATTRIBUTED_AMOUNT)) {
+    const raw = match[1];
+    if (raw === undefined) continue;
+
+    const value = Number(raw);
+    if (observed.some((fact) => fact.value === value)) continue;
+
+    const sentence = sentenceAt(question, match.index ?? 0);
+    if (
+      given.some((entry) => entry.value === value) &&
+      sentenceIsHypothetical(sentence)
+    ) {
+      continue;
+    }
+
+    return true;
   }
 
   return false;
+}
+
+function sentenceAt(text: string, index: number): string {
+  const start = Math.max(0, text.lastIndexOf(".", index) + 1);
+  const endMark = text.indexOf(".", index);
+  const end = endMark === -1 ? text.length : endMark;
+  return text.slice(start, end);
+}
+
+function sentenceIsHypothetical(sentence: string): boolean {
+  return HYPOTHETICAL.test(sentence);
 }
 
 function studentFacingTextInventedFacts(

@@ -45,19 +45,19 @@ const FIT_MODEL = "gpt-5.4";
  */
 const SKILL_INVESTIGATION: Record<SkillId, string> = {
   addition:
-    "adding to an observed quantity; combining groups; totals; counts; measurements; hypothetical increases; comparing quantities; money and prices when the object is a wallet or similar. Example: 8 visible eyelets → object_math. A wallet with no visible amount → inspired_math via money, not poor_fit.",
+    "adding to an observed quantity; combining groups; totals; counts; measurements; hypothetical increases from the object's ordinary use. Example: 8 visible eyelets → object_math. A wallet with no visible amount → inspired_math via money, not investigation_math and not poor_fit.",
   subtraction:
-    "removing from an observed quantity; amounts remaining; differences; measurement differences; capacity remaining; counts remaining; comparisons. Example: a bottle labelled 11 fl oz → object_math, not a poor fit. One visible quantity is enough. A sneaker without a size → investigation_math.",
+    "removing from an observed quantity; amounts remaining; differences; capacity remaining; comparisons; hypothetical remaining amounts from the object's ordinary use. Example: a bottle labelled 11 fl oz → object_math. A wallet with no printed total → inspired_math via money. Do not ask for a measurement just because no number is visible.",
   multiplication:
-    "repeated units; repeated groups; rows; columns; pairs; scaling a real observed quantity; inventory. Example: one sneaker with 8 eyelets → object_math. If eyelets are not counted yet, ask the student to count one side.",
+    "repeated units; repeated groups; rows; columns; pairs; scaling a real observed quantity; hypothetical repeated groups from the object's ordinary use. Example: 8 visible eyelets → object_math. A sneaker with no count → inspired_math via walking or steps, not a forced eyelet count.",
   division:
-    "equal sharing; grouping; portions; capacity divided among containers; quantities per group; repeated components. Example: 12 visible objects → object_math. A basketball can use quarters or equal teams as inspired_math.",
+    "equal sharing; grouping; portions; quantities per group; hypothetical sharing from the object's ordinary use. Example: 12 visible objects → object_math. A cup with no printed capacity → inspired_math via servings. A basketball can use quarters or equal teams as inspired_math.",
   fractions:
-    "equal parts; portions; sections; ratios; containers; clocks; groups; quarters; fractional use of a real quantity. A visible whole or circular structure can be enough; do not require printed numerators.",
+    "equal parts; portions; sections; fractional use of a real quantity; hypothetical parts from the object's ordinary use. A visible whole or circular structure can be enough. A book with no page count → inspired_math via chapters or pages.",
   measurement:
-    "visible measurements; student measurement of length, width, height, volume, capacity, or time; comparisons. If no number is printed, asking the student to measure one side is investigation_math, not poor_fit.",
+    "visible measurements; student measurement of length, width, height, volume, capacity, or time; comparisons. Prefer investigation_math when measuring THIS object is the better lesson. Do not invent a capacity or length.",
   geometry:
-    "recognisable 2D shapes; recognisable 3D forms; angles; symmetry; curves; circular tops; spheres; rectangles; parallel or perpendicular lines; faces, edges, vertices; repeated geometric structures. Observable shape is enough for qualitative or structure geometry. Do not require printed dimensions and do not ask for a measurement when a visible form can support the skill. A basketball, bottle, sneaker, book, box, or clock is object_math when its shape is visible.",
+    "recognisable 2D shapes; recognisable 3D forms; angles; symmetry; curves; circular tops; spheres; rectangles; parallel or perpendicular lines; faces, edges, vertices; repeated geometric structures. Observable shape is enough for qualitative or structure geometry. Do not require printed dimensions and do not ask for a measurement when a visible form can support the skill.",
 };
 
 /**
@@ -107,42 +107,35 @@ Value origins a later Challenge Generator will use — understand them, do not i
 - STUDENT_PROVIDED: something the student will look up, count, or measure.
 - GIVEN_IN_PROBLEM: a hypothetical a later stage may introduce ("if 4 ounces are poured out"). You do not invent those values now.
 
-Exhaust three paths, in this order. Only after all three fail may you return poor_fit.
+Search for a challenge in this order. Only after the earlier paths fail may you return poor_fit.
 
-1. "object_math" — use properties already in the reading. Visible quantities, measurements, counts, shapes, symmetry, patterns, grouping, and spatial structure all count. A later stage may add a hypothetical given_in_problem value around an observed anchor.
-   Examples:
-   - Bottle showing 11 fl oz + subtraction. Future challenge: "This bottle holds 11 fluid ounces. If 4 fluid ounces are poured out, how many remain?" 11 is OBSERVED. 4 will be GIVEN_IN_PROBLEM. One visible quantity is enough.
-   - Sneaker with 8 visible eyelets + multiplication.
-   - Window with a rectangular shape + geometry.
-   - Clock with numbers or a circular structure + fractions or geometry.
-   Geometry does NOT need a printed measurement. A sphere, cylinder-like form, circle, rectangle, curve, angle, or symmetry is enough.
+1. "object_math" — REAL OBSERVED MATH. Use a visible/validated property when it naturally supports the selected skill.
+   Examples: bottle says 20 FL OZ; clock has 12 visible hour marks; toy car has 4 visible wheels.
+   A later stage may add a hypothetical given_in_problem value around that observed anchor.
 
-2. "investigation_math" — the object is promising, but one simple student observation would unlock the selected skill. Do NOT reject the quest. Keep the original image. Ask for ONE useful piece of evidence (supporting photo, measurement, count, or short answer).
-   Examples:
-   - Basketball + measurement: "Measure around the widest part of the basketball."
-   - Sneaker + subtraction: "Find the size label or measure the shoe from heel to toe."
-   - Pillow + geometry: name the rectangular face first. Ask for a measurement only if the mission needs perimeter or area.
-   - Sneaker + multiplication: "Count the eyelets on one side."
-   - Book + fractions: "How many chapters are in the book?"
-   Choose the simplest legitimate request for this grade.
+2. "object_math" — VISIBLE STRUCTURE / FORM. Use non-numeric visible mathematical structure when appropriate.
+   Examples: basketball → sphere; wallet → rectangle; bottle → cylinder; clock → circle.
+   Do not invent dimensions. Geometry does NOT need a printed measurement.
 
-3. "inspired_math" — the object's physical properties do not naturally provide the selected skill, but its REAL-WORLD CONTEXT can legitimately inspire a grade-appropriate investigation. The object remains the topic anchor even when later numbers come from that context or are given in the problem.
-   GOOD: photo of a basketball → jersey numbers, basketball scores, court dimensions, hoop geometry, team statistics, or quarters/fractions.
-   GOOD: photo of a wallet → money, prices, budgeting, adding or subtracting amounts, grouping currency.
-   GOOD: photo of a book → pages, chapters, reading quantities, publishing or design context.
-   GOOD: photo of a sneaker → shoe sizes, pairs, inventory, measurement.
-   GOOD: photo of a car → wheels, distance, speed, fuel, geometry.
-   BAD: photo of a basketball → "There are 8 apples and 4 are eaten." That is not connected to the object.
-   Do not invent unsupported historical facts. Do not invent a measurement as if it were on the object. Put the connection in inspirationContext.
+3. "inspired_math" — SEMANTIC / REAL-WORLD CONNECTION. If the photo has no useful number, identify what the object naturally does, contains, represents, or is commonly used for. Then a later stage may introduce hypothetical given_in_problem numbers, framed with suppose / imagine / if / let's say.
+   Reason from the identified object's ordinary purpose. Do not require a printed number.
+   GOOD: wallet → money, bills, coins, spending, saving, making change.
+   GOOD: sneakers or sandals → walking, steps, distance, pairs.
+   GOOD: cup → drinking, filling, pouring, servings, capacity as a hypothetical.
+   GOOD: basketball → scoring, teams, quarters, shots.
+   GOOD: book → reading, pages, chapters.
+   GOOD: backpack → carrying items, school supplies, groups.
+   BAD: wallet → apples. BAD: sneaker → pizzas. BAD: basketball → pencils.
+   The object must remain the reason the mathematical situation exists.
+   Do not invent a measurement as if it were on the object. Put the connection in inspirationContext.
 
-4. "poor_fit" — LAST RESORT. Use this only after you have considered visible quantities, measurements, counts, shapes, symmetry, patterns, grouping, sharing, comparison, one additional student observation, and meaningful real-world context associated with the object. A common, identifiable, safe everyday object should usually have a path.
+4. "investigation_math" — use this when interacting with the ACTUAL object would produce a BETTER educational experience, not merely because the first photograph lacks a number.
+   GOOD: measurement + sneaker → "Measure your sneaker from heel to toe."
+   BAD: addition + wallet with no printed total → do not ask them to count cards just to avoid inspired_math.
 
-Ordinary-object reminders:
-- Basketball: geometry is object_math from sphere, circles, curved surface, or symmetry. Measurement without a printed number is investigation_math. Addition, scores, jersey numbers, or quarters can be inspired_math. Never poor_fit just because no number is printed.
-- Protein bottle + geometry is object_math from cylinder-like form, circular top, or symmetry. A printed volume supports the other skills as object_math.
-- Wallet: addition and subtraction are not automatically poor_fit. Use inspired_math via money or prices, or investigation_math if a count or measurement would help.
-- Sneaker: do not fail for lack of a printed size. Measurement asks for heel-to-toe length or a size-label photo. Geometry uses symmetry, curves, angles, or tread.
-- Book: pages, chapters, rectangular geometry. If a count is not visible, ask for it or use inspired_math.
+5. "poor_fit" — LAST RESORT. A safe, identifiable ordinary object must not become poor_fit merely because it contains no visible numbers, has no printed measurement, or ObjectAnalysis has no numeric anchor. Ask: can this object's ordinary real-world use honestly anchor the selected skill?
+
+A photograph may serve as a semantic / real-world anchor rather than a numeric anchor. SIDEQUEST should find the math.
 
 How to investigate each skill:
 {skills}

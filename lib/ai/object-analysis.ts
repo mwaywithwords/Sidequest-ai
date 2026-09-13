@@ -65,6 +65,7 @@ export const WireAnalysisSchema = z.strictObject({
   countableProperties: z.array(z.string()),
   shapeProperties: z.array(z.string()),
   observableProperties: z.array(z.string()),
+  typicalUses: z.array(z.string()),
 });
 
 /**
@@ -93,6 +94,7 @@ Report what is visible:
 - "countableProperties": things a student could count in this photograph, such as "6 visible buttons", "12 window panes".
 - "shapeProperties": geometric description in words — 2D shapes, 3D forms, symmetry, curves, angles, parallel or perpendicular edges, faces, or cross-sections. Examples: "approximately spherical", "cylinder-like body", "circular top", "left-right symmetry", "rectangular cover". No dimensions and no invented face or edge counts.
 - "observableProperties": material, colour, texture, condition, or state, such as "clear plastic", "about half full", "worn leather".
+- "typicalUses": the ordinary real-world uses, contents, or activities of this kind of object. Examples: a wallet → "holding money", "carrying cards"; a cup → "drinking", "pouring", "servings"; sneakers → "walking", "steps". These are NOT observed numbers. Do not put a capacity, price, page count, shoe size, or any other figure here.
 
 Never invent a number. Specifically, do not report a diameter, circumference, weight, volume, capacity, price, model number, or product specification unless that value is legible in the photograph. Do not assume a basketball is regulation size, that a baby bottle holds 8 oz, or that a soda can holds 12 fl oz. Do not estimate the dimensions of furniture or of a room. Do not infer a price, and do not infer specifications from recognising a brand.
 

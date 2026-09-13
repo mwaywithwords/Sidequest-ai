@@ -1,4 +1,5 @@
 import type { Computation, CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
+import { evaluateArithmeticSteps } from "@/lib/math/evaluate";
 import type { Grade } from "@/lib/types";
 
 /**
@@ -106,6 +107,19 @@ function grade3Violation(
     }
   }
 
+  if (computation.type === "multi_step_arithmetic") {
+    for (const step of computation.steps) {
+      if (step.operation !== "multiply") continue;
+      const product = step.operands.reduce((total, operand) => {
+        if (operand.kind !== "value") return total;
+        return total * operand.value;
+      }, 1);
+      if (product > 100) {
+        return "Grade 3 multiplication stays within 100.";
+      }
+    }
+  }
+
   if (computation.type === "division") {
     if (computation.dividend.value > 100 || computation.divisor.value > 10) {
       return "Grade 3 division uses a dividend up to 100 and a divisor up to 10.";
@@ -196,6 +210,12 @@ function fractionDenominatorViolation(
 function extraComputationNumbers(computation: Computation): number[] {
   if (computation.type === "fraction_of") {
     return [computation.numerator, computation.denominator];
+  }
+
+  if (computation.type === "multi_step_arithmetic") {
+    const intermediates = evaluateArithmeticSteps(computation.steps);
+    if (!intermediates.ok) return [];
+    return intermediates.values.map((entry) => entry.value);
   }
 
   return [];

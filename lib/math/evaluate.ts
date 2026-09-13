@@ -1,5 +1,7 @@
 import type {
+  ArithmeticStep,
   Computation,
+  ComputationStepOperand,
   CorrectAnswer,
   UsedValue,
 } from "@/lib/ai/schemas";
@@ -40,6 +42,8 @@ export function computationOperands(computation: Computation): UsedValue[] {
   switch (computation.type) {
     case "arithmetic":
       return computation.operands;
+    case "multi_step_arithmetic":
+      return multiStepValueOperands(computation.steps);
     case "division":
       return [computation.dividend, computation.divisor];
     case "fraction_of":
@@ -62,6 +66,8 @@ export function evaluateComputation(
   switch (computation.type) {
     case "arithmetic":
       return evaluateArithmetic(computation);
+    case "multi_step_arithmetic":
+      return evaluateMultiStepArithmetic(computation);
     case "division":
       return evaluateDivision(computation);
     case "fraction_of":
@@ -132,6 +138,110 @@ function evaluateArithmetic(
   )?.unit;
 
   return numberResult(product, unit);
+}
+
+function evaluateMultiStepArithmetic(
+  computation: Extract<Computation, { type: "multi_step_arithmetic" }>,
+): EvaluationResult {
+  const intermediates = evaluateArithmeticSteps(computation.steps);
+  if (!intermediates.ok) return intermediates;
+
+  const last = intermediates.values.at(-1);
+  if (last === undefined) {
+    return fail("invalid_values", "A multi-step computation produced no result.");
+  }
+
+  return numberResult(last.value, last.unit);
+}
+
+export function evaluateArithmeticSteps(
+  steps: readonly ArithmeticStep[],
+):
+  | { ok: true; values: Array<{ value: number; unit?: string }> }
+  | EvaluationFailure {
+  const results: Array<{ value: number; unit?: string }> = [];
+
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index];
+    if (step === undefined) {
+      return fail("invalid_values", "A multi-step computation skipped a step.");
+    }
+
+    const resolved = resolveStepOperands(step.operands, results);
+    if (!resolved.ok) return resolved;
+
+    const evaluated = evaluateArithmetic({
+      type: "arithmetic",
+      operation: step.operation,
+      operands: resolved.operands,
+    });
+    if (!evaluated.ok) return evaluated;
+    if (evaluated.answer.type !== "number") {
+      return fail(
+        "unsupported_computation",
+        "A multi-step arithmetic step must produce a number.",
+      );
+    }
+
+    results.push({
+      value: evaluated.answer.value,
+      unit: evaluated.answer.unit,
+    });
+  }
+
+  return { ok: true, values: results };
+}
+
+function resolveStepOperands(
+  operands: readonly ComputationStepOperand[],
+  results: readonly { value: number; unit?: string }[],
+):
+  | { ok: true; operands: UsedValue[] }
+  | EvaluationFailure {
+  const resolved: UsedValue[] = [];
+
+  for (const operand of operands) {
+    if (operand.kind === "value") {
+      const { kind: _kind, ...value } = operand;
+      void _kind;
+      resolved.push(value);
+      continue;
+    }
+
+    const prior = results[operand.step];
+    if (prior === undefined) {
+      return fail(
+        "invalid_values",
+        `Step result ${operand.step} is not available yet.`,
+      );
+    }
+
+    resolved.push({
+      label: `result of step ${operand.step + 1}`,
+      value: prior.value,
+      origin: "given_in_problem",
+      ...(prior.unit === undefined ? {} : { unit: prior.unit }),
+    });
+  }
+
+  return { ok: true, operands: resolved };
+}
+
+function multiStepValueOperands(
+  steps: readonly ArithmeticStep[],
+): UsedValue[] {
+  const values: UsedValue[] = [];
+
+  for (const step of steps) {
+    for (const operand of step.operands) {
+      if (operand.kind !== "value") continue;
+      const { kind: _kind, ...value } = operand;
+      void _kind;
+      values.push(value);
+    }
+  }
+
+  return values;
 }
 
 function evaluateDivision(
