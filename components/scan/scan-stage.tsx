@@ -65,11 +65,9 @@ function problemNotice(
 export function ScanStage({
   grade,
   skill,
-  questId,
 }: {
   grade: Grade;
   skill: Skill;
-  questId: string;
 }) {
   const router = useRouter();
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -222,9 +220,7 @@ export function ScanStage({
     ]);
 
     if (outcome.status === "ok") {
-      router.push(
-        `/quest/${questId}?grade=${grade}&skill=${skill.id}&quest=${outcome.questId}`,
-      );
+      router.push(`/quest/${outcome.questId}`);
       return;
     }
 

@@ -24,6 +24,32 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}
+
+/**
+ * The profile already issued to this browser, or null if none exists yet.
+ *
+ * Read-only: a page that is only checking ownership must not mint a new
+ * profile just because someone followed a quest link. Creation stays on
+ * the upload path, where a grade is known and a row is actually needed.
+ */
+export async function getProfileId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const existing = cookieStore.get(COOKIE_NAME)?.value;
+
+  if (!existing || !isUuid(existing)) return null;
+
+  const { data } = await createAdminClient()
+    .from("profiles")
+    .select("id")
+    .eq("id", existing)
+    .maybeSingle();
+
+  return data?.id ?? null;
+}
+
 /**
  * Returns the profile for this browser, creating one on first upload.
  *
@@ -38,7 +64,7 @@ export async function getOrCreateProfileId(grade: Grade): Promise<string> {
 
   // Shape-check before querying: the cookie is attacker-supplied, and a
   // non-uuid would just be a guaranteed round trip to a Postgres cast error.
-  if (existing && UUID_PATTERN.test(existing)) {
+  if (existing && isUuid(existing)) {
     const { data } = await supabase
       .from("profiles")
       .select("id, grade_level")
