@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { CameraIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
@@ -13,7 +16,8 @@ const SIZES: Record<PhotoSize, string> = {
 
 /**
  * The student's photograph, framed with the same viewfinder the scan
- * screen uses. Signed URL in, no storage credentials.
+ * screen uses. Signed URL in, no storage credentials. An expired or
+ * broken URL falls back to the empty frame instead of a dead image.
  */
 export function QuestPhotoFrame({
   photo,
@@ -26,6 +30,9 @@ export function QuestPhotoFrame({
   size: PhotoSize;
   className?: string;
 }) {
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const visible = photo !== null && photo.url !== brokenUrl;
+
   return (
     <div
       className={cn(
@@ -35,12 +42,13 @@ export function QuestPhotoFrame({
       )}
       style={{ ["--color-lime" as string]: accent }}
     >
-      {photo ? (
+      {visible ? (
         // Signed URL from the private bucket: short-lived, not a next/image host.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={photo.url}
           alt={photo.alt}
+          onError={() => setBrokenUrl(photo.url)}
           className="max-h-[32rem] w-full object-contain"
         />
       ) : (

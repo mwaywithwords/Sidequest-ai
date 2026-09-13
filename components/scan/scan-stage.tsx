@@ -88,6 +88,7 @@ export function ScanStage({
   const [uploadFailed, setUploadFailed] = useState(false);
   const [cluePhotoFailed, setCluePhotoFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const uploadLock = useRef(false);
 
   const revokeCluePreview = useCallback(() => {
     setClueCollection((current) => {
@@ -209,10 +210,14 @@ export function ScanStage({
   }
 
   async function findTheMath() {
+    if (uploadLock.current) return;
+
     if (!file) {
       reject("missing");
       return;
     }
+
+    uploadLock.current = true;
 
     setRejection(null);
     setDetour(null);
@@ -229,6 +234,8 @@ export function ScanStage({
       router.push(`/quest/${outcome.questId}`);
       return;
     }
+
+    uploadLock.current = false;
 
     if (outcome.status === "needsEvidence") {
       beginClue({

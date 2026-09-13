@@ -17,12 +17,16 @@ import { openaiApiKey } from "@/lib/env.server";
  * The safety gate sits inside the upload request, so a model that stops
  * answering has to become an error quickly. Timing out is a refusal to
  * continue, which is the behaviour we want anyway.
+ *
+ * Bounded with MAX_RETRIES so a 7-call pipeline cannot run away. Worst
+ * case still has to fit inside POST /api/quests maxDuration (300s).
  */
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * One retry, not the SDK's default of two. A student is waiting behind a
  * spinner, and a second failure is better spent telling them than retrying.
+ * Never raise this without also raising the route maxDuration.
  */
 const MAX_RETRIES = 1;
 

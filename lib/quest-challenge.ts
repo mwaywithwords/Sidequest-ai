@@ -52,10 +52,34 @@ export async function generateQuestChallenge(
     );
   }
 
-  if (quest.status === "failed" || quest.status === "rejected") {
+  if (
+    quest.status === "failed" ||
+    quest.status === "rejected" ||
+    quest.status === "ready"
+  ) {
     console.warn("[quest-challenge] refused to generate for a closed quest", {
       questId,
       status: quest.status,
+    });
+
+    return closed();
+  }
+
+  const { count: existingCount, error: existingError } = await supabase
+    .from("challenges")
+    .select("id", { count: "exact", head: true })
+    .eq("quest_id", questId);
+
+  if (existingError !== null) {
+    throw new Error(
+      `Could not count candidates for quest ${questId}: ${existingError.message}`,
+    );
+  }
+
+  if ((existingCount ?? 0) > 0) {
+    console.warn("[quest-challenge] refused to store a second candidate", {
+      questId,
+      count: existingCount,
     });
 
     return closed();
