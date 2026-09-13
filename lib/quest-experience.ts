@@ -15,6 +15,7 @@ import {
   sanitiseSuggestions,
 } from "@/lib/detour";
 import { getProfileId, isUuid } from "@/lib/profile";
+import { progressFromAttempts } from "@/lib/progress/outcome";
 import {
   presentStudentQuest,
   type QuestExperience,
@@ -118,6 +119,7 @@ export const loadQuestExperience = cache(
 
     const presented = await presentReadyQuest({
       questId,
+      profileId,
       objectMetadata: quest.object_metadata,
       validationResult: quest.validation_result,
       discovery: quest.discovery,
@@ -142,6 +144,7 @@ export const loadQuestExperience = cache(
 
 async function presentReadyQuest({
   questId,
+  profileId,
   objectMetadata,
   validationResult,
   discovery,
@@ -150,6 +153,7 @@ async function presentReadyQuest({
   skillRef,
 }: {
   questId: string;
+  profileId: string;
   objectMetadata: unknown;
   validationResult: unknown;
   discovery: unknown;
@@ -175,7 +179,7 @@ async function presentReadyQuest({
   const { data: rows, error } = await createAdminClient()
     .from("challenges")
     .select(
-      "question, hint_1, object_connection, correct_answer, generation_metadata",
+      "id, question, hint_1, hint_2, solution, object_connection, correct_answer, generation_metadata",
     )
     .eq("quest_id", questId);
 
@@ -202,7 +206,20 @@ async function presentReadyQuest({
     return null;
   }
 
+  const { data: attemptRows, error: attemptError } = await createAdminClient()
+    .from("attempts")
+    .select("attempt_number, is_correct")
+    .eq("profile_id", profileId)
+    .eq("challenge_id", row.id)
+    .order("attempt_number", { ascending: true });
+
+  if (attemptError !== null) {
+    console.error("[quest-experience] could not load attempts", attemptError);
+    return null;
+  }
+
   return presentStudentQuest({
+    questId,
     objectName: analysis.data.objectName || identifiedObject || "object",
     photo,
     discoveryTitle: fact.data.title,
@@ -217,6 +234,16 @@ async function presentReadyQuest({
     skillAccent: skillRef.skill.accent,
     grade: skillRef.grade,
     skillId: skillRef.skillId,
+    progress: progressFromAttempts({
+      attempts: (attemptRows ?? []).map((attempt) => ({
+        attemptNumber: attempt.attempt_number,
+        isCorrect: attempt.is_correct,
+      })),
+      hint1: row.hint_1,
+      hint2: row.hint_2,
+      solution: row.solution,
+      expected: answer.data,
+    }),
   });
 }
 

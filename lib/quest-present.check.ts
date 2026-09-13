@@ -60,6 +60,7 @@ function readyInput(
   overrides: Partial<PresentReadyQuestInput> = {},
 ): PresentReadyQuestInput {
   return {
+    questId: "00000000-0000-4000-8000-000000000001",
     objectName: "Soda can",
     photo: {
       url: "https://signed.example/photo.jpg",
@@ -152,6 +153,13 @@ check(
 );
 
 check(
+  "an unsolved quest starts open and does not carry a revealed answer",
+  presented.progress.status === "open" &&
+    !("revealedAnswer" in presented.progress) &&
+    !("correctAnswer" in presented.progress),
+);
+
+check(
   "mission links are built on the server from grade and skill",
   presented.scanHref === "/scan?grade=5&skill=division" &&
     presented.setupHref === "/setup?grade=5",
@@ -210,6 +218,13 @@ check(
   "studentAnswerInput never copies the number across",
   JSON.stringify(studentAnswerInput(numberAnswer)) ===
     JSON.stringify({ kind: "number", unit: "cans" }),
+);
+
+check(
+  "quest id is the only database identifier on the student payload",
+  presented.questId === "00000000-0000-4000-8000-000000000001" &&
+    !("challengeId" in presented) &&
+    !("profileId" in presented),
 );
 
 if (failed > 0) {

@@ -321,6 +321,19 @@ export const copy = {
       tryAnotherSkill: "Try Another Math Skill",
       submitted:
         "Got it. Checking answers is coming next — your Sidequest is still here.",
+      correctHeading: "Nice work — you found the math.",
+      incorrectTrail: "Not quite — you're on the trail.",
+      revealedHeading: "Let's look at how it works out.",
+      revealedBody:
+        "Every Sidequest teaches something. Here's the path through this one.",
+      xp: (amount: number) => `+${amount} XP`,
+      checking: "Checking…",
+      invalidNumber:
+        "That answer didn't come through as a number I can check. Try typing it again.",
+      invalidFraction:
+        "That fraction needs two whole numbers, and the bottom can't be zero.",
+      unavailable:
+        "This Sidequest isn't ready to check yet. Try another photo.",
       answerLabel: "Your answer",
       answerUnitLabel: (unit: string) => `Your answer in ${unit}`,
       numberPlaceholder: "Type a number",
