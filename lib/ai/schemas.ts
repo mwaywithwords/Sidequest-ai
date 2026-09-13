@@ -332,12 +332,31 @@ export const ChallengeSchema = z.strictObject({
  * the verifier. Extra fields are rejected so a raw model dump cannot hide
  * here.
  */
+export const AdaptiveProfileSchema = z.strictObject({
+  masteryBand: z.enum(["support", "developing", "advancing"]),
+  targetDifficulty: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+  ]),
+  hintSupport: z.enum(["strong", "standard", "light"]),
+  complexity: z.enum(["clean", "standard", "challenging"]),
+  recentTrend: z.enum([
+    "improving",
+    "mixed",
+    "struggling",
+    "insufficient_data",
+  ]),
+});
+
 export const GenerationMetadataSchema = z.strictObject({
   valuesUsed: z.array(UsedValueSchema).min(1),
   computation: ComputationSchema,
   verificationStrategy: text,
   model: z.string().optional(),
   challengeMode: z.enum(["direct", "grounded_scenario"]).optional(),
+  adaptation: AdaptiveProfileSchema.optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -412,6 +431,7 @@ export type ComputationOperand = z.infer<typeof ComputationOperandSchema>;
 export type CorrectAnswer = z.infer<typeof CorrectAnswerSchema>;
 export type Computation = z.infer<typeof ComputationSchema>;
 export type GenerationMetadata = z.infer<typeof GenerationMetadataSchema>;
+export type StoredAdaptiveProfile = z.infer<typeof AdaptiveProfileSchema>;
 /** The generated problem. Distinct from the mock `Challenge` in lib/types.ts, which is UI shape. */
 export type GeneratedChallenge = z.infer<typeof ChallengeSchema>;
 

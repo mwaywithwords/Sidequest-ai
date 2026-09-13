@@ -6,7 +6,6 @@ import {
   type ChallengeGenerationResult,
   type RegenerationHint,
 } from "@/lib/ai/challenge";
-import type { SkillProgressInput } from "@/lib/ai/challenge-grounding";
 import {
   ObjectAnalysisSchema,
   type ReadySkillFit,
@@ -14,6 +13,8 @@ import {
   SkillFitAnalysisSchema,
 } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
+import { getAdaptiveProfile } from "@/lib/progress/adaptation";
+import { loadAdaptationState } from "@/lib/progress/load";
 import { setQuestStatus } from "@/lib/quest-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseGrade, parseSkillId } from "@/lib/types";
@@ -101,10 +102,15 @@ export async function generateQuestChallenge(
   }
 
   const readyFit = fit as ReadySkillFit;
-  const progress = await loadSkillProgress(
+  const { progress, recentOutcomes } = await loadAdaptationState(
     quest.profile_id,
     quest.selected_skill_id,
   );
+  const adaptation = getAdaptiveProfile({
+    grade,
+    progress,
+    recentOutcomes,
+  });
 
   const result = await generateChallenge({
     analysis: analysis.data,
@@ -112,7 +118,7 @@ export async function generateQuestChallenge(
     skillId,
     skillDescription: skill.description,
     grade,
-    progress,
+    adaptation,
     regeneration: options?.regeneration,
   });
 
@@ -144,6 +150,7 @@ export async function generateQuestChallenge(
       verificationStrategy: result.challenge.verificationStrategy,
       model: CHALLENGE_MODEL,
       challengeMode: readyFit.challengeMode,
+      adaptation,
     },
   });
 
@@ -156,27 +163,6 @@ export async function generateQuestChallenge(
   // Status stays pending. A stored candidate is not a verified challenge.
 
   return result;
-}
-
-async function loadSkillProgress(
-  profileId: string,
-  skillId: string,
-): Promise<SkillProgressInput> {
-  const { data } = await createAdminClient()
-    .from("skill_progress")
-    .select("current_level, mastery_score, total_attempts, correct_attempts")
-    .eq("profile_id", profileId)
-    .eq("skill_id", skillId)
-    .maybeSingle();
-
-  if (data === null) return null;
-
-  return {
-    currentLevel: data.current_level,
-    masteryScore: Number(data.mastery_score),
-    totalAttempts: data.total_attempts,
-    correctAttempts: data.correct_attempts,
-  };
 }
 
 function closed(): ChallengeGenerationResult {
