@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/play";
 import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
+import {
+  spokenMathExpression,
+  type StudentMathExpression,
+} from "@/lib/math/expression";
 import type {
   ChallengeProgress,
   StudentGradeView,
@@ -276,6 +280,8 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
         </p>
       </div>
 
+      <MathBoard expression={quest.mathExpression} accent={quest.accent} />
+
       {quest.answer.kind === "unsupported" ? (
         <p className="text-sm leading-relaxed text-muted">
           {copy.quest.experience.unsupportedAnswer}
@@ -415,6 +421,40 @@ function FinishedState({
           {copy.quest.experience.changeMission}
         </ButtonLink>
       </div>
+    </div>
+  );
+}
+
+function MathBoard({
+  expression,
+  accent,
+}: {
+  expression: StudentMathExpression;
+  accent: string;
+}) {
+  if (expression.kind !== "equation") return null;
+
+  const spoken = spokenMathExpression(expression);
+  const multi = expression.lines.length > 1;
+
+  return (
+    <div
+      role="img"
+      className="math-board"
+      data-lines={multi ? "multi" : "single"}
+      style={{ color: accent }}
+      aria-label={spoken}
+    >
+      {expression.lines.map((line, index) => (
+        <div
+          key={`${line.heading ?? "eq"}-${index}`}
+          aria-hidden
+          className="math-board-line"
+        >
+          {line.heading ? <p className="math-board-step">{line.heading}</p> : null}
+          <p className="math-board-eq">{line.display}</p>
+        </div>
+      ))}
     </div>
   );
 }

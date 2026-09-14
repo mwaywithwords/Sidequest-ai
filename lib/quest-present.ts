@@ -1,9 +1,15 @@
-import type { CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
+import type { Computation, CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
-import { labelsForChoiceSet } from "@/lib/math/geometry-forms";
 import type { DetourPresentation } from "@/lib/detour";
+import {
+  presentMathExpression,
+  type StudentMathExpression,
+} from "@/lib/math/expression";
+import { labelsForChoiceSet } from "@/lib/math/geometry-forms";
 import type { ChallengeProgress } from "@/lib/progress/outcome";
 import type { Grade, SkillId } from "@/lib/types";
+
+export type { StudentMathExpression };
 
 /**
  * Student-facing shape of a ready Sidequest.
@@ -11,6 +17,7 @@ import type { Grade, SkillId } from "@/lib/types";
  * Built on the server from trusted rows, then passed to a Client Component.
  * Deliberately narrower than a database row: the answer, the computation,
  * model names, origins, and skill codes stay behind the server boundary.
+ * The math board is a shaped expression, never the raw computation.
  */
 
 export type QuestPhoto = {
@@ -45,6 +52,7 @@ export type StudentQuest = {
   worldContext: boolean;
   highlightedValues: GroundedValueView[];
   question: string;
+  mathExpression: StudentMathExpression;
   hint: string | null;
   answer: StudentAnswerInput;
   progress: ChallengeProgress;
@@ -96,6 +104,7 @@ export type PresentReadyQuestInput = {
   challengeMode: "object_math" | "inspired_math" | "direct" | "grounded_scenario";
   inspirationTopic?: string | null;
   question: string;
+  computation: Computation;
   hint1: string | null;
   answer: CorrectAnswer;
   skillLabel: string;
@@ -168,6 +177,7 @@ export function presentStudentQuest(
     worldContext: inspired,
     highlightedValues,
     question: input.question,
+    mathExpression: presentMathExpression(input.computation),
     hint: emptyToNull(input.hint1),
     answer: studentAnswerInput(input.answer),
     progress: input.progress ?? { status: "open" },

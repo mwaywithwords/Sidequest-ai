@@ -7,7 +7,7 @@
  * and confirm the browser object cannot carry the answer or the internals.
  */
 
-import type { CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
+import type { Computation, CorrectAnswer, UsedValue } from "@/lib/ai/schemas";
 import {
   forbiddenStudentFields,
   formatGroundedDisplay,
@@ -49,6 +49,18 @@ const numberAnswer: CorrectAnswer = {
   unit: "cans",
 };
 
+const divisionComputation: Computation = {
+  type: "division",
+  operation: "whole_groups",
+  dividend: {
+    label: "dispenser volume",
+    value: 128,
+    unit: "fl oz",
+    origin: "given_in_problem",
+  },
+  divisor: observedVolume,
+};
+
 const fractionAnswer: CorrectAnswer = {
   type: "fraction",
   numerator: 5,
@@ -75,6 +87,7 @@ function readyInput(
     challengeMode: "object_math",
     question:
       "A dispenser holds 128 fluid ounces. If each can holds 12 fluid ounces, how many whole cans fill it?",
+    computation: divisionComputation,
     hint1: "Try dividing 128 by 12.",
     answer: numberAnswer,
     skillLabel: "Division",
@@ -200,6 +213,30 @@ check(
 );
 
 const serialized = JSON.stringify(presented);
+
+check(
+  "math board is a shaped expression, not the raw computation",
+  presented.mathExpression.kind === "equation" &&
+    presented.mathExpression.lines[0]?.display === "128 ÷ 12 = ?" &&
+    presented.mathExpression.lines[0]?.spoken ===
+      "128 divided by 12 equals unknown" &&
+    !("computation" in presented) &&
+    !("type" in presented.mathExpression.lines[0]!),
+);
+
+check(
+  "qualitative geometry keeps the student payload equation-free",
+  presentStudentQuest(
+    readyInput({
+      computation: {
+        type: "shape_identify",
+        aspect: "solid",
+        label: "sphere",
+      },
+      answer: { type: "choice", value: "sphere", set: "solid" },
+    }),
+  ).mathExpression.kind === "none",
+);
 
 check(
   "serialized payload does not include the numeric answer",

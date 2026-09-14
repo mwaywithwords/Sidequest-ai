@@ -232,6 +232,7 @@ async function presentReadyQuest({
         ? fit.data.inspirationContext.topic
         : null,
     question,
+    computation: metadata.data.computation,
     hint1: row.hint_1,
     answer: answer.data,
     skillLabel: skillRef.skill.label,
