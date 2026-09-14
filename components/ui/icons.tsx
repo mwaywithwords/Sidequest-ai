@@ -125,3 +125,13 @@ export function StopIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SpeakerOffIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.5 9.5h3.2L12 6v12l-4.3-3.5H4.5A1.5 1.5 0 0 1 3 13V11a1.5 1.5 0 0 1 1.5-1.5Z" />
+      <path d="m15 9 6 6" />
+      <path d="m21 9-6 6" />
+    </Icon>
+  );
+}

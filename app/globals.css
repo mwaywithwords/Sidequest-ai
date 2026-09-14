@@ -138,6 +138,10 @@
   color: var(--color-void);
 }
 
+.game-profile[data-sound="off"] {
+  color: var(--color-muted);
+}
+
 .game-main {
   width: 100%;
   max-width: var(--shell-max);

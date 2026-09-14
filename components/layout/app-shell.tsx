@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "@/components/brand/wordmark";
+import { SoundToggle } from "@/components/game/sound-toggle";
 import { CompassIcon } from "@/components/ui/icons";
 import { copy } from "@/lib/copy";
 
@@ -41,19 +42,22 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="game-header">
         <div className="game-header-bar">
           <Wordmark />
-          {onProgress ? (
-            <span className="game-profile is-current" aria-current="page">
-              <CompassIcon className="size-5" />
-            </span>
-          ) : (
-            <Link
-              href="/progress"
-              aria-label="Your progress"
-              className="game-profile"
-            >
-              <CompassIcon className="size-5" />
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            <SoundToggle />
+            {onProgress ? (
+              <span className="game-profile is-current" aria-current="page">
+                <CompassIcon className="size-5" />
+              </span>
+            ) : (
+              <Link
+                href="/progress"
+                aria-label="Your progress"
+                className="game-profile"
+              >
+                <CompassIcon className="size-5" />
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 

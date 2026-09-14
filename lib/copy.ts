@@ -21,6 +21,11 @@ export const copy = {
     footer: "SIDEQUEST — find the math hiding in your world.",
   },
 
+  hud: {
+    soundOn: "Sound on",
+    soundOff: "Sound off",
+  },
+
   landing: {
     tagline: "Find the math hiding in your world.",
     start: "Start a Sidequest",
