@@ -24,10 +24,15 @@ import {
 import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
 import {
+  celebrationForSubmission,
+  hudXpAmountForProgress,
+} from "@/lib/feedback-celebration";
+import {
   feedbackCueForSubmission,
   readStoredSoundPreference,
 } from "@/lib/feedback-sound";
 import { shouldStopReadAloudForStatus } from "@/lib/feedback-cues";
+import { resetHudXpView, setHudXpView } from "@/lib/hud-xp-view";
 import {
   spokenMathExpression,
   type StudentMathExpression,
@@ -257,6 +262,7 @@ function ChallengeStage({
   );
   const [submitting, setSubmitting] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
+  const [victory, setVictory] = useState(false);
   const {
     supported: speechSupported,
     playingId,
@@ -267,6 +273,16 @@ function ChallengeStage({
   useEffect(() => {
     startedAt.current = performance.now();
   }, []);
+
+  useEffect(() => {
+    setHudXpView({
+      amount: hudXpAmountForProgress(progress),
+      celebrate: victory,
+    });
+    return () => {
+      resetHudXpView();
+    };
+  }, [progress, victory]);
 
   const finished = progress.status === "correct" || progress.status === "complete";
   const shownHint =
@@ -343,7 +359,13 @@ function ChallengeStage({
       nextStatus: result.status,
       enabled: readStoredSoundPreference(),
     });
+    const celebration = celebrationForSubmission({
+      previousStatus: progress.status,
+      nextStatus: result.status,
+      xp: "xp" in result ? result.xp : null,
+    });
 
+    if (celebration === "victory") setVictory(true);
     setProgress(result);
     if (result.status === "incorrect") {
       setHintOpen(true);
@@ -402,6 +424,7 @@ function ChallengeStage({
         <FinishedState
           progress={progress}
           quest={quest}
+          celebrate={victory}
           speechSupported={speechSupported}
           playingId={playingId}
           onToggleSpeech={toggleSpeech}
@@ -511,12 +534,14 @@ function ChallengeStage({
 function FinishedState({
   progress,
   quest,
+  celebrate,
   speechSupported,
   playingId,
   onToggleSpeech,
 }: {
   progress: Extract<ChallengeProgress, { status: "correct" | "complete" }>;
   quest: StudentQuest;
+  celebrate: boolean;
   speechSupported: boolean;
   playingId: string | null;
   onToggleSpeech: (id: string, text: string) => void;
@@ -526,33 +551,42 @@ function FinishedState({
 
   return (
     <div className="animate-rise text-center">
-      <div role="status" className={cn("flex flex-col items-center", solved && "animate-discover")}>
+      <div
+        role="status"
+        className={cn(
+          "reward-panel flex flex-col items-center",
+          solved ? "reward-celebrate animate-discover" : "reward-complete",
+        )}
+      >
         {solved ? (
           <>
             <span
               aria-hidden
-              className="grid size-[4.5rem] place-items-center rounded-2xl border-b-4 text-void"
+              className="reward-seal grid size-[4.75rem] place-items-center rounded-2xl border-b-4 text-void"
               style={{ background: quest.accent, borderColor: "#0b0914" }}
             >
               <CheckIcon className="size-10" />
             </span>
-            <p className="mt-4 font-display text-4xl font-extrabold tracking-tight text-cream uppercase">
+            <p className="reward-heading mt-4 font-display text-4xl font-extrabold tracking-tight text-cream uppercase">
               {copy.quest.experience.correctHeading}
             </p>
-            <div className="mt-3">
-              <XpBadge amount={progress.xp} />
-            </div>
           </>
         ) : (
           <>
-            <p className="font-display text-3xl font-extrabold tracking-tight text-cream">
+            <p className="reward-heading font-display text-3xl font-extrabold tracking-tight text-cream uppercase">
               {copy.quest.experience.revealedHeading}
             </p>
-            <p className="mt-2 text-sm text-muted">
+            <p className="mt-2 text-base font-medium text-cream">
               {copy.quest.experience.revealedBody}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              {copy.quest.experience.revealedXpNote}
             </p>
           </>
         )}
+        <div className="mt-4">
+          <XpBadge amount={progress.xp} celebrate={solved && celebrate} />
+        </div>
       </div>
 
       <p className="mt-5 text-base leading-relaxed text-cream/90">

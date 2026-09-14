@@ -26,10 +26,16 @@ export default async function ProgressPage() {
 
       <div className="flex flex-wrap justify-center gap-3">
         <StatTile
+          value={progress.totalXp}
+          label={copy.progress.xpStat}
+          accent="#c8ff4d"
+          mark="⚡"
+        />
+        <StatTile
           value={progress.sidequestsCompleted}
           label={copy.progress.completedStat}
           accent="#ffc94d"
-          mark="⚡"
+          mark="🧭"
         />
         <StatTile
           value={progress.objectsDiscovered}
@@ -38,6 +44,10 @@ export default async function ProgressPage() {
           mark="🔎"
         />
       </div>
+
+      <p className="mx-auto game-support text-center">
+        {copy.progress.keepExploring}
+      </p>
 
       <section>
         <h2 className="game-moment text-cream">

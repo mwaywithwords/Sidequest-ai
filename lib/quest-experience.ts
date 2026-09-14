@@ -16,6 +16,7 @@ import {
 } from "@/lib/detour";
 import { getProfileId, isUuid } from "@/lib/profile";
 import { progressFromAttempts } from "@/lib/progress/outcome";
+import { readQuestReward } from "@/lib/progress/rewards";
 import {
   presentStudentQuest,
   type QuestExperience,
@@ -206,12 +207,16 @@ async function presentReadyQuest({
     return null;
   }
 
-  const { data: attemptRows, error: attemptError } = await createAdminClient()
-    .from("attempts")
-    .select("attempt_number, is_correct")
-    .eq("profile_id", profileId)
-    .eq("challenge_id", row.id)
-    .order("attempt_number", { ascending: true });
+  const supabase = createAdminClient();
+  const [{ data: attemptRows, error: attemptError }, reward] = await Promise.all([
+    supabase
+      .from("attempts")
+      .select("attempt_number, is_correct")
+      .eq("profile_id", profileId)
+      .eq("challenge_id", row.id)
+      .order("attempt_number", { ascending: true }),
+    readQuestReward(profileId, row.id),
+  ]);
 
   if (attemptError !== null) {
     console.error("[quest-experience] could not load attempts", attemptError);
@@ -248,6 +253,7 @@ async function presentReadyQuest({
       hint2: row.hint_2,
       solution: row.solution,
       expected: answer.data,
+      awardedXp: reward?.xp ?? 0,
     }),
   });
 }

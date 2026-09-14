@@ -43,19 +43,47 @@ const NUMBER_WORDS: Readonly<Record<number, readonly string[]>> = {
 
 export const HYPOTHETICAL_PREFIX = "Suppose";
 
+const SOURCE_ORIGINS = new Set([
+  "observed",
+  "student_provided",
+  "contextual",
+  "given_in_problem",
+]);
+
 export type HypotheticalValue = {
   origin: string;
   value: number;
+};
+
+export type FramingRepairOutcome =
+  | "hypothetical_prefix"
+  | "repair_not_applicable"
+  | "not_considered";
+
+export type FramingRepairResult = {
+  question: string;
+  applied: boolean;
+  considered: boolean;
+  outcome: FramingRepairOutcome;
 };
 
 export function questionHasHypotheticalFraming(question: string): boolean {
   return HYPOTHETICAL.test(question);
 }
 
+export function givenInProblemValues(
+  values: readonly HypotheticalValue[],
+): HypotheticalValue[] {
+  return values.filter((value) => value.origin === "given_in_problem");
+}
+
 /**
- * Narrow inspired-math repair: every relevant quantity is already
- * `given_in_problem` and written in the question, but the model forgot
- * an if/suppose/imagine prefix. This never changes an origin.
+ * Narrow inspired-math repair: every quantity that needs hypothetical
+ * framing is already `given_in_problem` and written in the question,
+ * but the model forgot an if/suppose/imagine prefix.
+ *
+ * Callers must pass the challenge's source values, not derived extras.
+ * This never changes an origin, unit, or computation.
  */
 export function canPrefixHypotheticalFraming(
   question: string,
@@ -64,17 +92,76 @@ export function canPrefixHypotheticalFraming(
   maxQuestionLength: number,
 ): boolean {
   if (challengeMode !== "inspired_math") return false;
-  if (values.length === 0) return false;
-  if (values.some((value) => value.origin !== "given_in_problem")) {
-    return false;
-  }
+
+  const given = givenInProblemValues(values);
+  if (given.length === 0) return false;
+
+  const sources = values.filter((value) => SOURCE_ORIGINS.has(value.origin));
+  const allSourcesGiven =
+    sources.length > 0 &&
+    sources.every((value) => value.origin === "given_in_problem");
+  const framingQuantitiesGiven = given.length > 0;
+  if (!allSourcesGiven && !framingQuantitiesGiven) return false;
+
   if (questionHasHypotheticalFraming(question)) return false;
-  if (!values.every((value) => questionStatesNumber(question, value.value))) {
+  if (!given.every((value) => questionStatesNumber(question, value.value))) {
     return false;
   }
 
   const repaired = prefixHypotheticalFraming(question);
-  return repaired.length > question.trim().length && repaired.length <= maxQuestionLength;
+  return (
+    repaired.length > question.trim().length &&
+    repaired.length <= maxQuestionLength
+  );
+}
+
+/**
+ * Returns a new question string. The caller must pass that string into
+ * grounding — do not keep using the unrepaired original.
+ */
+export function applyHypotheticalFramingRepair(input: {
+  question: string;
+  challengeMode: string;
+  values: readonly HypotheticalValue[];
+  maxQuestionLength: number;
+  objectRelevant: boolean;
+}): FramingRepairResult {
+  const given = givenInProblemValues(input.values);
+  const considered =
+    input.challengeMode === "inspired_math" && given.length > 0;
+
+  if (!considered) {
+    return {
+      question: input.question,
+      applied: false,
+      considered: false,
+      outcome: "not_considered",
+    };
+  }
+
+  if (
+    !input.objectRelevant ||
+    !canPrefixHypotheticalFraming(
+      input.question,
+      input.challengeMode,
+      input.values,
+      input.maxQuestionLength,
+    )
+  ) {
+    return {
+      question: input.question,
+      applied: false,
+      considered: true,
+      outcome: "repair_not_applicable",
+    };
+  }
+
+  return {
+    question: prefixHypotheticalFraming(input.question),
+    applied: true,
+    considered: true,
+    outcome: "hypothetical_prefix",
+  };
 }
 
 export function prefixHypotheticalFraming(question: string): string {

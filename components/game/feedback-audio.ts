@@ -62,8 +62,8 @@ export function playFeedbackCue(cue: FeedbackCue): void {
 
     const brassBus = ctx.createBiquadFilter();
     brassBus.type = "lowpass";
-    brassBus.frequency.setValueAtTime(3200, now);
-    brassBus.Q.setValueAtTime(0.65, now);
+    brassBus.frequency.setValueAtTime(3800, now);
+    brassBus.Q.setValueAtTime(0.55, now);
     brassBus.connect(master);
 
     for (const note of cueRecipe(cue).notes) {
@@ -80,9 +80,18 @@ function voice(
 ) {
   const start = zero + note.at;
   if (note.voice === "brass") {
-    ping(ctx, note.freq, start, note.dur, note.gain * 0.62, "sawtooth", dest);
-    ping(ctx, note.freq * 2, start, note.dur, note.gain * 0.28, "triangle", dest);
-    ping(ctx, note.freq * 3, start, note.dur, note.gain * 0.12, "sine", dest);
+    ping(ctx, note.freq, start, note.dur, note.gain * 0.7, "sawtooth", dest, 0.008);
+    ping(
+      ctx,
+      note.freq * 2,
+      start,
+      note.dur,
+      note.gain * 0.3,
+      "triangle",
+      dest,
+      0.01,
+    );
+    ping(ctx, note.freq * 3, start, note.dur, note.gain * 0.14, "sine", dest, 0.012);
     return;
   }
 
@@ -101,13 +110,17 @@ function ping(
   gain: number,
   type: OscillatorType,
   dest: AudioNode,
+  attack = 0.016,
 ) {
   const osc = ctx.createOscillator();
   const amp = ctx.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(frequency, start);
   amp.gain.setValueAtTime(0.0001, start);
-  amp.gain.exponentialRampToValueAtTime(Math.max(gain, 0.0002), start + 0.016);
+  amp.gain.exponentialRampToValueAtTime(
+    Math.max(gain, 0.0002),
+    start + attack,
+  );
   amp.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   osc.connect(amp);
   amp.connect(dest);

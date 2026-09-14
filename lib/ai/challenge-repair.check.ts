@@ -266,9 +266,60 @@ check(
   "wallet unframed given_in_problem amounts get a Suppose prefix",
   unframedWallet.finalized.status === "ok" &&
     unframedWallet.finalized.repairs.includes("hypothetical_prefix") &&
+    unframedWallet.finalized.framingRepair === "hypothetical_prefix" &&
     unframedWallet.finalized.challenge.question ===
       "Suppose your wallet has $20 and you add $50. How much money do you have?" &&
     unframedWallet.verified?.ok === true,
+);
+
+const unframedWalletGrade5 = prepared(
+  walletAddition({
+    question: "Your wallet has $20 and you add $50. How much money do you have?",
+    solution: "Add $20 and $50. $20 + $50 = $70.",
+  }),
+  wallet,
+  walletFit,
+  5,
+);
+
+check(
+  "wallet unframed Grade 5 addition is prefixed and verifies",
+  unframedWalletGrade5.finalized.status === "ok" &&
+    unframedWalletGrade5.finalized.framingRepair === "hypothetical_prefix" &&
+    unframedWalletGrade5.finalized.challenge.question ===
+      "Suppose your wallet has $20 and you add $50. How much money do you have?" &&
+    unframedWalletGrade5.verified?.ok === true,
+);
+
+const unframedWalletExtraAnswer = prepared(
+  walletAddition({
+    question: "Your wallet has $20 and you add $50. How much money do you have?",
+    solution: "Add $20 and $50. $20 + $50 = $70.",
+    valuesUsed: [
+      operand("starting dollars", 20, "given_in_problem", "dollars"),
+      operand("added dollars", 50, "given_in_problem", "dollars"),
+      operand("total", 70, "given_in_problem", "dollars"),
+    ],
+  }),
+  wallet,
+  walletFit,
+);
+
+check(
+  "wallet framing repair uses source values, not a leftover answer",
+  unframedWalletExtraAnswer.finalized.status === "ok" &&
+    unframedWalletExtraAnswer.finalized.framingRepair === "hypothetical_prefix" &&
+    unframedWalletExtraAnswer.finalized.challenge.question ===
+      "Suppose your wallet has $20 and you add $50. How much money do you have?" &&
+    unframedWalletExtraAnswer.verified?.ok === true,
+);
+
+check(
+  "already framed wallet is not prefixed again",
+  silentWallet.finalized.status === "ok" &&
+    silentWallet.finalized.framingRepair === "repair_not_applicable" &&
+    !silentWallet.finalized.repairs.includes("hypothetical_prefix") &&
+    silentWallet.finalized.challenge.question.startsWith("Suppose your wallet"),
 );
 
 const bothRepairs = prepared(

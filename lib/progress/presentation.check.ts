@@ -58,6 +58,7 @@ const empty = presentProgress({
   grade: 5,
   skillProgress: [],
   completedSidequestCount: 0,
+  totalXp: 0,
   quests: [],
 });
 
@@ -68,6 +69,7 @@ check(
 );
 check("no progress starts at explorer level 1", empty.explorerLevel === 1);
 check("no progress has zero completed Sidequests", empty.sidequestsCompleted === 0);
+check("no progress has zero XP", empty.totalXp === 0);
 check("no progress has zero discoveries", empty.objectsDiscovered === 0);
 check("no progress is the empty map", empty.hasProgress === false);
 check(
@@ -97,6 +99,7 @@ const zeroAttemptRow = presentProgress({
     }),
   ],
   completedSidequestCount: 0,
+  totalXp: 0,
   quests: [],
 });
 check(
@@ -120,6 +123,7 @@ const oneSkill = presentProgress({
     }),
   ],
   completedSidequestCount: 4,
+  totalXp: 34,
   quests: [
     {
       status: "ready",
@@ -144,6 +148,7 @@ check(
   addition?.masteryPercent === null,
 );
 check("one practiced skill keeps the completed count", oneSkill.sidequestsCompleted === 4);
+check("one practiced skill shows persisted XP", oneSkill.totalXp === 34);
 check("one practiced skill can discover one object", oneSkill.objectsDiscovered === 1);
 check("one practiced skill uses that skill's current_level", oneSkill.explorerLevel === 2);
 
@@ -176,6 +181,7 @@ const many = presentProgress({
     }),
   ],
   completedSidequestCount: 10,
+  totalXp: 79,
   quests: [
     { status: "ready", identifiedObject: "Pizza", completed: true },
     { status: "ready", identifiedObject: "Bottle", completed: true },
@@ -309,6 +315,7 @@ const grade3AdditionNowGrade5 = presentProgress({
     }),
   ],
   completedSidequestCount: 6,
+  totalXp: 0,
   quests: [
     { status: "ready", identifiedObject: "Egg carton", completed: true },
   ],
@@ -327,6 +334,11 @@ check(
   "lifetime completed Sidequests still include other-grade history",
   grade3AdditionNowGrade5.sidequestsCompleted === 6,
 );
+check(
+  "historical Sidequests without XP stay valid at 0 XP",
+  grade3AdditionNowGrade5.totalXp === 0 &&
+    grade3AdditionNowGrade5.hasProgress === true,
+);
 
 const leaked = presentProgress({
   grade: 4,
@@ -341,6 +353,7 @@ const leaked = presentProgress({
     }),
   ],
   completedSidequestCount: 1,
+  totalXp: 10,
   quests: [
     {
       status: "ready",
@@ -368,6 +381,20 @@ check("presentation does not include correct answers", !payloadHas(leaked, "corr
 check(
   "presentation does not include generation metadata",
   !payloadHas(leaked, "generation_metadata"),
+);
+check(
+  "presentation does not include XP reason codes",
+  !payloadHas(leaked, "correct_attempt") && !payloadHas(leaked, "solution_revealed"),
+);
+check(
+  "non-finite XP is shown as 0",
+  presentProgress({
+    grade: 4,
+    skillProgress: [],
+    completedSidequestCount: 0,
+    totalXp: Number.NaN,
+    quests: [],
+  }).totalXp === 0,
 );
 
 if (failed > 0) {

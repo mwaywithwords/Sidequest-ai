@@ -1,5 +1,6 @@
 import "server-only";
 
+import { readProfileXpTotal } from "@/lib/progress/rewards";
 import { getProfileId } from "@/lib/profile";
 import {
   completedSidequests,
@@ -29,6 +30,7 @@ export async function loadProgressSummary(): Promise<PresentedProgress> {
       grade: null,
       skillProgress: [],
       completedSidequestCount: 0,
+      totalXp: 0,
       quests: [],
     });
   }
@@ -92,6 +94,8 @@ export async function loadProgressSummary(): Promise<PresentedProgress> {
   if (attemptError !== null) {
     throw new Error(`Could not load attempts: ${attemptError.message}`);
   }
+
+  const totalXp = await readProfileXpTotal(profileId);
 
   const { data: questRows, error: questError } = await supabase
     .from("quests")
@@ -162,6 +166,7 @@ export async function loadProgressSummary(): Promise<PresentedProgress> {
     grade,
     skillProgress,
     completedSidequestCount: countCompletedSidequests(attempts),
+    totalXp,
     quests,
   });
 }

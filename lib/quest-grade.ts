@@ -11,13 +11,20 @@ import {
   skillProgressFromAttempts,
 } from "@/lib/progress/mastery";
 import {
+  persistQuestReward,
+  readQuestReward,
+} from "@/lib/progress/rewards";
+import {
   type GradeView,
+  type ChallengeProgress,
+  applyAwardedXp,
   canAcceptAttempt,
   hintUsedForAttempt,
   nextAttemptNumber,
   progressFromAttempts,
   questIsGradeable,
 } from "@/lib/progress/outcome";
+import { xpDecisionForGrade } from "@/lib/progress/xp";
 import { getProfileId, isUuid } from "@/lib/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -34,9 +41,10 @@ export type GradeRequest = {
 /**
  * Grade one submission for an owned, ready Sidequest.
  *
- * Profile, challenge, attempt number, and correctness are resolved here.
- * The browser only sends the quest id, the typed answer, a hint flag,
- * and a response-time reading.
+ * Profile, challenge, attempt number, correctness, and XP are resolved
+ * here. The browser only sends the quest id, the typed answer, a hint
+ * flag, and a response-time reading. It cannot submit xp, attempt_number,
+ * is_correct, profile_id, or challenge_id.
  */
 export async function gradeQuestAnswer(
   request: GradeRequest,
@@ -55,12 +63,19 @@ export async function gradeQuestAnswer(
   }
 
   if (!canAcceptAttempt(loaded.attempts)) {
-    return progressFromAttempts({
-      attempts: loaded.attempts,
-      hint1: loaded.hint1,
-      hint2: loaded.hint2,
-      solution: loaded.solution,
-      expected: loaded.expected,
+    return settleQuestXp({
+      profileId,
+      questId: request.questId,
+      challengeId: loaded.challengeId,
+      previousAttempts: loaded.attempts,
+      nextAttempts: loaded.attempts,
+      view: progressFromAttempts({
+        attempts: loaded.attempts,
+        hint1: loaded.hint1,
+        hint2: loaded.hint2,
+        solution: loaded.solution,
+        expected: loaded.expected,
+      }),
     });
   }
 
@@ -92,12 +107,19 @@ export async function gradeQuestAnswer(
 
     await syncSkillProgress(profileId, loaded.skillRowId);
 
-    return progressFromAttempts({
-      attempts: replayed.attempts,
-      hint1: replayed.hint1,
-      hint2: replayed.hint2,
-      solution: replayed.solution,
-      expected: replayed.expected,
+    return settleQuestXp({
+      profileId,
+      questId: request.questId,
+      challengeId: loaded.challengeId,
+      previousAttempts: loaded.attempts,
+      nextAttempts: replayed.attempts,
+      view: progressFromAttempts({
+        attempts: replayed.attempts,
+        hint1: replayed.hint1,
+        hint2: replayed.hint2,
+        solution: replayed.solution,
+        expected: replayed.expected,
+      }),
     });
   }
 
@@ -118,7 +140,48 @@ export async function gradeQuestAnswer(
     await syncSkillProgress(profileId, loaded.skillRowId);
   }
 
-  return view;
+  return settleQuestXp({
+    profileId,
+    questId: request.questId,
+    challengeId: loaded.challengeId,
+    previousAttempts: loaded.attempts,
+    nextAttempts: attempts,
+    view,
+  });
+}
+
+async function settleQuestXp(input: {
+  profileId: string;
+  questId: string;
+  challengeId: string;
+  previousAttempts: { attemptNumber: number; isCorrect: boolean }[];
+  nextAttempts: { attemptNumber: number; isCorrect: boolean }[];
+  view: ChallengeProgress;
+}): Promise<ChallengeProgress> {
+  if (input.view.status !== "correct" && input.view.status !== "complete") {
+    return input.view;
+  }
+
+  const existingReward = await readQuestReward(
+    input.profileId,
+    input.challengeId,
+  );
+  const decision = xpDecisionForGrade({
+    previousAttempts: input.previousAttempts,
+    nextAttempts: input.nextAttempts,
+    existingReward,
+  });
+
+  const reward = decision.persist
+    ? await persistQuestReward({
+        profileId: input.profileId,
+        questId: input.questId,
+        challengeId: input.challengeId,
+        reward: decision.reward,
+      })
+    : decision.reward;
+
+  return applyAwardedXp(input.view, reward?.xp ?? null);
 }
 
 type LoadedGrade =

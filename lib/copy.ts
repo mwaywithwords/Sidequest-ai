@@ -24,6 +24,7 @@ export const copy = {
   hud: {
     soundOn: "Sound on",
     soundOff: "Sound off",
+    xpStat: "XP",
   },
 
   landing: {
@@ -356,9 +357,11 @@ export const copy = {
         "Got it. Checking answers is coming next — your Sidequest is still here.",
       correctHeading: "You got it!",
       incorrectTrail: "Take another look.",
-      revealedHeading: "Here's how it works.",
+      revealedHeading: "Sidequest complete",
       revealedBody: "Every Sidequest teaches something.",
+      revealedXpNote: "You earned XP for seeing it through.",
       xp: (amount: number) => `+${amount} XP`,
+      xpEarned: (amount: number) => `You earned ${amount} XP.`,
       checking: "Checking…",
       invalidNumber:
         "That answer didn't come through as a number I can check. Try typing it again.",
@@ -388,8 +391,10 @@ export const copy = {
     emptyHeading: "Math Explorer",
     emptyBody: "Finish a Sidequest to start.",
     explorerStat: "Level",
+    xpStat: "XP",
     completedStat: "Sidequests",
     discoveredStat: "Objects Found",
+    keepExploring: "Keep exploring to earn more XP!",
     skillsLabel: "Your math skills",
     nextCta: "Next Sidequest",
     firstCta: "Start a Sidequest",
