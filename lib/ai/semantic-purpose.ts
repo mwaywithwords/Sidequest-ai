@@ -22,7 +22,9 @@ export type SemanticDomainId =
   | "carrying"
   | "servings"
   | "food"
-  | "time";
+  | "time"
+  | "seating"
+  | "travel";
 
 export type SemanticPurpose = {
   domains: SemanticDomainId[];
@@ -261,6 +263,35 @@ const DOMAINS: readonly DomainLexicon[] = [
     ],
     objectKinds: ["clock", "watch", "timer"],
   },
+  {
+    id: "seating",
+    situations: [
+      "seat",
+      "seats",
+      "seating",
+      "sit",
+      "sitting",
+      "group",
+      "groups",
+      "people",
+    ],
+    objectKinds: ["chair", "stool", "bench", "sofa"],
+  },
+  {
+    id: "travel",
+    situations: [
+      "distance",
+      "wheel",
+      "wheels",
+      "travel",
+      "trip",
+      "trips",
+      "drive",
+      "driving",
+      "miles",
+    ],
+    objectKinds: ["toy car", "toy truck", "car", "truck", "vehicle"],
+  },
 ];
 
 const DOMAIN_TOPIC: Record<SemanticDomainId, string> = {
@@ -273,6 +304,8 @@ const DOMAIN_TOPIC: Record<SemanticDomainId, string> = {
   servings: "servings and portions",
   food: "food portions and sharing",
   time: "hours and elapsed time",
+  seating: "seating and groups",
+  travel: "distance, wheels, and travel",
 };
 
 /**
@@ -349,22 +382,52 @@ export function challengeMatchesObjectPurpose(
   inspiration?: InspirationContext | null,
 ): boolean {
   const purpose = inferSemanticPurpose(analysis);
-  const challengeHay = [question, objectConnection, inspiration?.topic ?? ""]
-    .join(" ")
-    .toLowerCase();
+  const objectDomains = unique([
+    ...purpose.domains,
+    ...domainsInText(inspiration?.topic ?? ""),
+  ]);
+  const challengeHay = [question, objectConnection].join(" ").toLowerCase();
   const challengeDomains = domainsInText(challengeHay);
 
-  if (purpose.domains.length === 0) {
+  if (objectDomains.length === 0) {
     return !challengeDomains.includes("food");
   }
 
-  const shared = purpose.domains.filter((domain) =>
+  const shared = objectDomains.filter((domain) =>
     challengeDomains.includes(domain),
   );
 
   if (shared.length > 0) return true;
 
-  return !hasUnrelatedSituation(challengeDomains, purpose.domains);
+  return !hasUnrelatedSituation(challengeDomains, objectDomains);
+}
+
+/**
+ * objectConnection may cite the semantic domain (money, bills, steps)
+ * rather than repeating the object label next to every number.
+ */
+export function connectionCitesSemanticDomain(
+  connection: string,
+  analysis: ObjectAnalysis,
+  inspiration?: InspirationContext | null,
+): boolean {
+  const purpose = inferSemanticPurpose(analysis);
+  const hay = connection.toLowerCase();
+  const domains = unique([
+    ...purpose.domains,
+    ...domainsInText(inspiration?.topic ?? ""),
+  ]);
+
+  if (domains.some((domain) => containsToken(hay, domain))) return true;
+
+  for (const domain of DOMAINS) {
+    if (!domains.includes(domain.id)) continue;
+    if (domain.situations.some((token) => containsToken(hay, token))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function hasUnrelatedSituation(
@@ -454,6 +517,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function unique(values: readonly string[]): string[] {
+function unique<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)];
 }

@@ -21,6 +21,7 @@ import {
   type SkillFitResult,
   type SkillFitWire,
 } from "@/lib/ai/skill-fit-finalize";
+import type { GenerationFailureStage, GenerationRunDiagnostic } from "@/lib/ai/generation-failure";
 import { copy } from "@/lib/copy";
 import type { Grade, SkillId } from "@/lib/types";
 
@@ -46,6 +47,7 @@ export type QuestGenerationResult =
       discovery: Discovery;
       challenge: GeneratedChallenge;
       contextualGrounding: ContextualPayload | null;
+      attemptsUsed?: 1 | 2;
     }
   | {
       status: "needsEvidence";
@@ -56,24 +58,56 @@ export type QuestGenerationResult =
       fit: SkillFitAnalysis;
       failure: QuestGenerationFailure;
     }
-  | { status: "failed"; failure: QuestGenerationFailure };
+  | { status: "failed"; failure: QuestGenerationFailure; diagnostic?: GenerationRunDiagnostic };
 
-export function finalizeQuestGeneration(
+export type ReadyQuestSections = {
+  status: "ready";
+  fit: ReadySkillFit;
+  discovery: Discovery;
+  contextualGrounding: ContextualPayload | null;
+  challengeWire: WireChallenge | null;
+};
+
+export type QuestGenerationSections =
+  | ReadyQuestSections
+  | {
+      status: "needsEvidence";
+      fit: Extract<SkillFitResult, { status: "needsEvidence" }>["fit"];
+    }
+  | {
+      status: "poorFit";
+      fit: SkillFitAnalysis;
+      failure: QuestGenerationFailure;
+    }
+  | {
+      status: "failed";
+      stage: GenerationFailureStage;
+      failure: QuestGenerationFailure;
+    };
+
+/**
+ * Validates the investigation and Discovery sections independently of
+ * the challenge candidate. A ready path with a broken challenge can
+ * keep these values for a challenge-only retry.
+ */
+export function finalizeQuestSections(
   wire: QuestGenerationWire,
   {
     analysis,
     skillId,
-    grade,
   }: {
     analysis: ObjectAnalysis;
     skillId: SkillId;
-    grade: Grade;
   },
-): QuestGenerationResult {
+): QuestGenerationSections {
   const investigation = finalizeSkillFit(wire.investigation, analysis, skillId);
 
   if (investigation.status === "failed") {
-    return investigation;
+    return {
+      status: "failed",
+      stage: "generation_schema_failure",
+      failure: investigation.failure,
+    };
   }
 
   if (investigation.status === "needsEvidence") {
@@ -91,19 +125,20 @@ export function finalizeQuestGeneration(
   const fit = investigation.fit;
 
   if (wire.discovery === null) {
-    console.warn("[quest-generation] discovery missing on a ready path");
-    return generationFailed();
+    return {
+      status: "failed",
+      stage: "generation_schema_failure",
+      failure: generationFailed().failure,
+    };
   }
 
   const discovery = finalizeDiscovery(wire.discovery, analysis);
   if (discovery.status !== "ok") {
-    console.warn("[quest-generation] discovery failed validation");
-    return generationFailed();
-  }
-
-  if (wire.challenge === null) {
-    console.warn("[quest-generation] challenge missing on a ready path");
-    return generationFailed();
+    return {
+      status: "failed",
+      stage: "generation_schema_failure",
+      failure: generationFailed().failure,
+    };
   }
 
   const contextualGrounding =
@@ -111,28 +146,77 @@ export function finalizeQuestGeneration(
       ? buildContextualPayload(analysis, fit.inspirationContext)
       : null;
 
-  const finalized: ChallengeFinalization = finalizeChallenge(wire.challenge, {
-    analysis,
+  return {
+    status: "ready",
     fit,
+    discovery: discovery.discovery,
+    contextualGrounding,
+    challengeWire: wire.challenge,
+  };
+}
+
+export function finalizeQuestGeneration(
+  wire: QuestGenerationWire,
+  {
+    analysis,
     skillId,
     grade,
-    studentEvidence: [],
-    contextualGrounding,
-  });
+  }: {
+    analysis: ObjectAnalysis;
+    skillId: SkillId;
+    grade: Grade;
+  },
+): QuestGenerationResult {
+  const sections = finalizeQuestSections(wire, { analysis, skillId });
+
+  if (sections.status === "failed") {
+    return { status: "failed", failure: sections.failure };
+  }
+
+  if (sections.status === "needsEvidence") {
+    return { status: "needsEvidence", fit: sections.fit };
+  }
+
+  if (sections.status === "poorFit") {
+    return {
+      status: "poorFit",
+      fit: sections.fit,
+      failure: sections.failure,
+    };
+  }
+
+  if (sections.challengeWire === null) {
+    return generationFailed();
+  }
+
+  const finalized: ChallengeFinalization = finalizeChallenge(
+    sections.challengeWire,
+    {
+      analysis,
+      fit: sections.fit,
+      skillId,
+      grade,
+      studentEvidence: [],
+      contextualGrounding: sections.contextualGrounding,
+    },
+  );
 
   const challenge = resultFromFinalization(finalized, skillId);
 
   if (challenge.status === "failed") {
     if (finalized.status === "generation_failure") {
-      console.warn("[quest-generation] challenge failed validation", {
-        path: finalized.issue.path,
-        code: finalized.issue.code,
-        computationType: wire.challenge.computation.type,
-        answerType: wire.challenge.correctAnswer.type,
-        shapesUsedCount: wire.challenge.shapesUsed?.length ?? 0,
-        valuesUsedCount: wire.challenge.valuesUsed.length,
-        challengeMode: fit.challengeMode,
-      });
+      console.error(
+        "[quest-pipeline]",
+        JSON.stringify({
+          stage: "candidate_1_schema",
+          status: "failed",
+          failureCode: finalized.issue.code,
+          path: finalized.issue.path,
+          computationType: sections.challengeWire.computation.type,
+          answerType: sections.challengeWire.correctAnswer.type,
+          challengeMode: sections.fit.challengeMode,
+        }),
+      );
     }
     return challenge;
   }
@@ -140,21 +224,23 @@ export function finalizeQuestGeneration(
   if (challenge.status === "poorFit") {
     return {
       status: "poorFit",
-      fit,
+      fit: sections.fit,
       failure: challenge.failure,
     };
   }
 
   return {
     status: "ok",
-    fit,
-    discovery: discovery.discovery,
+    fit: sections.fit,
+    discovery: sections.discovery,
     challenge: challenge.challenge,
-    contextualGrounding,
+    contextualGrounding: sections.contextualGrounding,
   };
 }
 
-export function generationFailed(): QuestGenerationResult {
+export function generationFailed(
+  diagnostic?: GenerationRunDiagnostic,
+): Extract<QuestGenerationResult, { status: "failed" }> {
   return {
     status: "failed",
     failure: QuestGenerationFailureSchema.parse({
@@ -162,5 +248,6 @@ export function generationFailed(): QuestGenerationResult {
       studentMessage: copy.challenge.failure,
       recommendedNextAction: "retry",
     }),
+    ...(diagnostic === undefined ? {} : { diagnostic }),
   };
 }

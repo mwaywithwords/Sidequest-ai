@@ -20,6 +20,7 @@ import { setQuestStatus } from "@/lib/quest-status";
 import { isJwtIssuedAtFutureError } from "@/lib/skill-catalogue";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QUEST_IMAGE_BUCKET, questImagePath } from "@/lib/supabase/storage";
+import type { QuestLogger } from "@/lib/quest-trace";
 import { verifyQuestChallenge } from "@/lib/quest-verify";
 import type { Grade, SkillId } from "@/lib/types";
 
@@ -34,11 +35,13 @@ export async function createQuest({
   extension,
   grade,
   skillId,
+  logger,
 }: {
   file: File;
   extension: string;
   grade: Grade;
   skillId: SkillId;
+  logger?: QuestLogger;
 }): Promise<QuestCreateResult> {
   const image = await imageDataUrl(file);
 
@@ -50,6 +53,7 @@ export async function createQuest({
       generateQuest,
       verifyQuest: verifyQuestChallenge,
       adaptiveProfile: getAdaptiveProfile,
+      logger,
       persist: {
         async resolveSkill(nextGrade, nextSkillId) {
           return resolveSkillRow(nextGrade, nextSkillId);

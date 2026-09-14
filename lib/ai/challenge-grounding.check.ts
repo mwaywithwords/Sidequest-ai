@@ -839,6 +839,151 @@ if (bottleChallenge.status === "ok") {
   );
 }
 
+const foldedSubtract = finalizeChallenge(
+  baseWire({
+    computation: {
+      type: "arithmetic",
+      operation: "Subtract",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("printed bottle volume", 11, "observed", "fl oz"),
+        operand("amount poured out", 4, "given_in_problem", "fl oz"),
+      ],
+    },
+  }),
+  context(bottle, bottleFit),
+);
+
+check(
+  "casing on an exact operation token is normalized, not guessed",
+  foldedSubtract.status === "ok" &&
+    foldedSubtract.challenge.computation.type === "arithmetic" &&
+    foldedSubtract.challenge.computation.operation === "subtract",
+);
+
+const measuredWindowFit: ReadySkillFit = {
+  selectedSkillCode: "geometry",
+  fitScore: 0.8,
+  challengeMode: "object_math",
+  canGenerateChallenge: true,
+  usableProperties: ["pane width: 12 in", "pane height: 18 in"],
+  reason: "Visible dimensions support area.",
+  suggestedObjectCharacteristics: [],
+  alternativeSkillCodes: [],
+  anchors: [
+    { property: "pane width: 12 in", origin: "observed" },
+    { property: "pane height: 18 in", origin: "observed" },
+  ],
+  evidenceRequest: null,
+  inspirationContext: null,
+};
+
+const rectangularArea = finalizeChallenge(
+  {
+    canGenerate: true,
+    question:
+      "The window in your photo is 12 inches wide and 18 inches tall. What is its area?",
+    skillCode: "geometry",
+    solution: "12 × 18 = 216 square inches.",
+    hint1: "Area of a rectangle is width times height.",
+    hint2: "Multiply 12 by 18.",
+    difficulty: 2,
+    objectConnection:
+      "Your window shows those two measured sides, so they become the rectangle we measure.",
+    verificationStrategy: "Multiply the observed width by the observed height.",
+    valuesUsed: [
+      operand("pane width", 12, "observed", "in"),
+      operand("pane height", 18, "observed", "in"),
+    ],
+    shapesUsed: [],
+    correctAnswer: {
+      type: "number",
+      value: 216,
+      numerator: null,
+      denominator: null,
+      unit: "in",
+    },
+    computation: {
+      type: "geometry",
+      operation: "Area",
+      shape: "rectangular",
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("pane width", 12, "observed", "in"),
+        operand("pane height", 18, "observed", "in"),
+      ],
+    },
+  },
+  context(windowPane, measuredWindowFit),
+);
+
+check(
+  "measured geometry accepts the catalog inflection rectangular and folds Area",
+  rectangularArea.status === "ok" &&
+    rectangularArea.challenge.computation.type === "geometry" &&
+    rectangularArea.challenge.computation.shape === "rectangle" &&
+    rectangularArea.challenge.computation.operation === "area",
+);
+
+const triangleIsh = finalizeChallenge(
+  {
+    canGenerate: true,
+    question: "What 3D shape is your bottle most like?",
+    skillCode: "geometry",
+    solution: "It is a rectangular prism.",
+    hint1: "Look at the faces.",
+    hint2: "Count the sides you can see.",
+    difficulty: 2,
+    objectConnection: "Your bottle has a rectangular carton form.",
+    verificationStrategy: "Match the observed form.",
+    valuesUsed: [],
+    shapesUsed: [
+      {
+        label: "carton",
+        form: "triangle-ish",
+        aspect: "solid",
+        origin: "observed",
+      },
+    ],
+    correctAnswer: {
+      type: "choice",
+      value: null,
+      numerator: null,
+      denominator: null,
+      unit: null,
+      label: "triangle-ish",
+      set: "solid",
+    },
+    computation: {
+      type: "shape_identify",
+      operation: "solid",
+      shape: "triangle-ish",
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [],
+    },
+  },
+  context(bottle, {
+    ...bottleFit,
+    selectedSkillCode: "geometry",
+    usableProperties: ["rectangular carton with a screw cap"],
+    anchors: [
+      { property: "rectangular carton with a screw cap", origin: "observed" },
+    ],
+  }),
+);
+
+check(
+  "triangle-ish is not auto-repaired into a catalog shape",
+  triangleIsh.status === "generation_failure",
+);
+
 if (failed > 0) {
   console.error(`\n${failed} check(s) failed`);
   process.exit(1);

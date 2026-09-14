@@ -10,7 +10,10 @@
 
 import type { WireChallenge } from "@/lib/ai/challenge-grounding";
 import type { WireDiscovery } from "@/lib/ai/discovery-grounding";
-import { finalizeQuestGeneration } from "@/lib/ai/quest-generation-finalize";
+import {
+  finalizeQuestGeneration,
+  finalizeQuestSections,
+} from "@/lib/ai/quest-generation-finalize";
 import type { ObjectAnalysis } from "@/lib/ai/schemas";
 import type { SkillFitWire } from "@/lib/ai/skill-fit-finalize";
 
@@ -288,6 +291,23 @@ check(
     missingChallenge.failure.reason === "generation_failure",
 );
 
+const retained = finalizeQuestSections(
+  {
+    investigation: investigation(),
+    discovery: discovery(),
+    challenge: null,
+  },
+  { analysis: bottle, skillId: "subtraction" },
+);
+
+check(
+  "section parsing keeps a valid path and Discovery when the challenge is missing",
+  retained.status === "ready" &&
+    retained.challengeWire === null &&
+    retained.fit.challengeMode === "object_math" &&
+    retained.discovery.title === "Made to carry a drink",
+);
+
 const malformedInvestigation = finalizeQuestGeneration(
   {
     investigation: investigation({
@@ -503,6 +523,70 @@ check(
     !malformedGeometry.failure.studentMessage.toLowerCase().includes(
       "cool find",
     ),
+);
+
+const walletAddition = finalizeQuestGeneration(
+  {
+    investigation: investigation({
+      challengeMode: "inspired_math",
+      usableProperties: ["rectangular form"],
+      reason: "A wallet holds money, so addition can use imagined amounts.",
+      inspirationContext: {
+        topic: "money, dollars, and budgeting",
+        reason: "A wallet is used to carry money.",
+      },
+    }),
+    discovery: discovery({
+      title: "Made to carry cards",
+      text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      category: "design",
+    }),
+    challenge: challenge({
+      question:
+        "Let's say you put $20 in your wallet, then add $50 more. How much money would be in your wallet?",
+      skillCode: "addition",
+      solution: "20 + 50 = 70 dollars.",
+      hint1: "Start with the amount you imagined putting in.",
+      hint2: "Add the second amount to that total.",
+      objectConnection:
+        "Your wallet sent us to money, then imagined amounts to add, not a total printed on the wallet.",
+      valuesUsed: [
+        operand("starting dollars", 20, "given_in_problem", "dollars"),
+        operand("added dollars", 50, "given_in_problem", "dollars"),
+      ],
+      correctAnswer: {
+        type: "number",
+        value: 70,
+        numerator: null,
+        denominator: null,
+        unit: "dollars",
+      },
+      computation: {
+        type: "arithmetic",
+        operation: "add",
+        shape: null,
+        numerator: null,
+        denominator: null,
+        simplify: null,
+        operands: [
+          operand("starting dollars", 20, "given_in_problem", "dollars"),
+          operand("added dollars", 50, "given_in_problem", "dollars"),
+        ],
+      },
+    }),
+  },
+  { analysis: wallet, skillId: "addition", grade: 4 },
+);
+
+check(
+  "wallet + addition is inspired_math with given_in_problem amounts",
+  walletAddition.status === "ok" &&
+    walletAddition.fit.challengeMode === "inspired_math" &&
+    walletAddition.challenge.valuesUsed.every(
+      (value) => value.origin === "given_in_problem",
+    ) &&
+    walletAddition.challenge.correctAnswer.type === "number" &&
+    walletAddition.challenge.correctAnswer.value === 70,
 );
 
 if (failed > 0) {

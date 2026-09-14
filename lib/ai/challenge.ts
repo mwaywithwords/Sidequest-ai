@@ -12,6 +12,7 @@ import {
   challengeFailed,
   resultFromFinalization,
 } from "@/lib/ai/challenge-result";
+import type { RegenerationHint } from "@/lib/ai/generation-failure";
 import { openai } from "@/lib/ai/openai";
 import {
   CHALLENGE_VALUE_ORIGINS,
@@ -44,6 +45,8 @@ const WireOperandSchema = z.strictObject({
   value: z.number(),
   unit: z.string().nullable(),
   origin: z.enum(CHALLENGE_VALUE_ORIGINS),
+  kind: z.enum(["value", "step_result"]).nullable().optional(),
+  step: z.number().nullable().optional(),
 });
 
 const WireShapeSchema = z.strictObject({
@@ -226,7 +229,7 @@ Answer with the same fields as a normal challenge:
 Every computation operand must also appear in valuesUsed.
 
 Inspired-math skill notes — these override the object_math examples below:
-- addition / subtraction / multiplication / division: prefer the object's ordinary purpose — money for a wallet, steps for shoes, liquid for a cup, scoring for a basketball, pages for a book. Mix contextual facts with given_in_problem only when the extra number is written in the question. For advancing students, a richer multi-step application is allowed when multi_step_arithmetic can represent every step.
+- addition / subtraction / multiplication / division: When the photographed object has no usable observed number, prefer a semantic real-world scenario over asking the child for another observation. Wallet → money. Shoe → steps. Cup → servings/liquid. Basketball → score difference. Mix contextual facts with given_in_problem only when the extra number is written in the question. For advancing students, a richer multi-step application is allowed when multi_step_arithmetic can represent every step.
 - fractions: a game of 4 quarters, a pair of 2 shoes, a fraction of money, or a clearly imagined whole. Do not invent a count visible on this object.
 - geometry: if the photograph already shows a form, prefer shape_identify or shape_count. Otherwise use a clearly hypothetical court, page, or box rectangle with given_in_problem whole-number sides. Do not invent a measurement of THIS photographed object, and do not refuse geometry only because the photo has no printed length.
 - measurement: use an established application constant from the payload, or a hypothetical amount written in the question. Never invent this object's size, price, or capacity.
@@ -237,11 +240,12 @@ How to write each skill:
 {skills}`;
 
 export type { ChallengeGenerationResult };
+export type { RegenerationHint } from "@/lib/ai/generation-failure";
 
-export type RegenerationHint = {
-  reason: string;
-  guidance: string;
-};
+export type ChallengeRequestResult =
+  | { status: "ok"; wire: WireChallenge }
+  | { status: "api_failure" }
+  | { status: "parse_failure" };
 
 export async function generateChallenge({
   analysis,
@@ -264,7 +268,6 @@ export async function generateChallenge({
   contextualGrounding?: ContextualPayload | null;
   regeneration?: RegenerationHint;
 }): Promise<ChallengeGenerationResult> {
-  const skill = getSkill(skillId);
   const profile =
     adaptation ??
     getAdaptiveProfile({
@@ -273,7 +276,56 @@ export async function generateChallenge({
       recentOutcomes: [],
     });
 
-  let wire: z.infer<typeof WireChallengeSchema> | null = null;
+  const requested = await requestChallengeWire({
+    analysis,
+    fit,
+    skillId,
+    skillDescription,
+    grade,
+    adaptation: profile,
+    studentEvidence,
+    contextualGrounding,
+    regeneration,
+  });
+
+  if (requested.status !== "ok") {
+    return challengeFailed();
+  }
+
+  const finalized = finalizeChallenge(requested.wire, {
+    analysis,
+    fit,
+    skillId,
+    grade,
+    studentEvidence,
+    contextualGrounding,
+  });
+
+  return resultFromFinalization(finalized, skillId);
+}
+
+export async function requestChallengeWire({
+  analysis,
+  fit,
+  skillId,
+  skillDescription,
+  grade,
+  adaptation,
+  studentEvidence = [],
+  contextualGrounding = null,
+  regeneration,
+}: {
+  analysis: ObjectAnalysis;
+  fit: ReadySkillFit;
+  skillId: SkillId;
+  skillDescription: string | null;
+  grade: Grade;
+  adaptation: AdaptiveProfile;
+  studentEvidence?: readonly StudentEvidenceValue[];
+  contextualGrounding?: ContextualPayload | null;
+  regeneration?: RegenerationHint;
+}): Promise<ChallengeRequestResult> {
+  const skill = getSkill(skillId);
 
   try {
     const instructions =
@@ -295,7 +347,7 @@ export async function generateChallenge({
                 `Selected skill: ${skillId} (${skill.label})`,
                 `What that means in grade ${grade}: ${skillDescription ?? skill.blurb}`,
                 `Challenge mode: ${fit.challengeMode}`,
-                adaptationGenerationGuidance(profile),
+                adaptationGenerationGuidance(adaptation),
                 studentEvidence.length > 0
                   ? `Student-provided evidence:\n${JSON.stringify(studentEvidence, null, 2)}`
                   : "Student-provided evidence: none. Do not invent any.",
@@ -307,15 +359,7 @@ export async function generateChallenge({
                       "If a number is not in that payload, it is not contextual. Use given_in_problem instead.",
                     ].join("\n")
                   : "",
-                regeneration
-                  ? [
-                      "",
-                      "A previous candidate failed deterministic verification.",
-                      `Reason: ${regeneration.reason}`,
-                      regeneration.guidance,
-                      "Write a new challenge. Do not repeat the previous mistake.",
-                    ].join("\n")
-                  : "",
+                regeneration ? ["", regeneration.guidance].join("\n") : "",
                 "",
                 "The reading of the object:",
                 JSON.stringify(analysis, null, 2),
@@ -341,29 +385,33 @@ export async function generateChallenge({
       text: { format: zodTextFormat(WireChallengeSchema, "challenge") },
     });
 
-    wire = response.output_parsed;
+    if (!response.output_parsed) {
+      return { status: "parse_failure" };
+    }
+
+    return { status: "ok", wire: response.output_parsed as WireChallenge };
   } catch (error) {
-    console.warn("[challenge] generation call failed", error);
+    void error;
+    return transportOrParseFailure(error);
+  }
+}
 
-    return challengeFailed();
+function transportOrParseFailure(error: unknown): ChallengeRequestResult {
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.toLowerCase() : "";
+    const status = typeof record.status === "number" ? record.status : null;
+    if (
+      name.includes("timeout") ||
+      name.includes("abort") ||
+      status === 429 ||
+      (status !== null && status >= 500)
+    ) {
+      return { status: "api_failure" };
+    }
   }
 
-  if (!wire) {
-    console.warn("[challenge] no parsed challenge");
-
-    return challengeFailed();
-  }
-
-  const finalized = finalizeChallenge(wire as WireChallenge, {
-    analysis,
-    fit,
-    skillId,
-    grade,
-    studentEvidence,
-    contextualGrounding,
-  });
-
-  return resultFromFinalization(finalized, skillId);
+  return { status: "parse_failure" };
 }
 
 export { resultFromFinalization };

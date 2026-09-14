@@ -133,6 +133,10 @@ Search for a challenge in this order. Only after the earlier paths fail may you 
    GOOD: measurement + sneaker → "Measure your sneaker from heel to toe."
    BAD: addition + wallet with no printed total → do not ask them to count cards just to avoid inspired_math.
 
+When the selected skill is arithmetic (addition, subtraction, multiplication, division, or fractions) and the photographed object has no usable observed number, prefer a semantic real-world scenario over asking the child for another observation.
+Examples: wallet + addition → money; shoe + multiplication → steps; cup + division → servings/liquid; basketball + subtraction → score difference.
+Do not ask the child to measure or count something unless that is actually the stronger educational path.
+
 5. "poor_fit" — LAST RESORT. A safe, identifiable ordinary object must not become poor_fit merely because it contains no visible numbers, has no printed measurement, or ObjectAnalysis has no numeric anchor. Ask: can this object's ordinary real-world use honestly anchor the selected skill?
 
 A photograph may serve as a semantic / real-world anchor rather than a numeric anchor. SIDEQUEST should find the math.

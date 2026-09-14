@@ -357,8 +357,7 @@ const unverifiedResult = await run(unverified.deps);
 
 check(
   "only a verified challenge sets ready",
-  unverifiedResult.kind === "refused" &&
-    unverifiedResult.reason === "invalid_math" &&
+  unverifiedResult.kind === "generationFailed" &&
     !unverified.readyMarked,
 );
 
@@ -399,7 +398,11 @@ check(
     !serialized.includes("verification_ms") &&
     !serialized.includes("database_ms") &&
     !serialized.includes("total_ms") &&
-    !serialized.includes("[quest-pipeline]"),
+    !serialized.includes("[quest-pipeline]") &&
+    !serialized.includes("questTraceId") &&
+    !serialized.includes("QUEST_GENERATION_FAILED") &&
+    !serialized.includes("failureCode") &&
+    !serialized.includes("ungrounded_observed_value"),
 );
 
 check(

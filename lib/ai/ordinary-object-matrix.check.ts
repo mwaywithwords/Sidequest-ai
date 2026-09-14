@@ -516,6 +516,27 @@ check(
   ).status === "ok",
 );
 
+const walletAdditionFromShape = finalizeSkillFit(
+  {
+    challengeMode: "object_math",
+    fitScore: 0.8,
+    usableProperties: ["rectangular form"],
+    reason: "The wallet looks rectangular.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: null,
+    inspirationContext: null,
+  },
+  OBJECTS.wallet,
+  "addition",
+);
+
+check(
+  "wallet + addition proposing object_math from a rectangle becomes inspired_math",
+  walletAdditionFromShape.status === "ok" &&
+    walletAdditionFromShape.fit.challengeMode === "inspired_math",
+);
+
 check(
   "sneaker + measurement can request evidence",
   finalizeSkillFit(
