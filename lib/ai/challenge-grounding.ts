@@ -29,12 +29,18 @@ import {
   structureCount,
 } from "@/lib/math/geometry-forms";
 import {
+  canRepairObjectMathWording,
+  questionRefersToPhotographedObject,
+  repairObjectMathQuestion,
+} from "@/lib/ai/object-math-wording";
+import {
   canPrefixHypotheticalFraming,
   prefixHypotheticalFraming,
   questionHasHypotheticalFraming,
   questionStatesNumber,
   sentenceIsHypothetical,
 } from "@/lib/math/hypothetical";
+import { alignValuesUsedWithComputation } from "@/lib/math/source-values";
 import { normaliseUnit as foldUnit } from "@/lib/math/units";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
 import { sanitiseZodIssues } from "@/lib/quest-trace";
@@ -59,6 +65,8 @@ const CONNECTION_MAX = 280;
 export const CHALLENGE_REPAIRS = [
   "hypothetical_prefix",
   "deterministic_solution",
+  "object_reference",
+  "values_used",
 ] as const;
 
 export type ChallengeRepair = (typeof CHALLENGE_REPAIRS)[number];
@@ -174,7 +182,10 @@ export type ChallengeFinalization =
  * become an honest question. Invented object facts, a missing grounded
  * anchor, or a malformed payload are generation failures. A missing
  * inspired-math hypothetical prefix may be added when every value is
- * already `given_in_problem`. Origins and observed facts are never rewritten.
+ * already `given_in_problem`. Object_math may add photographed-object
+ * attribution when a grounded observed value is already in the question,
+ * and may align valuesUsed to the structured computation's source
+ * operands. Origins and observed facts are never rewritten.
  */
 export function finalizeChallenge(
   wire: WireChallenge,
@@ -225,7 +236,7 @@ export function finalizeChallenge(
     return generationFailure("difficulty", "invalid_difficulty");
   }
 
-  const valuesUsed = parseValues(wire.valuesUsed);
+  let valuesUsed = parseValues(wire.valuesUsed);
   if (valuesUsed === null) {
     return generationFailure("valuesUsed", "invalid_used_value");
   }
@@ -243,6 +254,19 @@ export function finalizeChallenge(
   const computation = parseComputation(wire.computation);
   if (computation === null) {
     return generationFailure("computation", "invalid_computation");
+  }
+
+  const aligned = alignValuesUsedWithComputation(
+    valuesUsed,
+    computation,
+    correctAnswer,
+  );
+  if (aligned.status === "conflict") {
+    return generationFailure("computation", "computation_value_mismatch");
+  }
+  valuesUsed = aligned.values;
+  if (aligned.repaired) {
+    repairs.push("values_used");
   }
 
   const valueGrounding = valuesGroundingIssue(valuesUsed, context);
@@ -266,6 +290,22 @@ export function finalizeChallenge(
 
   if (!computationMatchesValues(computation, valuesUsed)) {
     return generationFailure("computation", "computation_value_mismatch");
+  }
+
+  if (!refersToObject(question, context.analysis)) {
+    if (canRepairObjectMathWording(question, valuesUsed, context)) {
+      const repairedQuestion = repairObjectMathQuestion(
+        question,
+        valuesUsed,
+        context,
+        QUESTION_MAX,
+        computation.type,
+      );
+      if (repairedQuestion !== null) {
+        question = repairedQuestion;
+        repairs.push("object_reference");
+      }
+    }
   }
 
   if (!refersToObject(question, context.analysis)) {
@@ -423,23 +463,7 @@ export function refersToObject(
   question: string,
   analysis: ObjectAnalysis,
 ): boolean {
-  const hay = question.toLowerCase();
-  const name = analysis.objectName.toLowerCase().trim();
-
-  if (name.length > 0 && hay.includes(name)) return true;
-
-  const tokens = name
-    .split(/[^a-z0-9]+/i)
-    .map((token) => token.toLowerCase())
-    .filter((token) => token.length >= 4);
-
-  if (tokens.some((token) => hay.includes(token))) return true;
-
-  return (
-    hay.includes("in your photo") ||
-    hay.includes("your photo") ||
-    hay.includes("the object")
-  );
+  return questionRefersToPhotographedObject(question, analysis);
 }
 
 export function objectConnectionCitesAnchor(

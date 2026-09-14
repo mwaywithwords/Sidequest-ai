@@ -1198,6 +1198,115 @@ check(
     !walletUnframed.lines.some((line) => line.includes("generation_candidate_2")),
 );
 
+const beverageCan: ObjectAnalysis = {
+  objectName: "beverage can",
+  category: "packaged beverage",
+  confidence: 0.94,
+  visibleText: ["222 mL"],
+  visibleMeasurements: [
+    { value: 222, unit: "mL", label: "printed can volume" },
+  ],
+  countableProperties: [],
+  shapeProperties: ["cylinder"],
+  observableProperties: ["pull tab"],
+  typicalUses: [
+    "drinking",
+    "holding a flavored beverage",
+    "single-serve beverage container",
+  ],
+};
+
+function canAddition(): WireChallenge {
+  return arithmeticChallenge(
+    "addition",
+    "222 mL plus another 100 mL equals how much?",
+    "Your can shows 222 mL, so that printed volume starts the addition.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    322,
+    "mL",
+  );
+}
+
+const canTrace = await runCase({
+  analysis: beverageCan,
+  skillId: "addition",
+  collectLogs: true,
+  combined: combinedWire("addition", canAddition(), {
+    investigation: investigation("addition", {
+      usableProperties: ["printed can volume: 222 mL"],
+      reason: "The printed volume anchors addition.",
+    }),
+  }),
+});
+
+check(
+  "beverage can + Grade 4 addition repairs missing object reference on candidate 1",
+  canTrace.result.status === "ok" &&
+    canTrace.combinedCalls === 1 &&
+    canTrace.challengeCalls === 0 &&
+    canTrace.result.status === "ok" &&
+    canTrace.result.challenge.question.toLowerCase().includes("can"),
+);
+
+check(
+  "can object-reference repair logs without a candidate 2 call",
+  canTrace.challengeCalls === 0 &&
+    canTrace.lines.some((line) =>
+      line.includes("candidate_1_object_reference_repair"),
+    ) &&
+    canTrace.lines.some((line) => line.includes('"repair":"object_reference"')) &&
+    !canTrace.lines.some((line) => line.includes("generation_candidate_2")) &&
+    !canTrace.lines.some((line) => line.includes("222 mL plus another")),
+);
+
+const walletValuesUsedRepair = await runCase({
+  analysis: wallet,
+  skillId: "subtraction",
+  collectLogs: true,
+  combined: {
+    status: "ok",
+    wire: {
+      investigation: inspiredInvestigation(
+        "money, spending, and saving",
+        "A wallet holds money.",
+        ["rectangular form"],
+      ),
+      discovery: discovery({
+        title: "Made to carry cards",
+        text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      }),
+      challenge: {
+        ...walletMultiStep(),
+        valuesUsed: [
+          operand("starting dollars", 50, "given_in_problem", "dollars"),
+          operand("added dollars", 20, "given_in_problem", "dollars"),
+          operand("running total", 70, "given_in_problem", "dollars"),
+          operand("final amount", 55, "given_in_problem", "dollars"),
+        ],
+      },
+    },
+  },
+});
+
+check(
+  "multi-step valuesUsed repair logs without a candidate 2 call",
+  walletValuesUsedRepair.result.status === "ok" &&
+    walletValuesUsedRepair.challengeCalls === 0 &&
+    walletValuesUsedRepair.lines.some((line) =>
+      line.includes("candidate_1_values_used_repair"),
+    ) &&
+    walletValuesUsedRepair.lines.some((line) =>
+      line.includes('"repair":"values_used"'),
+    ) &&
+    !walletValuesUsedRepair.lines.some((line) =>
+      line.includes("generation_candidate_2"),
+    ),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} generation-reliability checks failed`);
   process.exit(1);

@@ -620,21 +620,16 @@ function logPassedCandidateStages(
   }
 
   for (const repair of repairs) {
-    const stage =
-      repair === "deterministic_solution"
-        ? `candidate_${attempt}_solution_repair`
-        : `candidate_${attempt}_framing_repair`;
+    const mapped = repairLogFor(attempt, repair);
+    if (mapped === null) continue;
     logger.stage({
-      stage,
+      stage: mapped.stage,
       status: "passed",
       attempt,
       challengeMode,
       selectedPath: challengeMode,
       valueOrigins,
-      repair:
-        repair === "deterministic_solution"
-          ? "deterministic_solution"
-          : "hypothetical_prefix",
+      repair: mapped.repair,
     });
   }
 
@@ -648,6 +643,36 @@ function logPassedCandidateStages(
     groundingResult: "ok",
     verificationResult: "ok",
   });
+}
+
+function repairLogFor(
+  attempt: 1 | 2,
+  repair: string,
+): { stage: string; repair: string } | null {
+  switch (repair) {
+    case "deterministic_solution":
+      return {
+        stage: `candidate_${attempt}_solution_repair`,
+        repair: "deterministic_solution",
+      };
+    case "hypothetical_prefix":
+      return {
+        stage: `candidate_${attempt}_framing_repair`,
+        repair: "hypothetical_prefix",
+      };
+    case "object_reference":
+      return {
+        stage: `candidate_${attempt}_object_reference_repair`,
+        repair: "object_reference",
+      };
+    case "values_used":
+      return {
+        stage: `candidate_${attempt}_values_used_repair`,
+        repair: "values_used",
+      };
+    default:
+      return null;
+  }
 }
 
 function failBoth(

@@ -636,8 +636,11 @@ const noObject = finalizeChallenge(
   context(bottle, bottleFit),
 );
 check(
-  "a question that never refers to the photographed object fails",
-  noObject.status === "generation_failure",
+  "a question that omitted the photographed object is attributed to it",
+  noObject.status === "ok" &&
+    noObject.repairs.includes("object_reference") &&
+    noObject.challenge.question.toLowerCase().includes("bottle") &&
+    noObject.challenge.question.toLowerCase().includes("photo"),
 );
 
 const unframedGiven = finalizeChallenge(
@@ -726,6 +729,41 @@ check(
 check(
   "refersToObject rejects a generic worksheet stem",
   !refersToObject("Sam owns 4 cans and buys 3 more.", bottle),
+);
+
+const beverageCan: ObjectAnalysis = {
+  objectName: "beverage can",
+  category: "packaged beverage",
+  confidence: 0.94,
+  visibleText: ["222 mL"],
+  visibleMeasurements: [
+    { value: 222, unit: "mL", label: "printed can volume" },
+  ],
+  countableProperties: [],
+  shapeProperties: ["cylinder"],
+  observableProperties: ["pull tab"],
+  typicalUses: ["drinking", "holding a flavored beverage"],
+};
+
+check(
+  "refersToObject accepts your can for a beverage can",
+  refersToObject("Your can contains 222 mL.", beverageCan),
+);
+check(
+  "refersToObject accepts the can in your photo",
+  refersToObject("The can in your photo contains 222 mL.", beverageCan),
+);
+check(
+  "refersToObject accepts the 222 mL shown on your can",
+  refersToObject("The 222 mL shown on your can is the starting amount.", beverageCan),
+);
+check(
+  "refersToObject rejects a modal you can without the photographed object",
+  !refersToObject("You can add 222 mL plus 100 mL.", beverageCan),
+);
+check(
+  "refersToObject rejects Sam owns 4 cans for a beverage can",
+  !refersToObject("Sam owns 4 cans and buys 3 more.", beverageCan),
 );
 
 check(

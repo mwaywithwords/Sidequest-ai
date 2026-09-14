@@ -923,6 +923,196 @@ check("sneaker + multiplication verifies", sneakerOk.ok);
 check("window + perimeter verifies", windowOk.ok);
 check("pizza + fractions verifies", pizzaOk.ok);
 
+const walletMultiStepChallenge = challenge({
+  question:
+    "Let's say your wallet has $50. You add $20. How much more would you need to reach $125?",
+  skillCode: "subtraction",
+  solution: "Add $50 and $20. $50 + $20 = $70. Subtract $70 from $125. $125 − $70 = $55.",
+  objectConnection:
+    "Your wallet sent us to money, then imagined amounts to add and a savings target.",
+  valuesUsed: [
+    val("starting dollars", 50, "given_in_problem", "dollars"),
+    val("added dollars", 20, "given_in_problem", "dollars"),
+    val("target dollars", 125, "given_in_problem", "dollars"),
+  ],
+  correctAnswer: { type: "number", value: 55, unit: "dollars" },
+  computation: {
+    type: "multi_step_arithmetic",
+    steps: [
+      {
+        operation: "add",
+        operands: [
+          {
+            kind: "value",
+            label: "starting dollars",
+            value: 50,
+            unit: "dollars",
+            origin: "given_in_problem",
+          },
+          {
+            kind: "value",
+            label: "added dollars",
+            value: 20,
+            unit: "dollars",
+            origin: "given_in_problem",
+          },
+        ],
+      },
+      {
+        operation: "subtract",
+        operands: [
+          {
+            kind: "value",
+            label: "target dollars",
+            value: 125,
+            unit: "dollars",
+            origin: "given_in_problem",
+          },
+          { kind: "step_result", step: 0 },
+        ],
+      },
+    ],
+  },
+});
+
+const walletFit = {
+  selectedSkillCode: "subtraction" as const,
+  fitScore: 0.68,
+  challengeMode: "inspired_math" as const,
+  canGenerateChallenge: true as const,
+  usableProperties: [] as string[],
+  reason: "A wallet holds money.",
+  suggestedObjectCharacteristics: [] as string[],
+  alternativeSkillCodes: [] as ReadySkillFit["alternativeSkillCodes"],
+  anchors: [] as ReadySkillFit["anchors"],
+  evidenceRequest: null,
+  inspirationContext: {
+    topic: "money, spending, and saving",
+    reason: "A wallet holds money.",
+  },
+};
+
+const walletAnalysis: ObjectAnalysis = {
+  objectName: "wallet",
+  category: "personal accessory",
+  confidence: 0.9,
+  visibleText: [],
+  visibleMeasurements: [],
+  countableProperties: [],
+  shapeProperties: ["rectangular form"],
+  observableProperties: ["card slots", "billfold"],
+};
+
+const multiStepOk = verifyChallenge({
+  challenge: walletMultiStepChallenge,
+  analysis: walletAnalysis,
+  fit: walletFit,
+  skillId: "subtraction",
+  grade: 4,
+});
+
+check(
+  "multi-step source values verify without intermediates in valuesUsed",
+  multiStepOk.ok,
+);
+
+const multiStepWithDerived = verifyChallenge({
+  challenge: {
+    ...walletMultiStepChallenge,
+    valuesUsed: [
+      ...walletMultiStepChallenge.valuesUsed,
+      val("running total", 70, "given_in_problem", "dollars"),
+      val("final amount", 55, "given_in_problem", "dollars"),
+    ],
+  },
+  analysis: walletAnalysis,
+  fit: walletFit,
+  skillId: "subtraction",
+  grade: 4,
+});
+
+check(
+  "multi-step extra derived valuesUsed entries are not required and do not fail",
+  multiStepWithDerived.ok,
+);
+
+const multiStepMissingSource = verifyChallenge({
+  challenge: {
+    ...walletMultiStepChallenge,
+    valuesUsed: [
+      val("starting dollars", 50, "given_in_problem", "dollars"),
+      val("added dollars", 20, "given_in_problem", "dollars"),
+    ],
+  },
+  analysis: walletAnalysis,
+  fit: walletFit,
+  skillId: "subtraction",
+  grade: 4,
+});
+
+check(
+  "multi-step missing source operand still fails",
+  !multiStepMissingSource.ok && multiStepMissingSource.reason === "invalid_values",
+);
+
+const multiStepOriginMismatch = verifyChallenge({
+  challenge: {
+    ...walletMultiStepChallenge,
+    valuesUsed: [
+      val("starting dollars", 50, "observed", "dollars"),
+      val("added dollars", 20, "given_in_problem", "dollars"),
+      val("target dollars", 125, "given_in_problem", "dollars"),
+    ],
+    computation: {
+      type: "multi_step_arithmetic",
+      steps: [
+        {
+          operation: "add",
+          operands: [
+            {
+              kind: "value",
+              label: "starting dollars",
+              value: 50,
+              unit: "dollars",
+              origin: "observed",
+            },
+            {
+              kind: "value",
+              label: "added dollars",
+              value: 20,
+              unit: "dollars",
+              origin: "given_in_problem",
+            },
+          ],
+        },
+        {
+          operation: "subtract",
+          operands: [
+            {
+              kind: "value",
+              label: "target dollars",
+              value: 125,
+              unit: "dollars",
+              origin: "given_in_problem",
+            },
+            { kind: "step_result", step: 0 },
+          ],
+        },
+      ],
+    },
+  },
+  analysis: walletAnalysis,
+  fit: walletFit,
+  skillId: "subtraction",
+  grade: 4,
+});
+
+check(
+  "multi-step source origin mismatch still fails",
+  !multiStepOriginMismatch.ok &&
+    multiStepOriginMismatch.reason === "ungrounded_value",
+);
+
 if (failed > 0) {
   console.error(`\n${failed} check(s) failed`);
   process.exit(1);

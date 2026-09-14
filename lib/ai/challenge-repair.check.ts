@@ -771,6 +771,408 @@ check(
   objectMathUnframed.status === "generation_failure",
 );
 
+const beverageCan: ObjectAnalysis = {
+  objectName: "beverage can",
+  category: "packaged beverage",
+  confidence: 0.94,
+  visibleText: ["222 mL"],
+  visibleMeasurements: [
+    { value: 222, unit: "mL", label: "printed can volume" },
+  ],
+  countableProperties: [],
+  shapeProperties: ["cylinder"],
+  observableProperties: ["pull tab"],
+  typicalUses: [
+    "drinking",
+    "holding a flavored beverage",
+    "single-serve beverage container",
+  ],
+};
+
+const waterBottle: ObjectAnalysis = {
+  objectName: "water bottle",
+  category: "packaged beverage",
+  confidence: 0.9,
+  visibleText: ["12 FL OZ"],
+  visibleMeasurements: [
+    { value: 12, unit: "fl oz", label: "printed bottle volume" },
+  ],
+  countableProperties: [],
+  shapeProperties: ["cylinder"],
+  observableProperties: ["screw cap"],
+};
+
+function divisionWire(
+  skillCode: SkillId,
+  question: string,
+  connection: string,
+  dividend: ReturnType<typeof operand>,
+  divisor: ReturnType<typeof operand>,
+  answer: number,
+  unit: string | null,
+): WireChallenge {
+  return {
+    canGenerate: true,
+    question,
+    skillCode,
+    solution: "Divide the two amounts.",
+    hint1: "Use the numbers in the question.",
+    hint2: "Share the amount into equal groups.",
+    difficulty: 2,
+    objectConnection: connection,
+    verificationStrategy: "Evaluate the structured computation.",
+    valuesUsed: [dividend, divisor],
+    shapesUsed: [],
+    correctAnswer: {
+      type: "number",
+      value: answer,
+      numerator: null,
+      denominator: null,
+      unit,
+    },
+    computation: {
+      type: "division",
+      operation: "quotient",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [dividend, divisor],
+    },
+  };
+}
+
+const canAddition = prepared(
+  arithmeticWire(
+    "addition",
+    "222 mL plus another 100 mL equals how much?",
+    "Your can shows 222 mL, so that printed volume starts the addition.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    322,
+    "mL",
+    { solution: "Add the two amounts." },
+  ),
+  beverageCan,
+  objectFit("addition", "printed can volume: 222 mL"),
+);
+
+check(
+  "beverage can Grade 4 addition repairs a missing object reference",
+  canAddition.finalized.status === "ok" &&
+    canAddition.finalized.repairs.includes("object_reference") &&
+    canAddition.finalized.challenge.question.includes("can") &&
+    canAddition.finalized.challenge.question.toLowerCase().includes("photo") &&
+    canAddition.finalized.challenge.question.includes("222") &&
+    canAddition.finalized.challenge.question.includes("100") &&
+    canAddition.verified?.ok === true,
+);
+
+check(
+  "can addition repair keeps observed 222 mL and given 100 mL",
+  canAddition.finalized.status === "ok" &&
+    canAddition.finalized.challenge.valuesUsed.some(
+      (value) =>
+        value.origin === "observed" &&
+        value.value === 222 &&
+        value.unit === "mL",
+    ) &&
+    canAddition.finalized.challenge.valuesUsed.some(
+      (value) =>
+        value.origin === "given_in_problem" &&
+        value.value === 100 &&
+        value.unit === "mL",
+    ) &&
+    canAddition.finalized.challenge.correctAnswer.type === "number" &&
+    canAddition.finalized.challenge.correctAnswer.value === 322 &&
+    canAddition.finalized.challenge.computation.type === "arithmetic",
+);
+
+check(
+  "can addition repair does not invent a second observed can",
+  canAddition.finalized.status === "ok" &&
+    canAddition.finalized.challenge.valuesUsed.filter(
+      (value) => value.origin === "observed",
+    ).length === 1,
+);
+
+const canFramed = prepared(
+  arithmeticWire(
+    "addition",
+    "If you add another 100 mL to 222 mL, how much is that altogether?",
+    "Your can shows 222 mL, so that printed volume starts the addition.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    322,
+    "mL",
+    { solution: "222 + 100 = 322 mL." },
+  ),
+  beverageCan,
+  objectFit("addition", "printed can volume: 222 mL"),
+);
+
+check(
+  "framed can addition gets a minimal attribution prefix",
+  canFramed.finalized.status === "ok" &&
+    canFramed.finalized.repairs.includes("object_reference") &&
+    canFramed.finalized.challenge.question.startsWith(
+      "The can in your photo contains 222 mL.",
+    ) &&
+    canFramed.finalized.challenge.question.includes("If you add another 100 mL") &&
+    canFramed.verified?.ok === true,
+);
+
+const bottleSubtractMissingRef = prepared(
+  arithmeticWire(
+    "subtraction",
+    "11 fl oz minus 4 fl oz equals how much?",
+    "Your bottle shows 11 fl oz, so that real measurement becomes the starting amount.",
+    [
+      operand("printed bottle volume", 11, "observed", "fl oz"),
+      operand("amount poured out", 4, "given_in_problem", "fl oz"),
+    ],
+    "subtract",
+    7,
+    "fl oz",
+    { solution: "Subtract 4 from 11." },
+  ),
+  bottle,
+  objectFit("subtraction", "printed bottle volume: 11 fl oz"),
+);
+
+check(
+  "protein bottle subtraction repairs a missing object reference",
+  bottleSubtractMissingRef.finalized.status === "ok" &&
+    bottleSubtractMissingRef.finalized.repairs.includes("object_reference") &&
+    bottleSubtractMissingRef.finalized.challenge.question.includes("bottle") &&
+    bottleSubtractMissingRef.verified?.ok === true,
+);
+
+const canMultiply = prepared(
+  arithmeticWire(
+    "multiplication",
+    "222 mL times 3 equals how much?",
+    "Your can shows 222 mL, so that printed volume is the group we scale up.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("number of cans", 3, "given_in_problem"),
+    ],
+    "multiply",
+    666,
+    "mL",
+    { solution: "Multiply 222 by 3." },
+  ),
+  beverageCan,
+  objectFit("multiplication", "printed can volume: 222 mL"),
+);
+
+check(
+  "can multiplication repairs a missing object reference",
+  canMultiply.finalized.status === "ok" &&
+    canMultiply.finalized.repairs.includes("object_reference") &&
+    canMultiply.finalized.challenge.question.includes("222") &&
+    canMultiply.finalized.challenge.question.includes("3") &&
+    canMultiply.verified?.ok === true,
+);
+
+const bottleDivide = prepared(
+  divisionWire(
+    "division",
+    "12 fl oz split into 3 equal groups equals how much each?",
+    "Your bottle shows 12 fl oz, so that printed volume is shared into groups.",
+    operand("printed bottle volume", 12, "observed", "fl oz"),
+    operand("number of groups", 3, "given_in_problem"),
+    4,
+    "fl oz",
+  ),
+  waterBottle,
+  objectFit("division", "printed bottle volume: 12 fl oz"),
+);
+
+check(
+  "bottle division repairs a missing object reference",
+  bottleDivide.finalized.status === "ok" &&
+    bottleDivide.finalized.repairs.includes("object_reference") &&
+    bottleDivide.finalized.challenge.question.includes("12") &&
+    bottleDivide.finalized.challenge.question.includes("3") &&
+    bottleDivide.verified?.ok === true,
+);
+
+const multiStepMisaligned = prepared(
+  {
+    ...multiStepWire,
+    valuesUsed: [
+      operand("starting dollars", 50, "given_in_problem", "dollars"),
+      operand("added dollars", 20, "given_in_problem", "dollars"),
+      operand("running total", 70, "given_in_problem", "dollars"),
+      operand("final amount", 55, "given_in_problem", "dollars"),
+    ],
+  },
+  wallet,
+  inspiredFit("subtraction", "money, spending, and saving", "A wallet holds money."),
+);
+
+check(
+  "multi-step valuesUsed drops intermediates and restores source operands",
+  multiStepMisaligned.finalized.status === "ok" &&
+    multiStepMisaligned.finalized.repairs.includes("values_used") &&
+    multiStepMisaligned.finalized.challenge.valuesUsed.some(
+      (value) => value.value === 125 && value.origin === "given_in_problem",
+    ) &&
+    !multiStepMisaligned.finalized.challenge.valuesUsed.some(
+      (value) => value.value === 70,
+    ) &&
+    !multiStepMisaligned.finalized.challenge.valuesUsed.some(
+      (value) => value.value === 55,
+    ) &&
+    multiStepMisaligned.verified?.ok === true,
+);
+
+const inventedCanVolume = prepareCandidateChallenge(
+  arithmeticWire(
+    "addition",
+    "250 mL plus another 100 mL equals how much?",
+    "Your can shows 250 mL.",
+    [
+      operand("printed can volume", 250, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    350,
+    "mL",
+  ),
+  ctx(beverageCan, objectFit("addition", "printed can volume: 222 mL")),
+);
+
+check(
+  "invented observed 250 mL still fails when ObjectAnalysis says 222 mL",
+  inventedCanVolume.status === "generation_failure" &&
+    inventedCanVolume.issue.code === "ungrounded_observed_value",
+);
+
+const observedMissingFromQuestion = prepareCandidateChallenge(
+  arithmeticWire(
+    "addition",
+    "100 mL plus another 50 mL equals how much?",
+    "Your can shows 222 mL.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    322,
+    "mL",
+  ),
+  ctx(beverageCan, objectFit("addition", "printed can volume: 222 mL")),
+);
+
+check(
+  "observed value not present in the question is not repaired",
+  observedMissingFromQuestion.status === "generation_failure",
+);
+
+const differentObjectRepair = prepared(
+  arithmeticWire(
+    "addition",
+    "222 mL plus another 100 mL equals how much?",
+    "Your can shows 222 mL, so that printed volume starts the addition.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    322,
+    "mL",
+  ),
+  beverageCan,
+  objectFit("addition", "printed can volume: 222 mL"),
+);
+
+check(
+  "object reference repair uses the photographed can, not a different object",
+  differentObjectRepair.finalized.status === "ok" &&
+    differentObjectRepair.finalized.challenge.question.toLowerCase().includes("can") &&
+    !differentObjectRepair.finalized.challenge.question.toLowerCase().includes("bottle") &&
+    !differentObjectRepair.finalized.challenge.question.toLowerCase().includes("sneaker"),
+);
+
+const sourceMismatch = prepareCandidateChallenge(
+  {
+    ...multiStepWire,
+    valuesUsed: [
+      operand("starting dollars", 50, "given_in_problem", "dollars"),
+      operand("added dollars", 20, "given_in_problem", "dollars"),
+      operand("target dollars", 125, "given_in_problem", "cents"),
+    ],
+    computation: {
+      ...multiStepWire.computation,
+      operands: [
+        operand("starting dollars", 50, "given_in_problem", "dollars"),
+        operand("added dollars", 20, "given_in_problem", "dollars"),
+        operand("target dollars", 125, "given_in_problem", "dollars"),
+      ],
+    },
+  },
+  ctx(
+    wallet,
+    inspiredFit("subtraction", "money, spending, and saving", "A wallet holds money."),
+  ),
+);
+
+check(
+  "computation/valuesUsed unit disagreement still fails",
+  sourceMismatch.status === "generation_failure" &&
+    sourceMismatch.issue.code === "computation_value_mismatch",
+);
+
+const givenMissing = prepareCandidateChallenge(
+  arithmeticWire(
+    "addition",
+    "222 mL plus some more equals how much?",
+    "Your can shows 222 mL.",
+    [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    "add",
+    322,
+    "mL",
+  ),
+  ctx(beverageCan, objectFit("addition", "printed can volume: 222 mL")),
+);
+
+check(
+  "given value missing from the question still fails",
+  givenMissing.status === "generation_failure",
+);
+
+const canApples = prepareCandidateChallenge(
+  arithmeticWire(
+    "addition",
+    "There are 8 apples and 4 more apples. How many apples is that?",
+    "This question is about your can.",
+    [
+      operand("apples", 8, "given_in_problem"),
+      operand("more apples", 4, "given_in_problem"),
+    ],
+    "add",
+    12,
+    "apples",
+  ),
+  ctx(beverageCan, objectFit("addition", "printed can volume: 222 mL")),
+);
+
+check(
+  "irrelevant apple problem still fails for a beverage can",
+  canApples.status !== "ok",
+);
+
 if (silentWallet.finalized.status === "ok") {
   const untouched = applyDeterministicSolution({
     ...silentWallet.finalized.challenge,

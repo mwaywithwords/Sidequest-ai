@@ -178,6 +178,42 @@ check(
     !JSON.stringify(repairLog.payload).includes("answer"),
 );
 
+logger.stage({
+  stage: "candidate_1_object_reference_repair",
+  status: "passed",
+  attempt: 1,
+  repair: "object_reference",
+});
+logger.stage({
+  stage: "candidate_1_values_used_repair",
+  status: "passed",
+  attempt: 1,
+  repair: "values_used",
+});
+
+const objectRefLog = captured.find(
+  (entry) => entry.payload.stage === "candidate_1_object_reference_repair",
+);
+const valuesUsedLog = captured.find(
+  (entry) => entry.payload.stage === "candidate_1_values_used_repair",
+);
+
+check(
+  "object-reference repair logs questTraceId, attempt, and type",
+  objectRefLog?.payload.questTraceId === "abc123" &&
+    objectRefLog.payload.attempt === 1 &&
+    objectRefLog.payload.repair === "object_reference" &&
+    !JSON.stringify(objectRefLog.payload).includes("question"),
+);
+
+check(
+  "valuesUsed repair logs questTraceId, attempt, and type",
+  valuesUsedLog?.payload.questTraceId === "abc123" &&
+    valuesUsedLog.payload.attempt === 1 &&
+    valuesUsedLog.payload.repair === "values_used" &&
+    !JSON.stringify(valuesUsedLog.payload).includes("answer"),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} quest-trace checks failed`);
   process.exit(1);
