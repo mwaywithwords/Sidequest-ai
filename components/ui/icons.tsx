@@ -107,3 +107,21 @@ export function StarIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SpeakerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.5 9.5h3.2L12 6v12l-4.3-3.5H4.5A1.5 1.5 0 0 1 3 13V11a1.5 1.5 0 0 1 1.5-1.5Z" />
+      <path d="M16 9.2a4 4 0 0 1 0 5.6" />
+      <path d="M18.3 7a7 7 0 0 1 0 10" />
+    </Icon>
+  );
+}
+
+export function StopIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="7" y="7" width="10" height="10" rx="1.5" />
+    </Icon>
+  );
+}

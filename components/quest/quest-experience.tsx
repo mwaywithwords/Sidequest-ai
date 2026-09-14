@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { submitQuestAnswer } from "@/app/quest/actions";
 import { QuestPhotoFrame } from "@/components/quest/quest-photo";
+import {
+  ReadAloudButton,
+  useReadAloud,
+  type ReadAloudControls,
+} from "@/components/quest/read-aloud";
 import { FlowSteps } from "@/components/layout/flow-steps";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { CheckIcon } from "@/components/ui/icons";
@@ -18,6 +23,12 @@ import {
   spokenMathExpression,
   type StudentMathExpression,
 } from "@/lib/math/expression";
+import {
+  formatSpokenProse,
+  spokenChallengeReadout,
+  spokenConnectReadout,
+  spokenDiscoverReadout,
+} from "@/lib/speech";
 import type {
   ChallengeProgress,
   StudentGradeView,
@@ -36,29 +47,53 @@ function skillFromMission(label: string) {
  */
 export function QuestExperience({ quest }: { quest: StudentQuest }) {
   const [stage, setStage] = useState<Stage>("discover");
+  const readAloud = useReadAloud();
+
+  function goTo(next: Stage) {
+    readAloud.stop();
+    setStage(next);
+  }
 
   return (
     <div className="flex flex-col gap-5">
       <FlowSteps current={stage === "challenge" ? "solve" : "discover"} />
 
       {stage === "discover" ? (
-        <DiscoverStage quest={quest} onContinue={() => setStage("connect")} />
+        <DiscoverStage
+          quest={quest}
+          readAloud={readAloud}
+          onContinue={() => goTo("connect")}
+        />
       ) : null}
       {stage === "connect" ? (
-        <ConnectStage quest={quest} onContinue={() => setStage("challenge")} />
+        <ConnectStage
+          quest={quest}
+          readAloud={readAloud}
+          onContinue={() => goTo("challenge")}
+        />
       ) : null}
-      {stage === "challenge" ? <ChallengeStage quest={quest} /> : null}
+      {stage === "challenge" ? (
+        <ChallengeStage quest={quest} readAloud={readAloud} />
+      ) : null}
     </div>
   );
 }
 
 function DiscoverStage({
   quest,
+  readAloud,
   onContinue,
 }: {
   quest: StudentQuest;
+  readAloud: ReadAloudControls;
   onContinue: () => void;
 }) {
+  const discoverSpeech = spokenDiscoverReadout({
+    objectName: quest.objectName,
+    discoveryText: quest.discoveryText,
+    observations: quest.highlightedValues,
+  });
+
   return (
     <div key="discover" className="flex flex-col items-center gap-5 text-center animate-rise">
       <p className="game-moment">{copy.quest.objectFoundLabel}</p>
@@ -86,6 +121,16 @@ function DiscoverStage({
         <p className="game-support">{quest.discoveryText}</p>
       ) : null}
 
+      <ReadAloudButton
+        id="discover"
+        text={discoverSpeech}
+        name={copy.quest.experience.readAloudDiscover}
+        playingId={readAloud.playingId}
+        supported={readAloud.supported}
+        accent={quest.accent}
+        onToggle={readAloud.toggle}
+      />
+
       <div className="game-actions">
         <Button size="lg" onClick={onContinue} className="w-full">
           {copy.quest.experience.showMath}
@@ -97,13 +142,23 @@ function DiscoverStage({
 
 function ConnectStage({
   quest,
+  readAloud,
   onContinue,
 }: {
   quest: StudentQuest;
+  readAloud: ReadAloudControls;
   onContinue: () => void;
 }) {
   const skillLabel = skillFromMission(quest.missionLabel);
   const property = quest.highlightedValues[0];
+  const lookCloselyVisible = Boolean(
+    quest.lookClosely && (quest.worldContext || !property),
+  );
+  const connectSpeech = spokenConnectReadout({
+    connection: quest.connection,
+    lookClosely: quest.lookClosely,
+    lookCloselyVisible,
+  });
 
   return (
     <div key="connect" className="flex flex-col items-center gap-5 text-center animate-rise">
@@ -139,13 +194,23 @@ function ConnectStage({
         />
       )}
 
-      {quest.lookClosely && (quest.worldContext || !property) ? (
+      {lookCloselyVisible && quest.lookClosely ? (
         <p className="max-w-sm text-base font-medium leading-relaxed text-cream">
           {quest.lookClosely}
         </p>
       ) : null}
 
       <p className="game-support">{quest.connection}</p>
+
+      <ReadAloudButton
+        id="connect"
+        text={connectSpeech}
+        name={copy.quest.experience.readAloudConnect}
+        playingId={readAloud.playingId}
+        supported={readAloud.supported}
+        accent={quest.accent}
+        onToggle={readAloud.toggle}
+      />
 
       {quest.imaginedSituation ? (
         <p className="max-w-sm text-sm leading-relaxed text-faint">
@@ -164,7 +229,13 @@ function ConnectStage({
   );
 }
 
-function ChallengeStage({ quest }: { quest: StudentQuest }) {
+function ChallengeStage({
+  quest,
+  readAloud,
+}: {
+  quest: StudentQuest;
+  readAloud: ReadAloudControls;
+}) {
   const startedAt = useRef(0);
   const submitLock = useRef(false);
   const [value, setValue] = useState("");
@@ -177,6 +248,12 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
   );
   const [submitting, setSubmitting] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
+  const {
+    supported: speechSupported,
+    playingId,
+    toggle: toggleSpeech,
+    stop: stopSpeech,
+  } = readAloud;
 
   useEffect(() => {
     startedAt.current = performance.now();
@@ -189,6 +266,11 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
     progress.status === "incorrect" && progress.attemptNumber >= 2
       ? copy.quest.experience.hint2
       : copy.quest.experience.hint1;
+  const challengeSpeech = spokenChallengeReadout({
+    question: quest.question,
+    expression: quest.mathExpression,
+  });
+  const hintSpeech = shownHint ? formatSpokenProse(shownHint) : "";
 
   const answerReady =
     quest.answer.kind === "number"
@@ -251,6 +333,12 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
       setHintOpen(true);
       setHintRevealed(true);
     }
+    if (
+      (result.status === "correct" || result.status === "complete") &&
+      playingId === "hint"
+    ) {
+      stopSpeech();
+    }
   }
 
   const skillLabel = skillFromMission(quest.missionLabel);
@@ -278,6 +366,16 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
         <p className="mt-2 font-display text-[1.75rem] leading-snug font-extrabold tracking-tight text-pretty text-cream sm:text-3xl">
           {quest.question}
         </p>
+        <ReadAloudButton
+          id="challenge"
+          text={challengeSpeech}
+          name={copy.quest.experience.readAloudChallenge}
+          playingId={playingId}
+          supported={speechSupported}
+          accent={quest.accent}
+          className="mt-3"
+          onToggle={toggleSpeech}
+        />
       </div>
 
       <MathBoard expression={quest.mathExpression} accent={quest.accent} />
@@ -287,7 +385,13 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
           {copy.quest.experience.unsupportedAnswer}
         </p>
       ) : progress.status === "correct" || progress.status === "complete" ? (
-        <FinishedState progress={progress} quest={quest} />
+        <FinishedState
+          progress={progress}
+          quest={quest}
+          speechSupported={speechSupported}
+          playingId={playingId}
+          onToggleSpeech={toggleSpeech}
+        />
       ) : (
         <form onSubmit={submit}>
           <AnswerFields
@@ -337,28 +441,52 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
           ) : null}
 
           {progress.status === "incorrect" ? (
-            <div role="status" className="answer-nudge mt-5 text-center animate-rise">
-              <p className="font-display text-3xl font-extrabold tracking-tight text-amber uppercase">
-                {copy.quest.experience.incorrectHeading}
-              </p>
-              <p className="mt-2 text-base font-medium text-cream">
-                {copy.quest.experience.incorrectTrail}
-              </p>
-              {progress.hint ? (
-                <p className="mt-3 text-sm leading-relaxed text-muted">
-                  <span className="font-bold text-amber">{hintLabel}: </span>
-                  {progress.hint}
+            <div className="answer-nudge mt-5 text-center animate-rise">
+              <div role="status">
+                <p className="font-display text-3xl font-extrabold tracking-tight text-amber uppercase">
+                  {copy.quest.experience.incorrectHeading}
                 </p>
+                <p className="mt-2 text-base font-medium text-cream">
+                  {copy.quest.experience.incorrectTrail}
+                </p>
+                {progress.hint ? (
+                  <p className="mt-3 text-sm leading-relaxed text-muted">
+                    <span className="font-bold text-amber">{hintLabel}: </span>
+                    {progress.hint}
+                  </p>
+                ) : null}
+              </div>
+              {progress.hint ? (
+                <div className="mt-3 flex justify-center">
+                  <ReadAloudButton
+                    id="hint"
+                    text={hintSpeech}
+                    name={copy.quest.experience.readAloudHint}
+                    playingId={playingId}
+                    supported={speechSupported}
+                    accent={quest.accent}
+                    onToggle={toggleSpeech}
+                  />
+                </div>
               ) : null}
             </div>
           ) : shownHint ? (
-            <p
-              role="status"
-              className="mt-5 animate-rise text-sm leading-relaxed text-muted"
-            >
-              <span className="font-bold text-amber">{hintLabel}: </span>
-              {shownHint}
-            </p>
+            <div className="mt-5 animate-rise">
+              <p role="status" className="text-sm leading-relaxed text-muted">
+                <span className="font-bold text-amber">{hintLabel}: </span>
+                {shownHint}
+              </p>
+              <ReadAloudButton
+                id="hint"
+                text={hintSpeech}
+                name={copy.quest.experience.readAloudHint}
+                playingId={playingId}
+                supported={speechSupported}
+                accent={quest.accent}
+                className="mt-3"
+                onToggle={toggleSpeech}
+              />
+            </div>
           ) : null}
         </form>
       )}
@@ -369,11 +497,18 @@ function ChallengeStage({ quest }: { quest: StudentQuest }) {
 function FinishedState({
   progress,
   quest,
+  speechSupported,
+  playingId,
+  onToggleSpeech,
 }: {
   progress: Extract<ChallengeProgress, { status: "correct" | "complete" }>;
   quest: StudentQuest;
+  speechSupported: boolean;
+  playingId: string | null;
+  onToggleSpeech: (id: string, text: string) => void;
 }) {
   const solved = progress.status === "correct";
+  const explanationSpeech = formatSpokenProse(progress.explanation);
 
   return (
     <div className="animate-rise text-center">
@@ -409,7 +544,18 @@ function FinishedState({
       <p className="mt-5 text-base leading-relaxed text-cream/90">
         {progress.explanation}
       </p>
-      <p className="mt-2 font-display text-lg font-extrabold" style={{ color: quest.accent }}>
+      <div className="mt-3 flex justify-center">
+        <ReadAloudButton
+          id="explanation"
+          text={explanationSpeech}
+          name={copy.quest.experience.readAloudExplanation}
+          playingId={playingId}
+          supported={speechSupported}
+          accent={quest.accent}
+          onToggle={onToggleSpeech}
+        />
+      </div>
+      <p className="mt-4 font-display text-lg font-extrabold" style={{ color: quest.accent }}>
         {progress.revealedAnswer}
       </p>
 
