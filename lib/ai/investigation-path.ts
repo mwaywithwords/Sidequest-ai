@@ -8,9 +8,18 @@ import {
 import {
   buildSemanticInspiration,
   canAnchorSemantically,
+  inferSemanticPurpose,
 } from "@/lib/ai/semantic-purpose";
 import { looksGeometric } from "@/lib/math/geometry-forms";
 import type { SkillId } from "@/lib/types";
+
+const ARITHMETIC_SKILLS: ReadonlySet<SkillId> = new Set([
+  "addition",
+  "subtraction",
+  "multiplication",
+  "division",
+  "fractions",
+]);
 
 /**
  * How a first photograph is turned into an investigation path.
@@ -50,13 +59,15 @@ export type ResolvedInvestigation = {
  * Constrains the model's chosen path against what the reading can actually
  * support. The model proposes; this function decides.
  *
- * OBJECT_MATH needs at least one grounded property from the reading.
+ * OBJECT_MATH needs at least one skill-relevant grounded property.
+ * Arithmetic skills need a numeric or countable anchor, not a shape.
  * INSPIRED_MATH needs a structured real-world context, not a fact invented
  * about the object. A missing number prefers this path over a forced
  * investigation.
- * INVESTIGATION_MATH needs a well-formed request. It is kept when the
- * model asked for it, because measuring this object may be the better
- * lesson. It is not the default recovery for a numberless photograph.
+ * INVESTIGATION_MATH needs a well-formed request. Measuring this object
+ * may still be the better lesson for measurement. For arithmetic skills
+ * with a semantic domain and no numeric anchor, recovery upgrades this
+ * to inspired_math.
  * POOR_FIT is last. A valid earlier path always wins.
  */
 export function resolveInvestigation(
@@ -112,11 +123,23 @@ export function recoverInvestigation(
   analysis: ObjectAnalysis,
   skillId: SkillId,
 ): { resolved: ResolvedInvestigation; usableProperties: string[] } {
-  if (resolved.challengeMode !== "poor_fit") {
+  if (
+    resolved.challengeMode === "object_math" ||
+    resolved.challengeMode === "inspired_math"
+  ) {
     return { resolved, usableProperties: [] };
   }
 
   const anchors = readingAnchors(analysis, skillId);
+  const inspired = recoverInspiredMath(analysis, skillId, anchors);
+  if (inspired !== null) {
+    return inspired;
+  }
+
+  if (resolved.challengeMode !== "poor_fit") {
+    return { resolved, usableProperties: [] };
+  }
+
   if (anchors.length > 0) {
     return {
       resolved: {
@@ -178,9 +201,40 @@ export function recoverInvestigation(
 }
 
 /**
+ * Arithmetic skills with a real-world semantic domain and no numeric
+ * photograph anchor recover to inspired_math. Domain comes from the
+ * object's ordinary purpose, not from a hardcoded object-name table.
+ */
+function recoverInspiredMath(
+  analysis: ObjectAnalysis,
+  skillId: SkillId,
+  anchors: readonly string[],
+): { resolved: ResolvedInvestigation; usableProperties: string[] } | null {
+  if (anchors.length > 0) return null;
+  if (!ARITHMETIC_SKILLS.has(skillId)) return null;
+  if (!canAnchorSemantically(analysis)) return null;
+  if (inferSemanticPurpose(analysis).domains.length === 0) return null;
+
+  const inspirationContext = fallbackInspirationContext(analysis, skillId);
+  if (inspirationContext === null) return null;
+
+  return {
+    resolved: {
+      challengeMode: "inspired_math",
+      reason:
+        "The object's ordinary real-world use can honestly anchor this skill without a visible number.",
+      evidenceRequest: null,
+      inspirationContext,
+    },
+    usableProperties: [],
+  };
+}
+
+/**
  * Observed properties from the reading that can support object_math for
- * this skill. Geometry may use shape alone. Other skills need a count or
- * a measurement. Nothing here is invented.
+ * this skill. Geometry may use shape alone. Arithmetic and fractions need
+ * a numeric or countable anchor that actually contains a number. A
+ * rectangle or sphere is not an addition anchor. Nothing here is invented.
  */
 export function readingAnchors(
   analysis: ObjectAnalysis,
@@ -203,7 +257,14 @@ export function readingAnchors(
     return unique(measurements);
   }
 
-  return unique([...measurements, ...analysis.countableProperties]);
+  return unique([
+    ...measurements,
+    ...analysis.countableProperties.filter(hasNumericCount),
+  ]);
+}
+
+export function hasNumericCount(property: string): boolean {
+  return /\d+(?:\.\d+)?/.test(property);
 }
 
 /**

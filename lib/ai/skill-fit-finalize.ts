@@ -1,6 +1,7 @@
 import {
   buildAnchors,
   canGenerateFromMode,
+  readingAnchors,
   recoverInvestigation,
   resolveInvestigation,
 } from "@/lib/ai/investigation-path";
@@ -84,6 +85,18 @@ export function finalizeSkillFit(
 
   const evidenceRequest = parseEvidenceRequest(wire.evidenceRequest);
   const inspirationContext = parseInspirationContext(wire.inspirationContext);
+  const skillAnchors = readingAnchors(analysis, skillId);
+  const pathAnchors =
+    skillAnchors.length === 0
+      ? []
+      : grounded.filter((property) =>
+          skillAnchors.some(
+            (anchor) =>
+              property === anchor ||
+              property.includes(anchor) ||
+              anchor.includes(property),
+          ),
+        );
 
   const resolvedWire = resolveInvestigation(
     {
@@ -93,7 +106,7 @@ export function finalizeSkillFit(
       evidenceRequest,
       inspirationContext,
     },
-    grounded,
+    pathAnchors,
   );
 
   const recovered = recoverInvestigation(resolvedWire, analysis, skillId);

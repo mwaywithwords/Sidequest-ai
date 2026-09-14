@@ -36,15 +36,25 @@ export function resultFromFinalization(
   }
 
   if (finalized.status === "generation_failure") {
-    console.warn("[challenge] challenge failed validation", {
-      path: finalized.issue.path,
-      code: finalized.issue.code,
-    });
+    console.error(
+      "[quest-pipeline]",
+      JSON.stringify({
+        stage: "candidate_schema",
+        status: "failed",
+        failureCode: finalized.issue.code,
+        path: finalized.issue.path,
+      }),
+    );
   } else {
-    console.warn("[challenge] challenge failed validation", {
-      path: "challenge",
-      code: "invalid",
-    });
+    console.error(
+      "[quest-pipeline]",
+      JSON.stringify({
+        stage: "candidate_schema",
+        status: "failed",
+        failureCode: "invalid",
+        path: "challenge",
+      }),
+    );
   }
 
   return challengeFailed();

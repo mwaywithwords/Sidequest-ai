@@ -71,9 +71,9 @@ export const copy = {
     uploadFailedBody:
       "Something went wrong sending your photo, so nothing was saved. It's still here — you can send it again.",
     /** The photograph was accepted; writing the challenge did not finish. */
-    generationFailedHeading: "The challenge didn't quite write itself.",
+    generationFailedHeading: "Almost there",
     generationFailedBody:
-      "Your photo is fine. Something went wrong making the Sidequest. It's still here — try sending it again.",
+      "Your photo is fine, but this Sidequest didn't come together. Try it again.",
     processingSteps: [
       "Looking closely...",
       "Object found!",

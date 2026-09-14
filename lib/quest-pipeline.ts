@@ -1,4 +1,5 @@
 import type { ImageSafetyReason } from "@/lib/ai/schemas";
+import { inferSemanticPurpose } from "@/lib/ai/semantic-purpose";
 import type { VisionAnalysisResult } from "@/lib/ai/vision-finalize";
 import type { QuestGenerationResult } from "@/lib/ai/quest-generation-finalize";
 import type {
@@ -15,11 +16,12 @@ import type { PipelineTimer } from "@/lib/pipeline-timing";
 import { createPipelineTimer } from "@/lib/pipeline-timing";
 import type { SkillProgressInput } from "@/lib/ai/challenge-grounding";
 import type { AdaptiveProfile } from "@/lib/progress/adaptation";
+import { createQuestLogger, type QuestLogger } from "@/lib/quest-trace";
 import type { Grade, SkillId } from "@/lib/types";
 
 export type QuestVerificationView =
   | { status: "ok" }
-  | { status: "failed"; failure: { reason: string } };
+  | { status: "failed"; failure: { reason: string }; code?: string };
 
 /**
  * The ordered quest-creation stages, with injectable I/O so the call
@@ -101,6 +103,7 @@ export type QuestPipelineDeps = {
     skillDescription: string | null;
     grade: Grade;
     adaptation: AdaptiveProfile;
+    logger: QuestLogger;
   }) => Promise<QuestGenerationResult>;
   verifyQuest: (questId: string) => Promise<QuestVerificationView>;
   persist: QuestPipelinePersist;
@@ -110,6 +113,7 @@ export type QuestPipelineDeps = {
     recentOutcomes: boolean[];
   }) => AdaptiveProfile;
   timer?: PipelineTimer;
+  logger?: QuestLogger;
 };
 
 export async function runQuestPipeline(
@@ -122,30 +126,87 @@ export async function runQuestPipeline(
   deps: QuestPipelineDeps,
 ): Promise<QuestCreateResult> {
   const timer = deps.timer ?? createPipelineTimer();
+  const logger = deps.logger ?? createQuestLogger("pipeline");
   let insertedQuestId: string | null = null;
 
   try {
+    logger.stage({
+      stage: "skill_lookup",
+      status: "started",
+      grade: input.grade,
+      skill: input.skillId,
+    });
     const skill = await timer.measureDb(() =>
       deps.persist.resolveSkill(input.grade, input.skillId),
     );
+    logger.stage({
+      stage: "skill_lookup",
+      status: "passed",
+      grade: input.grade,
+      skill: input.skillId,
+    });
 
+    logger.stage({
+      stage: "moderation",
+      status: "started",
+      grade: input.grade,
+      skill: input.skillId,
+    });
     const harmful = await timer.measure("moderation", () =>
       deps.moderateImage(input.image),
     );
 
     if (harmful !== "appropriate") {
+      logger.stage({
+        stage: "moderation",
+        status: "failed",
+        failureCode: harmful,
+        grade: input.grade,
+        skill: input.skillId,
+      });
       timer.log();
       return refused(harmful);
     }
+    logger.stage({
+      stage: "moderation",
+      status: "passed",
+      grade: input.grade,
+      skill: input.skillId,
+    });
 
+    logger.stage({
+      stage: "vision",
+      status: "started",
+      grade: input.grade,
+      skill: input.skillId,
+    });
     const vision = await timer.measure("vision", () =>
       deps.analyzeVision(input.image),
     );
 
     if (vision.status === "unsafe") {
+      logger.stage({
+        stage: "vision",
+        status: "failed",
+        failureCode: vision.safety.reason,
+        grade: input.grade,
+        skill: input.skillId,
+      });
+      logger.stage({
+        stage: "object_analysis",
+        status: "skipped",
+        failureCode: vision.safety.reason,
+      });
       timer.log();
       return refused(vision.safety.reason);
     }
+
+    logger.stage({
+      stage: "vision",
+      status: "passed",
+      grade: input.grade,
+      skill: input.skillId,
+    });
 
     const { profileId } = await timer.measureDb(() =>
       deps.persist.loadProfile(input.grade),
@@ -161,6 +222,13 @@ export async function runQuestPipeline(
     insertedQuestId = questId;
 
     if (vision.status === "failed") {
+      logger.stage({
+        stage: "object_analysis",
+        status: "failed",
+        failureCode: vision.failure.reason,
+        grade: input.grade,
+        skill: input.skillId,
+      });
       await timer.measureDb(() =>
         vision.failure.reason === "generation_failure"
           ? deps.persist.markFailed(questId)
@@ -171,6 +239,17 @@ export async function runQuestPipeline(
     }
 
     const analysis = vision.analysis;
+    const purpose = inferSemanticPurpose(analysis);
+
+    logger.stage({
+      stage: "object_analysis",
+      status: "passed",
+      grade: input.grade,
+      skill: input.skillId,
+      identifiedObject: analysis.objectName,
+      semanticDomains: purpose.domains,
+      typicalUses: analysis.typicalUses,
+    });
 
     const [{ progress, recentOutcomes }] = await timer.measureDb(() =>
       Promise.all([
@@ -192,6 +271,7 @@ export async function runQuestPipeline(
         skillDescription: skill.description,
         grade: input.grade,
         adaptation,
+        logger,
       }),
     );
 
@@ -231,34 +311,97 @@ export async function runQuestPipeline(
       });
     }
 
-    await timer.measureDb(async () => {
-      await Promise.all([
-        deps.persist.storeFit(questId, generation.fit),
-        deps.persist.storeDiscovery(questId, generation.discovery),
-        deps.persist.storeChallenge({
-          questId,
-          skillRowId: skill.id,
-          challenge: generation.challenge,
-          fit: generation.fit,
-          adaptation,
-          contextualGrounding: generation.contextualGrounding,
-        }),
-      ]);
-    });
+    try {
+      logger.stage({
+        stage: "persistence",
+        status: "started",
+        grade: input.grade,
+        skill: input.skillId,
+      });
+      await timer.measureDb(async () => {
+        await Promise.all([
+          deps.persist.storeFit(questId, generation.fit),
+          deps.persist.storeDiscovery(questId, generation.discovery),
+          deps.persist.storeChallenge({
+            questId,
+            skillRowId: skill.id,
+            challenge: generation.challenge,
+            fit: generation.fit,
+            adaptation,
+            contextualGrounding: generation.contextualGrounding,
+          }),
+        ]);
+      });
+      logger.stage({
+        stage: "persistence",
+        status: "passed",
+        grade: input.grade,
+        skill: input.skillId,
+      });
+    } catch (error) {
+      logger.stage({
+        stage: "persistence",
+        status: "failed",
+        failureCode: "persistence_failure",
+        grade: input.grade,
+        skill: input.skillId,
+      });
+      logger.generationFailed({
+        challengeMode: generation.fit.challengeMode,
+        grade: input.grade,
+        skill: input.skillId,
+        candidate1FailureStage: "persistence_failure",
+        candidate1FailureCode: "persistence_failure",
+      });
+      void error;
+      throw error;
+    }
 
     const verified = await timer.measure("verification", () =>
       deps.verifyQuest(questId),
     );
 
     if (verified.status !== "ok") {
+      logger.stage({
+        stage: "candidate_1_verification",
+        status: "failed",
+        failureCode: verified.code ?? verified.failure.reason,
+        grade: input.grade,
+        skill: input.skillId,
+      });
+      logger.generationFailed({
+        challengeMode: generation.fit.challengeMode,
+        grade: input.grade,
+        skill: input.skillId,
+        candidate1FailureStage: "verification_failure",
+        candidate1FailureCode: verified.code ?? verified.failure.reason,
+      });
       timer.log();
-      return refused(verified.failure.reason);
+      return { kind: "generationFailed" };
     }
 
+    logger.stage({
+      stage: "ready",
+      status: "passed",
+      grade: input.grade,
+      skill: input.skillId,
+    });
+    logger.ready({
+      challengeMode: generation.fit.challengeMode,
+      grade: input.grade,
+      skill: input.skillId,
+      attemptsUsed: generation.attemptsUsed ?? 1,
+    });
     timer.log();
     return { kind: "ready", questId };
   } catch (error) {
-    console.error("[quest-pipeline]", error);
+    logger.generationFailed({
+      grade: input.grade,
+      skill: input.skillId,
+      candidate1FailureStage: "persistence_failure",
+      candidate1FailureCode: "unhandled_exception",
+    });
+    void error;
     if (insertedQuestId !== null) {
       await deps.persist.markFailed(insertedQuestId);
     }

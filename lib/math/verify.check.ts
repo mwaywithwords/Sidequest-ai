@@ -848,6 +848,14 @@ check(
   }),
 );
 check(
+  "solution using $ for a dollar answer agrees",
+  solutionAgreesWithAnswer("Add $20 and $50. $20 + $50 = $70.", {
+    type: "number",
+    value: 70,
+    unit: "dollars",
+  }),
+);
+check(
   "solution missing the answer is a mismatch",
   !solutionAgreesWithAnswer("Just subtract the numbers.", {
     type: "number",

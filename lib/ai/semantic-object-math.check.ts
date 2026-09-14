@@ -727,8 +727,54 @@ const walletContainsFact = finalizeChallenge(
 );
 
 check(
-  "FAIL: 'Your wallet contains $20' when $20 was not observed",
-  walletContainsFact.status !== "ok",
+  "PASS: unframed given_in_problem wallet amount is prefixed with Suppose",
+  walletContainsFact.status === "ok" &&
+    walletContainsFact.challenge.question.startsWith(
+      "Suppose your wallet contains $20",
+    ) &&
+    walletContainsFact.repairs.includes("hypothetical_prefix"),
+);
+
+const walletContainsObserved = finalizeChallenge(
+  wire({
+    skillCode: "subtraction",
+    question:
+      "Your wallet contains $20. How much more money would you need to reach $125?",
+    objectConnection: "Your wallet sent us to money and saving.",
+    valuesUsed: [
+      operand("target dollars", 125, "given_in_problem", "dollars"),
+      operand("starting dollars", 20, "observed", "dollars"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 105,
+      numerator: null,
+      denominator: null,
+      unit: "dollars",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "subtract",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("target dollars", 125, "given_in_problem", "dollars"),
+        operand("starting dollars", 20, "observed", "dollars"),
+      ],
+    },
+    solution: "125 − 20 = 105 dollars.",
+  }),
+  ctx(
+    wallet,
+    inspiredFit("subtraction", "money, spending, and saving", "A wallet holds money."),
+  ),
+);
+
+check(
+  "FAIL: 'Your wallet contains $20' labeled observed when $20 was not observed",
+  walletContainsObserved.status !== "ok",
 );
 
 const walletSuppose = finalizeChallenge(
@@ -814,8 +860,55 @@ const cupHoldsFact = finalizeChallenge(
 );
 
 check(
-  "FAIL: 'Your cup holds 500 mL' when capacity was not established",
-  cupHoldsFact.status !== "ok",
+  "PASS: unframed given_in_problem cup capacity is prefixed with Suppose",
+  cupHoldsFact.status === "ok" &&
+    cupHoldsFact.challenge.question.startsWith("Suppose your cup holds 500 mL") &&
+    cupHoldsFact.repairs.includes("hypothetical_prefix"),
+);
+
+const cupHoldsObserved = finalizeChallenge(
+  wire({
+    skillCode: "multiplication",
+    question: "Your cup holds 500 mL. How much water would 2 cups hold?",
+    objectConnection: "Your cup sent us to liquid and servings.",
+    valuesUsed: [
+      operand("cup amount", 500, "observed", "mL"),
+      operand("cups", 2, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 1000,
+      numerator: null,
+      denominator: null,
+      unit: "mL",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "multiply",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("cup amount", 500, "observed", "mL"),
+        operand("cups", 2, "given_in_problem"),
+      ],
+    },
+    solution: "500 × 2 = 1000 mL.",
+  }),
+  ctx(
+    cup,
+    inspiredFit(
+      "multiplication",
+      "liquid, pouring, and servings",
+      "A cup is used for drinking.",
+    ),
+  ),
+);
+
+check(
+  "FAIL: 'Your cup holds 500 mL' labeled observed when capacity was not established",
+  cupHoldsObserved.status !== "ok",
 );
 
 const cupSuppose = finalizeChallenge(
@@ -990,6 +1083,624 @@ check(
     basketball,
     { topic: "scoring, teams, and shots", reason: "Basketball scoring." },
   ),
+);
+
+check(
+  "PASS: wallet → bills without repeating wallet next to every number",
+  challengeMatchesObjectPurpose(
+    "Suppose the bills add 20 dollars and 50 dollars.",
+    "Your wallet sent us to bills and dollars.",
+    wallet,
+    { topic: "money, spending, and saving", reason: "A wallet holds money." },
+  ),
+);
+
+check(
+  "PASS: wallet → spending",
+  challengeMatchesObjectPurpose(
+    "Suppose you spend 7 dollars from your wallet.",
+    "Your wallet sent us to spending.",
+    wallet,
+    { topic: "money, spending, and saving", reason: "A wallet holds money." },
+  ),
+);
+
+check(
+  "PASS: wallet → saving",
+  challengeMatchesObjectPurpose(
+    "Suppose you save 15 dollars in your wallet.",
+    "Your wallet sent us to saving.",
+    wallet,
+    { topic: "money, spending, and saving", reason: "A wallet holds money." },
+  ),
+);
+
+check(
+  "FAIL: basketball → pencils",
+  !challengeMatchesObjectPurpose(
+    "Suppose there are 8 pencils next to your basketball.",
+    "This question is about your basketball.",
+    basketball,
+    { topic: "scoring, teams, and shots", reason: "Basketball scoring." },
+  ),
+);
+
+const shoe = reading("shoe", "footwear", {
+  shapeProperties: ["left-right symmetry"],
+  observableProperties: ["laces"],
+});
+
+const ARITHMETIC_SKILLS = [
+  "addition",
+  "subtraction",
+  "multiplication",
+  "division",
+  "fractions",
+] as const;
+
+for (const skillId of ARITHMETIC_SKILLS) {
+  check(
+    `wallet + ${skillId} resolves to inspired_math with no numeric anchor`,
+    recoveredMode(wallet, skillId) === "inspired_math",
+  );
+}
+
+for (const skillId of ["addition", "multiplication", "division"] as const) {
+  check(
+    `shoe + ${skillId} resolves to inspired_math with no numeric anchor`,
+    recoveredMode(shoe, skillId) === "inspired_math",
+  );
+  check(
+    `cup + ${skillId} resolves to inspired_math with no numeric anchor`,
+    recoveredMode(cup, skillId) === "inspired_math",
+  );
+}
+
+for (const skillId of ["addition", "subtraction", "multiplication"] as const) {
+  check(
+    `basketball + ${skillId} resolves to inspired_math with no numeric anchor`,
+    recoveredMode(basketball, skillId) === "inspired_math",
+  );
+}
+
+check(
+  "book + addition resolves to inspired_math with no numeric anchor",
+  recoveredMode(book, "addition") === "inspired_math",
+);
+
+check(
+  "book + fractions resolves to inspired_math with no numeric anchor",
+  recoveredMode(book, "fractions") === "inspired_math",
+);
+
+check(
+  "wallet + geometry is object_math from rectangular form",
+  recoveredMode(wallet, "geometry") === "object_math",
+);
+
+check(
+  "basketball + geometry is object_math from sphere/circular form",
+  recoveredMode(basketball, "geometry") === "object_math",
+);
+
+const investigationWallet = finalizeSkillFit(
+  {
+    challengeMode: "investigation_math",
+    fitScore: 0.35,
+    usableProperties: [],
+    reason: "No amount is visible.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: {
+      type: "student_count",
+      prompt: "Count one group of parts on your wallet.",
+      targetProperty: "visible count",
+      reason: "A real number from your object lets us do this mission.",
+    },
+    inspirationContext: null,
+  },
+  wallet,
+  "addition",
+);
+
+check(
+  "wallet + addition does not stay investigation_math when the money domain exists",
+  investigationWallet.status === "ok" &&
+    investigationWallet.fit.challengeMode === "inspired_math",
+);
+
+verifyNamed(
+  "wallet + addition end-to-end: suppose $20 then add $50",
+  wallet,
+  inspiredFit(
+    "addition",
+    "money, spending, and saving",
+    "A wallet holds money.",
+  ),
+  wire({
+    skillCode: "addition",
+    question:
+      "Suppose your wallet has $20 and you add $50. How much money would you have?",
+    objectConnection:
+      "Your wallet sent us to money, then imagined amounts to add, not a total printed on the wallet.",
+    hint1: "Start with the amount supposed to be in the wallet.",
+    hint2: "Add 20 and 50.",
+    valuesUsed: [
+      operand("starting dollars", 20, "given_in_problem", "dollars"),
+      operand("added dollars", 50, "given_in_problem", "dollars"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 70,
+      numerator: null,
+      denominator: null,
+      unit: "dollars",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "add",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("starting dollars", 20, "given_in_problem", "dollars"),
+        operand("added dollars", 50, "given_in_problem", "dollars"),
+      ],
+    },
+    solution: "20 + 50 = 70 dollars.",
+  }),
+);
+
+verifyNamed(
+  "wallet + multiplication end-to-end: 6 five-dollar bills",
+  wallet,
+  inspiredFit(
+    "multiplication",
+    "money, spending, and saving",
+    "A wallet holds money.",
+  ),
+  wire({
+    skillCode: "multiplication",
+    question:
+      "Imagine your wallet has 6 five-dollar bills. How much money is that?",
+    objectConnection:
+      "Your wallet sent us to money, then imagined bills to multiply, not a total printed on the wallet.",
+    hint1: "Each bill is worth five dollars.",
+    hint2: "Multiply 6 by 5.",
+    valuesUsed: [
+      operand("five-dollar bills", 6, "given_in_problem"),
+      operand("dollars per bill", 5, "given_in_problem", "dollars"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 30,
+      numerator: null,
+      denominator: null,
+      unit: "dollars",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "multiply",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("five-dollar bills", 6, "given_in_problem"),
+        operand("dollars per bill", 5, "given_in_problem", "dollars"),
+      ],
+    },
+    solution: "6 × 5 = 30 dollars.",
+  }),
+);
+
+verifyNamed(
+  "cup + division end-to-end: 1,000 mL into 250 mL cups",
+  cup,
+  inspiredFit(
+    "division",
+    "liquid, pouring, and servings",
+    "A cup is used for pouring servings.",
+  ),
+  wire({
+    skillCode: "division",
+    question:
+      "Suppose your cup holds 250 mL for this Sidequest. If you have 1,000 mL of water, how many cups could you fill?",
+    objectConnection:
+      "Your cup sent us to liquid and servings, not a capacity printed on the cup.",
+    hint1: "Each cup holds the same imagined amount.",
+    hint2: "Divide 1,000 by 250.",
+    valuesUsed: [
+      operand("total water", 1000, "given_in_problem", "mL"),
+      operand("cup amount", 250, "given_in_problem", "mL"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 4,
+      numerator: null,
+      denominator: null,
+      unit: null,
+    },
+    computation: {
+      type: "division",
+      operation: "quotient",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("total water", 1000, "given_in_problem", "mL"),
+        operand("cup amount", 250, "given_in_problem", "mL"),
+      ],
+    },
+    solution: "1,000 ÷ 250 = 4 cups.",
+  }),
+);
+
+verifyNamed(
+  "wallet + division end-to-end with given_in_problem money",
+  wallet,
+  inspiredFit("division", "money, spending, and saving", "A wallet holds money."),
+  wire({
+    skillCode: "division",
+    question:
+      "Suppose your wallet has $20 and you share it equally among 4 people. How many dollars does each person get?",
+    objectConnection: "Your wallet sent us to money, then imagined sharing.",
+    hint1: "The money is shared equally.",
+    hint2: "Divide 20 by 4.",
+    valuesUsed: [
+      operand("starting dollars", 20, "given_in_problem", "dollars"),
+      operand("people", 4, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 5,
+      numerator: null,
+      denominator: null,
+      unit: "dollars",
+    },
+    computation: {
+      type: "division",
+      operation: "quotient",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("starting dollars", 20, "given_in_problem", "dollars"),
+        operand("people", 4, "given_in_problem"),
+      ],
+    },
+    solution: "20 ÷ 4 = 5 dollars.",
+  }),
+);
+
+verifyNamed(
+  "wallet + fractions end-to-end with given_in_problem money",
+  wallet,
+  inspiredFit(
+    "fractions",
+    "money, spending, and saving",
+    "A wallet holds money.",
+  ),
+  wire({
+    skillCode: "fractions",
+    question:
+      "Suppose your wallet has $80 and you spend 1/4 of it. How much money did you spend?",
+    objectConnection: "Your wallet sent us to money, then imagined a portion.",
+    hint1: "The whole amount is 80 dollars.",
+    hint2: "Find one fourth of 80.",
+    valuesUsed: [
+      operand("starting dollars", 80, "given_in_problem", "dollars"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 20,
+      numerator: null,
+      denominator: null,
+      unit: "dollars",
+    },
+    computation: {
+      type: "fraction_of",
+      operation: "",
+      shape: null,
+      numerator: 1,
+      denominator: 4,
+      simplify: null,
+      operands: [
+        operand("starting dollars", 80, "given_in_problem", "dollars"),
+      ],
+    },
+    solution: "1/4 of 80 is 20 dollars.",
+  }),
+);
+
+verifyNamed(
+  "shoe + addition end-to-end with hypothetical steps",
+  shoe,
+  inspiredFit("addition", "walking, steps, and pairs", "A shoe is used for walking."),
+  wire({
+    skillCode: "addition",
+    question:
+      "Suppose you walk 18 steps in your shoe, then 14 more steps. How many steps is that altogether?",
+    objectConnection: "Your shoe sent us to walking and steps, not a printed size.",
+    hint1: "Add the two walks.",
+    hint2: "18 + 14.",
+    valuesUsed: [
+      operand("first walk", 18, "given_in_problem", "steps"),
+      operand("second walk", 14, "given_in_problem", "steps"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 32,
+      numerator: null,
+      denominator: null,
+      unit: "steps",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "add",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("first walk", 18, "given_in_problem", "steps"),
+        operand("second walk", 14, "given_in_problem", "steps"),
+      ],
+    },
+    solution: "18 + 14 = 32 steps.",
+  }),
+);
+
+verifyNamed(
+  "book + addition end-to-end with hypothetical pages",
+  book,
+  inspiredFit("addition", "reading, pages, and chapters", "Books are organised into pages."),
+  wire({
+    skillCode: "addition",
+    question:
+      "Suppose your book has 12 pages and you add 8 more pages of notes. How many pages is that altogether?",
+    objectConnection: "Your book sent us to reading and pages, not a printed page count.",
+    hint1: "Add the two amounts of pages.",
+    hint2: "12 + 8.",
+    valuesUsed: [
+      operand("pages", 12, "given_in_problem"),
+      operand("note pages", 8, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 20,
+      numerator: null,
+      denominator: null,
+      unit: null,
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "add",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("pages", 12, "given_in_problem"),
+        operand("note pages", 8, "given_in_problem"),
+      ],
+    },
+    solution: "12 + 8 = 20 pages.",
+  }),
+);
+
+verifyNamed(
+  "shoe + multiplication end-to-end with hypothetical steps",
+  shoe,
+  inspiredFit(
+    "multiplication",
+    "walking, steps, and pairs",
+    "A shoe is used for walking.",
+  ),
+  wire({
+    skillCode: "multiplication",
+    question:
+      "Imagine you walk 12 steps in each lap with your shoe. Suppose you complete 3 laps. How many steps is that?",
+    objectConnection:
+      "Your shoe sent us to walking and steps, not a size printed in the shoe.",
+    hint1: "Each lap has the same number of steps.",
+    hint2: "Multiply 12 by 3.",
+    valuesUsed: [
+      operand("steps per lap", 12, "given_in_problem", "steps"),
+      operand("laps", 3, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 36,
+      numerator: null,
+      denominator: null,
+      unit: "steps",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "multiply",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("steps per lap", 12, "given_in_problem", "steps"),
+        operand("laps", 3, "given_in_problem"),
+      ],
+    },
+    solution: "12 × 3 = 36 steps.",
+  }),
+);
+
+verifyNamed(
+  "shoe + division end-to-end with hypothetical steps",
+  shoe,
+  inspiredFit("division", "walking, steps, and pairs", "A shoe is used for walking."),
+  wire({
+    skillCode: "division",
+    question:
+      "Suppose you take 40 steps in your shoe and split them equally across 4 walks. How many steps is each walk?",
+    objectConnection:
+      "Your shoe sent us to walking and steps, not a printed measurement.",
+    hint1: "The steps are shared equally.",
+    hint2: "Divide 40 by 4.",
+    valuesUsed: [
+      operand("total steps", 40, "given_in_problem", "steps"),
+      operand("walks", 4, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 10,
+      numerator: null,
+      denominator: null,
+      unit: "steps",
+    },
+    computation: {
+      type: "division",
+      operation: "quotient",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("total steps", 40, "given_in_problem", "steps"),
+        operand("walks", 4, "given_in_problem"),
+      ],
+    },
+    solution: "40 ÷ 4 = 10 steps.",
+  }),
+);
+
+verifyNamed(
+  "cup + addition end-to-end with hypothetical servings",
+  cup,
+  inspiredFit(
+    "addition",
+    "liquid, pouring, and servings",
+    "A cup is used for drinking.",
+  ),
+  wire({
+    skillCode: "addition",
+    question:
+      "Suppose you pour 120 mL into your cup, then add 80 mL more. How many mL is that altogether?",
+    objectConnection:
+      "Your cup sent us to liquid and servings, not a capacity printed on the cup.",
+    hint1: "Add the two pours.",
+    hint2: "120 + 80.",
+    valuesUsed: [
+      operand("first pour", 120, "given_in_problem", "mL"),
+      operand("second pour", 80, "given_in_problem", "mL"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 200,
+      numerator: null,
+      denominator: null,
+      unit: "mL",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "add",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("first pour", 120, "given_in_problem", "mL"),
+        operand("second pour", 80, "given_in_problem", "mL"),
+      ],
+    },
+    solution: "120 + 80 = 200 mL.",
+  }),
+);
+
+verifyNamed(
+  "basketball + subtraction end-to-end with a hypothetical score",
+  basketball,
+  inspiredFit(
+    "subtraction",
+    "scoring, teams, and shots",
+    "Basketball scoring is connected to the ball.",
+  ),
+  wire({
+    skillCode: "subtraction",
+    question:
+      "Suppose your team has 18 points with the basketball. If the other team has 11 points, how many more points do you have?",
+    objectConnection:
+      "Your basketball sent us to scoring, not a number printed on the ball.",
+    hint1: "Start with your team's points.",
+    hint2: "Subtract 11 from 18.",
+    valuesUsed: [
+      operand("our points", 18, "given_in_problem", "points"),
+      operand("their points", 11, "given_in_problem", "points"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 7,
+      numerator: null,
+      denominator: null,
+      unit: "points",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "subtract",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("our points", 18, "given_in_problem", "points"),
+        operand("their points", 11, "given_in_problem", "points"),
+      ],
+    },
+    solution: "18 − 11 = 7 points.",
+  }),
+);
+
+verifyNamed(
+  "basketball + multiplication end-to-end with hypothetical shots",
+  basketball,
+  inspiredFit(
+    "multiplication",
+    "scoring, teams, and shots",
+    "Basketball scoring is connected to the ball.",
+  ),
+  wire({
+    skillCode: "multiplication",
+    question:
+      "Suppose you make 4 shots with your basketball and each shot is worth 2 points. How many points is that?",
+    objectConnection:
+      "Your basketball sent us to scoring, not a number printed on the ball.",
+    hint1: "Each shot is worth the same.",
+    hint2: "Multiply 4 by 2.",
+    valuesUsed: [
+      operand("shots", 4, "given_in_problem"),
+      operand("points per shot", 2, "given_in_problem", "points"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 8,
+      numerator: null,
+      denominator: null,
+      unit: "points",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "multiply",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("shots", 4, "given_in_problem"),
+        operand("points per shot", 2, "given_in_problem", "points"),
+      ],
+    },
+    solution: "4 × 2 = 8 points.",
+  }),
 );
 
 // ---------------------------------------------------------------------------

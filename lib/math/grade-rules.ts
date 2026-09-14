@@ -30,7 +30,8 @@ import type { Grade } from "@/lib/types";
  * Grade 4
  * - Whole numbers only.
  * - Magnitudes at most 10,000.
- * - Division divisor at most 9 (one digit).
+ * - Division divisor at most 9 (one digit), except equal-grouping
+ *   problems whose quotient is a whole number of at most 12.
  * - Fraction denominators at most 12.
  * - Conversions are allowed.
  * - Geometry may be perimeter or area.
@@ -38,7 +39,7 @@ import type { Grade } from "@/lib/types";
  * Grade 5
  * - Decimals to hundredths are allowed.
  * - Magnitudes at most 100,000.
- * - Division divisor at most 99.
+ * - Division divisor at most 99, with the same equal-grouping exception.
  * - Fraction denominators at most 12.
  * - Conversions and both geometry operations are allowed.
  */
@@ -153,7 +154,9 @@ function grade4Violation(
   }
 
   if (computation.type === "division" && computation.divisor.value > 9) {
-    return "Grade 4 division uses a one-digit divisor.";
+    if (!isFriendlyEqualGrouping(computation)) {
+      return "Grade 4 division uses a one-digit divisor.";
+    }
   }
 
   return fractionDenominatorViolation(computation, answer, (denominator) =>
@@ -177,7 +180,9 @@ function grade5Violation(
   }
 
   if (computation.type === "division" && computation.divisor.value > 99) {
-    return "Grade 5 division uses a divisor up to two digits.";
+    if (!isFriendlyEqualGrouping(computation)) {
+      return "Grade 5 division uses a divisor up to two digits.";
+    }
   }
 
   return fractionDenominatorViolation(computation, answer, (denominator) =>
@@ -185,6 +190,21 @@ function grade5Violation(
       ? null
       : "Grade 5 fraction denominators must be 12 or less.",
   );
+}
+
+function isFriendlyEqualGrouping(
+  computation: Extract<Computation, { type: "division" }>,
+): boolean {
+  const dividend = computation.dividend.value;
+  const divisor = computation.divisor.value;
+  if (!Number.isInteger(dividend) || !Number.isInteger(divisor) || divisor <= 0) {
+    return false;
+  }
+
+  if (dividend % divisor !== 0) return false;
+
+  const quotient = dividend / divisor;
+  return Number.isInteger(quotient) && quotient >= 1 && quotient <= 12;
 }
 
 function fractionDenominatorViolation(

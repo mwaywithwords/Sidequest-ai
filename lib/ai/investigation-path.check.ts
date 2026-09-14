@@ -11,10 +11,12 @@
 import {
   buildAnchors,
   fallbackEvidenceRequest,
+  hasNumericCount,
   readingAnchors,
   recoverInvestigation,
   resolveInvestigation,
 } from "@/lib/ai/investigation-path";
+import { finalizeSkillFit } from "@/lib/ai/skill-fit-finalize";
 import {
   type EvidenceRequest,
   type InspirationContext,
@@ -485,6 +487,128 @@ check(
   "wallet + addition recovers as inspired_math, not poor_fit or a forced count",
   recoveredWalletAddition.resolved.challengeMode === "inspired_math" &&
     recoveredWalletAddition.resolved.inspirationContext !== null,
+);
+
+const objectMathWallet = finalizeSkillFit(
+  {
+    challengeMode: "object_math",
+    fitScore: 0.8,
+    usableProperties: ["rectangular form"],
+    reason: "The wallet looks rectangular.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: null,
+    inspirationContext: null,
+  },
+  wallet,
+  "addition",
+);
+
+check(
+  "numberless wallet + addition is not object_math from a rectangle, investigation, or poor_fit",
+  objectMathWallet.status === "ok" &&
+    objectMathWallet.fit.challengeMode === "inspired_math",
+);
+
+const walletCountSlots: ObjectAnalysis = {
+  ...wallet,
+  countableProperties: ["card slots"],
+};
+
+check(
+  "wallet card slots without a number are not an addition object_math anchor",
+  readingAnchors(walletCountSlots, "addition").length === 0 &&
+    !hasNumericCount("card slots"),
+);
+
+const slotsAsObjectMath = finalizeSkillFit(
+  {
+    challengeMode: "object_math",
+    fitScore: 0.8,
+    usableProperties: ["card slots"],
+    reason: "The wallet has card slots.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: null,
+    inspirationContext: null,
+  },
+  walletCountSlots,
+  "addition",
+);
+
+check(
+  "wallet + addition does not stay object_math from a non-numeric countable",
+  slotsAsObjectMath.status === "ok" &&
+    slotsAsObjectMath.fit.challengeMode === "inspired_math",
+);
+
+const forcedInvestigation = finalizeSkillFit(
+  {
+    challengeMode: "investigation_math",
+    fitScore: 0.4,
+    usableProperties: [],
+    reason: "No printed amount.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: {
+      type: "student_count",
+      prompt: "Count the cards in your wallet.",
+      targetProperty: "visible count",
+      reason: "A count lets us add.",
+    },
+    inspirationContext: null,
+  },
+  wallet,
+  "addition",
+);
+
+check(
+  "wallet + addition recovers investigation_math to inspired_math from the money domain",
+  forcedInvestigation.status === "ok" &&
+    forcedInvestigation.fit.challengeMode === "inspired_math" &&
+    forcedInvestigation.fit.inspirationContext !== null,
+);
+
+const basketballAdditionFromSphere = finalizeSkillFit(
+  {
+    challengeMode: "object_math",
+    fitScore: 0.8,
+    usableProperties: ["sphere"],
+    reason: "The ball is a sphere.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: null,
+    inspirationContext: null,
+  },
+  basketball,
+  "addition",
+);
+
+check(
+  "basketball + addition is not object_math from a sphere",
+  basketballAdditionFromSphere.status === "ok" &&
+    basketballAdditionFromSphere.fit.challengeMode === "inspired_math",
+);
+
+const basketballGeometryFromSphere = finalizeSkillFit(
+  {
+    challengeMode: "object_math",
+    fitScore: 0.8,
+    usableProperties: ["sphere"],
+    reason: "The ball is a sphere.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    evidenceRequest: null,
+    inspirationContext: null,
+  },
+  basketball,
+  "geometry",
+);
+
+check(
+  "basketball + geometry stays object_math from a sphere",
+  basketballGeometryFromSphere.status === "ok" &&
+    basketballGeometryFromSphere.fit.challengeMode === "object_math",
 );
 
 const cup: ObjectAnalysis = {

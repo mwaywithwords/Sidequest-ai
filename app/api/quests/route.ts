@@ -3,15 +3,22 @@ import { MODEL_READABLE_IMAGE_TYPES } from "@/lib/ai/image-safety";
 import { inspectUploadedImage } from "@/lib/image-capture";
 import { createQuest } from "@/lib/quest-create";
 import { toClientCreateBody } from "@/lib/quest-pipeline";
+import { createQuestLogger, createQuestTraceId } from "@/lib/quest-trace";
 import { parseMission } from "@/lib/skill-catalogue";
 
 /**
- * Up to four model calls now sit inside this request — moderation, combined
- * vision, combined quest generation, and one controlled regeneration if the
- * first candidate fails verification. Each call is bounded by the client
- * timeout in lib/ai/openai.ts well before this.
+ * Happy path is three model calls: moderation, vision, and combined
+ * quest generation. A fourth challenge-only call happens only when the
+ * first challenge candidate is rejected. Each call is bounded by the
+ * client timeout in lib/ai/openai.ts well before this.
+ *
+ * Node.js runtime is required so console.info/warn/error are written to
+ * stdout/stderr and captured as Vercel Function Logs. Edge would hide
+ * the structured trace this route exists to emit.
  */
+export const runtime = "nodejs";
 export const maxDuration = 300;
+export const dynamic = "force-dynamic";
 
 /**
  * Creates a quest from a photograph, in the order the pipeline requires:
@@ -28,15 +35,30 @@ export const maxDuration = 300;
  * include the question or the answer.
  */
 export async function POST(request: Request) {
+  const questTraceId = createQuestTraceId();
+  const logger = createQuestLogger(questTraceId);
+
+  logger.stage({ stage: "mission_validation", status: "started" });
+
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
+    logger.stage({
+      stage: "mission_validation",
+      status: "failed",
+      failureCode: "missing",
+    });
     return NextResponse.json({ error: "missing" }, { status: 400 });
   }
 
   const mission = parseMission(form.get("grade"), form.get("skill"));
   if (mission === null) {
+    logger.stage({
+      stage: "mission_validation",
+      status: "failed",
+      failureCode: "badMission",
+    });
     return NextResponse.json({ error: "badMission" }, { status: 400 });
   }
   const { grade, skillCode: skillId } = mission;
@@ -46,14 +68,35 @@ export async function POST(request: Request) {
 
   const inspected = await inspectUploadedImage(incoming);
   if (!inspected.ok) {
+    logger.stage({
+      stage: "mission_validation",
+      status: "failed",
+      failureCode: inspected.reason,
+      grade,
+      skill: skillId,
+    });
     return NextResponse.json({ error: inspected.reason }, { status: 400 });
   }
 
   const file = inspected.file;
 
   if (!MODEL_READABLE_IMAGE_TYPES.includes(file.type)) {
+    logger.stage({
+      stage: "mission_validation",
+      status: "failed",
+      failureCode: "unsupported",
+      grade,
+      skill: skillId,
+    });
     return NextResponse.json({ error: "unsupported" }, { status: 400 });
   }
+
+  logger.stage({
+    stage: "mission_validation",
+    status: "passed",
+    grade,
+    skill: skillId,
+  });
 
   try {
     const result = await createQuest({
@@ -61,6 +104,7 @@ export async function POST(request: Request) {
       extension: inspected.extension,
       grade,
       skillId,
+      logger,
     });
 
     if (result.kind === "failed" || result.kind === "generationFailed") {
@@ -73,7 +117,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json(toClientCreateBody(result), { status: 201 });
   } catch (error) {
-    console.error("[POST /api/quests]", error);
+    logger.generationFailed({
+      grade,
+      skill: skillId,
+      candidate1FailureStage: "persistence_failure",
+      candidate1FailureCode: "unhandled_exception",
+    });
+    void error;
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
 }

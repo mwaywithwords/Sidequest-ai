@@ -1,4 +1,4 @@
-import { challengeMatchesObjectPurpose } from "@/lib/ai/semantic-purpose";
+import { challengeMatchesObjectPurpose, connectionCitesSemanticDomain } from "@/lib/ai/semantic-purpose";
 import type {
   Computation,
   ContextualPayload,
@@ -11,6 +11,10 @@ import type {
 import { computationOperands, evaluateComputation, simplifyFraction } from "@/lib/math/evaluate";
 import { gradeViolation } from "@/lib/math/grade-rules";
 import {
+  questionHasHypotheticalFraming,
+  questionStatesNumber,
+} from "@/lib/math/hypothetical";
+import {
   isContextualValue,
   isObservedValue,
   isStudentProvidedValue,
@@ -21,7 +25,7 @@ import {
   geometryCitationTokens,
   shapeSupports,
 } from "@/lib/math/geometry-forms";
-import { isFiniteNumber, sameUnit, unitsCompatible } from "@/lib/math/units";
+import { isFiniteNumber, normaliseUnit, sameUnit, unitsCompatible } from "@/lib/math/units";
 import type { Grade, SkillId } from "@/lib/types";
 
 /**
@@ -61,8 +65,6 @@ export type VerificationInput = {
   studentEvidence?: readonly StudentEvidenceValue[];
   contextualGrounding?: ContextualPayload | null;
 };
-
-const HYPOTHETICAL = /\b(if|suppose|imagine|what if|let'?s say)\b/i;
 
 const GENERIC_CONNECTION =
   /\bthis (question|problem|challenge|sidequest) is about your\b/i;
@@ -191,7 +193,8 @@ export function guidanceForFailure(reason: VerificationReason): string {
  * Isolated so the wording check can be tuned without touching arithmetic.
  *
  * Looks for the verified number or an equivalent fraction in the solution
- * text. It does not parse the solution as mathematics.
+ * text. It does not parse the solution as mathematics. Presentation repair
+ * may replace the generated solution before this check runs.
  */
 export function solutionAgreesWithAnswer(
   solution: string,
@@ -205,10 +208,7 @@ export function solutionAgreesWithAnswer(
 
   if (answer.type === "number") {
     if (!numberAppears(text, answer.value)) return false;
-    if (answer.unit && !text.includes(answer.unit.toLowerCase())) {
-      return false;
-    }
-    return true;
+    return unitAppears(text, answer.unit);
   }
 
   const reduced = simplifyFraction(answer.numerator, answer.denominator);
@@ -374,7 +374,7 @@ function verifyOrigins(
     (value) => value.origin === "given_in_problem",
   );
   if (given.length > 0) {
-    if (!HYPOTHETICAL.test(challenge.question)) {
+    if (!questionHasHypotheticalFraming(challenge.question)) {
       return fail(
         "ungrounded_value",
         "A given-in-problem value is not framed as hypothetical.",
@@ -382,7 +382,7 @@ function verifyOrigins(
     }
 
     for (const value of given) {
-      if (!challenge.question.includes(String(value.value))) {
+      if (!questionStatesNumber(challenge.question, value.value)) {
         return fail(
           "ungrounded_value",
           `The hypothetical value ${value.value} does not appear in the question.`,
@@ -642,8 +642,17 @@ function objectConnectionHolds(
       .split(/[^a-z0-9]+/i)
       .filter((token) => token.length >= 4)
       .some((token) => hay.includes(token));
+    const citesDomain = connectionCitesSemanticDomain(
+      connection,
+      analysis,
+      payload
+        ? { topic: payload.topic, reason: payload.reason }
+        : fit.inspirationContext,
+    );
 
-    if (!citesPhoto && !citesWorld && !citesTopic && !citesShape) return false;
+    if (!citesPhoto && !citesWorld && !citesTopic && !citesShape && !citesDomain) {
+      return false;
+    }
   } else if (!citesPhoto && !citesShape) {
     return false;
   }
@@ -696,7 +705,8 @@ function numberAppears(text: string, value: number): boolean {
 
 function unitAppears(text: string, unit: string | undefined): boolean {
   if (unit === undefined) return true;
-  return text.includes(unit.toLowerCase());
+  if (text.includes(unit.toLowerCase())) return true;
+  return normaliseUnit(unit) === "dollar" && text.includes("$");
 }
 
 function escapeRegExp(value: string): string {

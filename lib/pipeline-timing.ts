@@ -59,7 +59,10 @@ export function createPipelineTimer(): PipelineTimer {
       };
     },
     log() {
-      console.info("[quest-pipeline]", this.snapshot());
+      console.info(
+        "[quest-pipeline]",
+        JSON.stringify({ stage: "timing", status: "passed", ...this.snapshot() }),
+      );
     },
   };
 }

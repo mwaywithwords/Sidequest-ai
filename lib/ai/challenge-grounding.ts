@@ -17,7 +17,7 @@ import {
   type UsedValue,
   UsedValueSchema,
 } from "@/lib/ai/schemas";
-import { challengeMatchesObjectPurpose } from "@/lib/ai/semantic-purpose";
+import { challengeMatchesObjectPurpose, connectionCitesSemanticDomain } from "@/lib/ai/semantic-purpose";
 import {
   aspectAllowsLabel,
   geometryCitationTokens,
@@ -28,8 +28,16 @@ import {
   shapeSupports,
   structureCount,
 } from "@/lib/math/geometry-forms";
+import {
+  canPrefixHypotheticalFraming,
+  prefixHypotheticalFraming,
+  questionHasHypotheticalFraming,
+  questionStatesNumber,
+  sentenceIsHypothetical,
+} from "@/lib/math/hypothetical";
 import { normaliseUnit as foldUnit } from "@/lib/math/units";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
+import { sanitiseZodIssues } from "@/lib/quest-trace";
 import type { Grade, SkillId } from "@/lib/types";
 
 /**
@@ -43,15 +51,20 @@ import type { Grade, SkillId } from "@/lib/types";
  * next stage.
  */
 
-const QUESTION_MAX = 500;
+export const QUESTION_MAX = 500;
 const HINT_MAX = 280;
-const SOLUTION_MAX = 600;
+export const SOLUTION_MAX = 600;
 const CONNECTION_MAX = 280;
 
-const HYPOTHETICAL = /\b(if|suppose|imagine|what if|let'?s say)\b/i;
+export const CHALLENGE_REPAIRS = [
+  "hypothetical_prefix",
+  "deterministic_solution",
+] as const;
+
+export type ChallengeRepair = (typeof CHALLENGE_REPAIRS)[number];
 
 const MEASUREMENT =
-  /\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.(?=\s|$)|in(?!\s+(?:it|the|your|this|a|an|my|his|her|their|our))|feet|foot|ft|lbs?|pounds?)\b/gi;
+  /\b(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.(?=\s|$)|in(?!\s+(?:it|the|your|this|a|an|my|his|her|their|our))|feet|foot|ft|lbs?|pounds?)\b/gi;
 
 export type StudentEvidenceValue = {
   property: string;
@@ -141,10 +154,15 @@ export type ChallengeContext = {
 export type ChallengeValidationIssue = {
   path: string;
   code: string;
+  issues?: Array<{ path: string; code: string; expected?: string }>;
 };
 
 export type ChallengeFinalization =
-  | { status: "ok"; challenge: GeneratedChallenge }
+  | {
+      status: "ok";
+      challenge: GeneratedChallenge;
+      repairs: ChallengeRepair[];
+    }
   | { status: "poor_fit" }
   | { status: "generation_failure"; issue: ChallengeValidationIssue };
 
@@ -154,8 +172,9 @@ export type ChallengeFinalization =
  *
  * `canGenerate: false` is a poor fit: the approved investigation could not
  * become an honest question. Invented object facts, a missing grounded
- * anchor, or a malformed payload are generation failures. Nothing here
- * rewrites a bad value into a good one.
+ * anchor, or a malformed payload are generation failures. A missing
+ * inspired-math hypothetical prefix may be added when every value is
+ * already `given_in_problem`. Origins and observed facts are never rewritten.
  */
 export function finalizeChallenge(
   wire: WireChallenge,
@@ -165,7 +184,8 @@ export function finalizeChallenge(
     return { status: "poor_fit" };
   }
 
-  const question = wire.question.trim();
+  const repairs: ChallengeRepair[] = [];
+  let question = wire.question.trim();
   const solution = wire.solution.trim();
   const hint1 = wire.hint1.trim();
   const hint2 = wire.hint2.trim();
@@ -225,8 +245,9 @@ export function finalizeChallenge(
     return generationFailure("computation", "invalid_computation");
   }
 
-  if (!valuesAreGrounded(valuesUsed, context)) {
-    return generationFailure("valuesUsed", "ungrounded_value");
+  const valueGrounding = valuesGroundingIssue(valuesUsed, context);
+  if (valueGrounding !== null) {
+    return generationFailure("valuesUsed", valueGrounding);
   }
 
   if (!shapesAreGrounded(shapesUsed, context)) {
@@ -270,6 +291,18 @@ export function finalizeChallenge(
     return generationFailure("question", "contextual_as_observed");
   }
 
+  if (
+    canPrefixHypotheticalFraming(
+      question,
+      context.fit.challengeMode,
+      valuesUsed,
+      QUESTION_MAX,
+    )
+  ) {
+    question = prefixHypotheticalFraming(question);
+    repairs.push("hypothetical_prefix");
+  }
+
   if (!hypotheticalsAreFramed(question, valuesUsed)) {
     return generationFailure("question", "unframed_hypothetical");
   }
@@ -308,7 +341,7 @@ export function finalizeChallenge(
     return generationFailureFromZod(parsed.error);
   }
 
-  return { status: "ok", challenge: parsed.data };
+  return { status: "ok", challenge: parsed.data, repairs };
 }
 
 function generationFailure(
@@ -319,24 +352,27 @@ function generationFailure(
 }
 
 export function sanitiseZodIssue(error: {
-  issues: readonly { path: PropertyKey[]; code: string }[];
+  issues: readonly unknown[];
 }): ChallengeValidationIssue {
-  const issue = error.issues[0];
-  if (issue === undefined) {
-    return { path: "challenge", code: "invalid" };
-  }
+  const issues = sanitiseZodIssueList(error);
+  return issues[0] ?? { path: "challenge", code: "invalid", issues };
+}
 
-  return {
-    path: issue.path.map(String).join(".") || "challenge",
-    code: issue.code,
-  };
+export function sanitiseZodIssueList(error: {
+  issues: readonly unknown[];
+}): NonNullable<ChallengeValidationIssue["issues"]> {
+  return sanitiseZodIssues(error);
 }
 
 function generationFailureFromZod(error: {
-  issues: readonly { path: PropertyKey[]; code: string }[];
+  issues: readonly unknown[];
 }): Extract<ChallengeFinalization, { status: "generation_failure" }> {
-  const issue = sanitiseZodIssue(error);
-  return { status: "generation_failure", issue };
+  const issues = sanitiseZodIssueList(error);
+  const first = issues[0] ?? { path: "challenge", code: "invalid" };
+  return {
+    status: "generation_failure",
+    issue: { ...first, issues },
+  };
 }
 
 /**
@@ -445,7 +481,15 @@ export function objectConnectionCitesAnchor(
     context.contextualGrounding?.topic ??
     context.fit.inspirationContext?.topic ??
     "";
-  return topicTokens(topic).some((token) => hay.includes(token));
+  if (topicTokens(topic).some((token) => hay.includes(token))) {
+    return true;
+  }
+
+  return connectionCitesSemanticDomain(
+    connection,
+    context.analysis,
+    context.fit.inspirationContext,
+  );
 }
 
 function connectionCitesValue(hay: string, value: UsedValue): boolean {
@@ -486,7 +530,7 @@ function inspiredStaysOnTopic(
 }
 
 const ATTRIBUTED_TO_OBJECT =
-  /\b(?:your|the)\s+[\w-]+\s+(?:shows|showed|has printed|is labelled|is labeled|contains|holds)\s+(\d+(?:\.\d+)?)/gi;
+  /\b(?:your|the)\s+[\w-]+\s+(?:shows|showed|has printed|is labelled|is labeled|contains|holds)\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)/gi;
 
 function attributesContextualAsObserved(
   question: string,
@@ -501,7 +545,7 @@ function attributesContextualAsObserved(
   for (const match of question.matchAll(ATTRIBUTED_TO_OBJECT)) {
     const raw = match[1];
     if (raw === undefined) continue;
-    const amount = Number(raw);
+    const amount = parseWrittenNumber(raw);
     if (contextual.some((value) => value.value === amount)) {
       return true;
     }
@@ -664,13 +708,15 @@ function parseComputation(
   if (operands === null) return null;
 
   switch (wire.type) {
-    case "arithmetic":
-      if (!isArithmeticOp(wire.operation) || operands.length < 2) return null;
+    case "arithmetic": {
+      const operation = foldComputationToken(wire.operation);
+      if (!isArithmeticOp(operation) || operands.length < 2) return null;
       return parseUnion({
         type: "arithmetic",
-        operation: wire.operation,
+        operation,
         operands,
       });
+    }
     case "multi_step_arithmetic": {
       const steps = parseArithmeticSteps(wire.steps ?? []);
       if (steps === null) return null;
@@ -679,14 +725,16 @@ function parseComputation(
         steps,
       });
     }
-    case "division":
-      if (!isDivisionOp(wire.operation) || operands.length < 2) return null;
+    case "division": {
+      const operation = foldComputationToken(wire.operation);
+      if (!isDivisionOp(operation) || operands.length < 2) return null;
       return parseUnion({
         type: "division",
-        operation: wire.operation,
+        operation,
         dividend: operands[0],
         divisor: operands[1],
       });
+    }
     case "fraction_of":
       if (
         operands.length < 1 ||
@@ -713,25 +761,35 @@ function parseComputation(
         usedParts: operands[1],
         simplify: wire.simplify === true,
       });
-    case "conversion":
-      if (!isConversionOp(wire.operation) || operands.length < 2) return null;
+    case "conversion": {
+      const operation = foldComputationToken(wire.operation);
+      if (!isConversionOp(operation) || operands.length < 2) return null;
       return parseUnion({
         type: "conversion",
-        operation: wire.operation,
+        operation,
         value: operands[0],
         factor: operands[1],
       });
-    case "geometry":
-      if (!isGeometryOp(wire.operation) || !isGeometryShape(wire.shape)) {
+    }
+    case "geometry": {
+      const operation = foldComputationToken(wire.operation);
+      const shape =
+        wire.shape === null ? null : normaliseGeometryLabel(wire.shape);
+      if (
+        !isGeometryOp(operation) ||
+        shape === null ||
+        !isMeasuredGeometryShape(shape)
+      ) {
         return null;
       }
       if (operands.length < 1) return null;
       return parseUnion({
         type: "geometry",
-        operation: wire.operation,
-        shape: wire.shape,
+        operation,
+        shape,
         dimensions: operands,
       });
+    }
     case "shape_identify": {
       const aspect = normaliseGeometryAspect(wire.operation);
       const label =
@@ -777,7 +835,8 @@ function parseArithmeticSteps(
   const steps: ArithmeticStep[] = [];
 
   for (const [index, wire] of wires.entries()) {
-    if (!isArithmeticOp(wire.operation)) return null;
+    const operation = foldComputationToken(wire.operation);
+    if (!isArithmeticOp(operation)) return null;
 
     const operands: ComputationStepOperand[] = [];
     for (const operand of wire.operands) {
@@ -789,7 +848,7 @@ function parseArithmeticSteps(
     if (operands.length < 2 || operands.length > 4) return null;
 
     steps.push({
-      operation: wire.operation,
+      operation,
       operands,
     });
   }
@@ -826,38 +885,40 @@ function parseUnion(value: unknown): Computation | null {
   return parsed.success ? parsed.data : null;
 }
 
-function valuesAreGrounded(
+function valuesGroundingIssue(
   values: readonly UsedValue[],
   context: ChallengeContext,
-): boolean {
+): string | null {
   const observed = catalogObserved(context.analysis, context.fit);
   const payload = context.contextualGrounding ?? null;
 
   for (const value of values) {
     if (value.origin === "observed" && !isObservedFact(value, observed)) {
-      return false;
+      return "ungrounded_observed_value";
     }
 
     if (
       value.origin === "student_provided" &&
       !isStudentProvided(value, context.studentEvidence)
     ) {
-      return false;
+      return "student_evidence_missing";
     }
 
     if (value.origin === "contextual") {
-      if (context.fit.challengeMode !== "inspired_math") return false;
-      if (isObservedFact(value, observed)) return false;
-      if (!isContextualFact(value, payload)) return false;
+      if (context.fit.challengeMode !== "inspired_math") {
+        return "invalid_value_origin";
+      }
+      if (isObservedFact(value, observed)) return "invalid_value_origin";
+      if (!isContextualFact(value, payload)) return "contextual_value_missing";
     }
 
     if (value.origin === "given_in_problem") {
-      if (isObservedFact(value, observed)) return false;
-      if (isContextualFact(value, payload)) return false;
+      if (isObservedFact(value, observed)) return "invalid_value_origin";
+      if (isContextualFact(value, payload)) return "invalid_value_origin";
     }
   }
 
-  return true;
+  return null;
 }
 
 function shapesAreGrounded(
@@ -936,13 +997,13 @@ function hypotheticalsAreFramed(
   const given = values.filter((value) => value.origin === "given_in_problem");
   if (given.length === 0) return true;
 
-  if (!HYPOTHETICAL.test(question)) return false;
+  if (!questionHasHypotheticalFraming(question)) return false;
 
-  return given.every((value) => question.includes(String(value.value)));
+  return given.every((value) => questionStatesNumber(question, value.value));
 }
 
 const ATTRIBUTED_MEASUREMENT =
-  /\b(?:contains|holds|shows|labelled|labeled|printed)\s+(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.?|feet|foot|ft|lbs?|pounds?)\b/gi;
+  /\b(?:contains|holds|shows|labelled|labeled|printed)\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.?|feet|foot|ft|lbs?|pounds?)\b/gi;
 
 function attributesUnobservedMeasurement(
   question: string,
@@ -957,7 +1018,7 @@ function attributesUnobservedMeasurement(
     const rawUnit = match[2];
     if (rawValue === undefined || rawUnit === undefined) continue;
 
-    const value = Number(rawValue);
+    const value = parseWrittenNumber(rawValue);
     const ok = observed.some(
       (fact) =>
         fact.value === value &&
@@ -979,7 +1040,7 @@ function attributesUnobservedMeasurement(
 }
 
 const ATTRIBUTED_AMOUNT =
-  /\b(?:your|the)\s+[\w-]+\s+(?:shows|showed|has printed|is labelled|is labeled|contains|holds|has)\s+\$?(\d+(?:\.\d+)?)/gi;
+  /\b(?:your|the)\s+[\w-]+\s+(?:shows|showed|has printed|is labelled|is labeled|contains|holds|has)\s+\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)/gi;
 
 function attributedUnobservedAmount(
   question: string,
@@ -990,7 +1051,7 @@ function attributedUnobservedAmount(
     const raw = match[1];
     if (raw === undefined) continue;
 
-    const value = Number(raw);
+    const value = parseWrittenNumber(raw);
     if (observed.some((fact) => fact.value === value)) continue;
 
     const sentence = sentenceAt(question, match.index ?? 0);
@@ -1014,10 +1075,6 @@ function sentenceAt(text: string, index: number): string {
   return text.slice(start, end);
 }
 
-function sentenceIsHypothetical(sentence: string): boolean {
-  return HYPOTHETICAL.test(sentence);
-}
-
 function studentFacingTextInventedFacts(
   texts: readonly string[],
   analysis: ObjectAnalysis,
@@ -1039,7 +1096,7 @@ function studentFacingTextInventedFacts(
       const rawUnit = match[2];
       if (rawValue === undefined || rawUnit === undefined) continue;
 
-      const value = Number(rawValue);
+      const value = parseWrittenNumber(rawValue);
       const ok = allowed.some(
         (entry) =>
           entry.value === value &&
@@ -1163,36 +1220,48 @@ function normaliseLabel(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ").replace(/[.,;:]+$/g, "");
 }
 
+function parseWrittenNumber(raw: string): number {
+  return Number(raw.replace(/,/g, ""));
+}
+
 function cleanOptional(value: string | null): string | undefined {
   if (value === null) return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function foldComputationToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 function isArithmeticOp(
   value: string,
 ): value is "add" | "subtract" | "multiply" {
-  return value === "add" || value === "subtract" || value === "multiply";
+  const folded = foldComputationToken(value);
+  return folded === "add" || folded === "subtract" || folded === "multiply";
 }
 
 function isDivisionOp(
   value: string,
 ): value is "quotient" | "whole_groups" | "remainder" {
+  const folded = foldComputationToken(value);
   return (
-    value === "quotient" || value === "whole_groups" || value === "remainder"
+    folded === "quotient" || folded === "whole_groups" || folded === "remainder"
   );
 }
 
 function isConversionOp(value: string): value is "multiply" | "divide" {
-  return value === "multiply" || value === "divide";
+  const folded = foldComputationToken(value);
+  return folded === "multiply" || folded === "divide";
 }
 
 function isGeometryOp(value: string): value is "perimeter" | "area" {
-  return value === "perimeter" || value === "area";
+  const folded = foldComputationToken(value);
+  return folded === "perimeter" || folded === "area";
 }
 
-function isGeometryShape(
-  value: string | null,
+function isMeasuredGeometryShape(
+  value: string,
 ): value is "rectangle" | "square" | "triangle" {
   return value === "rectangle" || value === "square" || value === "triangle";
 }

@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { RegenerationHint } from "@/lib/ai/challenge";
 import {
   ChallengeSchema,
   CorrectAnswerSchema,
@@ -14,14 +13,11 @@ import {
 } from "@/lib/ai/schemas";
 import { copy } from "@/lib/copy";
 import {
-  guidanceForFailure,
-  planAfterVerification,
-  type VerificationReason,
   type VerificationResult,
   verifyChallenge,
 } from "@/lib/math/verify";
-import { generateQuestChallenge } from "@/lib/quest-challenge";
 import { setQuestStatus } from "@/lib/quest-status";
+import { sanitiseZodIssues } from "@/lib/quest-trace";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { type Grade, parseGrade, parseSkillId, type SkillId } from "@/lib/types";
 
@@ -29,16 +25,17 @@ import { type Grade, parseGrade, parseSkillId, type SkillId } from "@/lib/types"
  * Deterministic verification of a stored candidate challenge.
  *
  * Callable by quest id. Reloads the reading, the investigation, and the
- * challenge row. Does not download the photograph. May call Challenge
- * Generation exactly once if the first candidate fails.
+ * challenge row. Does not download the photograph. Regeneration now lives
+ * in combined generation's one shared challenge-repair budget, so this
+ * stage is a final gate only.
  *
- * A pass marks the quest ready. Two failures delete every candidate row
- * and mark the quest failed. The student never sees verifier detail.
+ * A pass marks the quest ready. A failure deletes the candidate and
+ * marks the quest failed. The student never sees verifier detail.
  */
 
 export type QuestVerificationResult =
   | { status: "ok" }
-  | { status: "failed"; failure: QuestGenerationFailure };
+  | { status: "failed"; failure: QuestGenerationFailure; code?: string };
 
 type StoredChallenge = {
   id: string;
@@ -68,49 +65,24 @@ export async function verifyQuestChallenge(
   if (loaded.status === "already_ready") return { status: "ok" };
   if (loaded.status !== "ok") return loaded;
 
-  const first = verifyLoaded(loaded);
+  const verified = verifyLoaded(loaded);
 
-  if (planAfterVerification(1, first) === "accept" && first.ok) {
+  if (verified.ok) {
     const marked = await setQuestStatus(questId, "ready");
-    return marked ? { status: "ok" } : mathFailed();
+    return marked ? { status: "ok" } : mathFailed("status_update_failure");
   }
 
-  const firstReason = first.ok ? "invalid_values" : first.reason;
-  console.warn("[quest-verify] first candidate failed", firstReason);
-  await deleteQuestChallenges(questId);
-
-  const regenerated = await generateQuestChallenge(questId, {
-    regeneration: hintFor(firstReason),
-  });
-
-  if (regenerated.status !== "ok") {
-    await deleteQuestChallenges(questId);
-    await setQuestStatus(questId, "failed");
-    return mathFailed();
-  }
-
-  const secondLoad = await loadVerificationContext(questId);
-  if (secondLoad.status === "already_ready") return { status: "ok" };
-  if (secondLoad.status !== "ok") {
-    await deleteQuestChallenges(questId);
-    await setQuestStatus(questId, "failed");
-    return mathFailed();
-  }
-
-  const second = verifyLoaded(secondLoad);
-
-  if (planAfterVerification(2, second) === "accept" && second.ok) {
-    const marked = await setQuestStatus(questId, "ready");
-    return marked ? { status: "ok" } : mathFailed();
-  }
-
-  console.warn(
-    "[quest-verify] second candidate failed",
-    second.ok ? "invalid_values" : second.reason,
+  console.error(
+    "[quest-pipeline]",
+    JSON.stringify({
+      stage: "verification",
+      status: "failed",
+      failureCode: verified.reason,
+    }),
   );
   await deleteQuestChallenges(questId);
   await setQuestStatus(questId, "failed");
-  return mathFailed();
+  return mathFailed(verified.reason);
 }
 
 async function loadVerificationContext(
@@ -118,7 +90,7 @@ async function loadVerificationContext(
 ): Promise<
   | LoadedContext
   | { status: "already_ready" }
-  | { status: "failed"; failure: QuestGenerationFailure }
+  | { status: "failed"; failure: QuestGenerationFailure; code?: string }
 > {
   const supabase = createAdminClient();
 
@@ -139,14 +111,14 @@ async function loadVerificationContext(
   }
 
   if (quest.status === "failed" || quest.status === "rejected") {
-    return mathFailed();
+    return mathFailed("quest_closed");
   }
 
   const analysis = ObjectAnalysisSchema.safeParse(quest.object_metadata);
   const fitParsed = parseSkillFitAnalysis(quest.validation_result);
 
   if (!analysis.success || !fitParsed.success) {
-    return mathFailed();
+    return mathFailed("stored_context_invalid");
   }
 
   const fit = fitParsed.data;
@@ -154,7 +126,7 @@ async function loadVerificationContext(
     fit.challengeMode !== "object_math" &&
     fit.challengeMode !== "inspired_math"
   ) {
-    return mathFailed();
+    return mathFailed("challenge_mode_not_ready");
   }
 
   const { data: skill, error: skillError } = await supabase
@@ -172,7 +144,7 @@ async function loadVerificationContext(
   const skillId = parseSkillId(skill.skill_code);
   const grade = parseGrade(skill.grade_level);
   if (skillId === null || grade === null) {
-    return mathFailed();
+    return mathFailed("skill_or_grade_invalid");
   }
 
   const { data: rows, error: challengeError } = await supabase
@@ -191,11 +163,15 @@ async function loadVerificationContext(
 
   const challenge = rows?.[0];
   if (challenge === undefined || (rows?.length ?? 0) !== 1) {
-    console.warn("[quest-verify] expected exactly one candidate", {
-      questId,
-      count: rows?.length ?? 0,
-    });
-    return mathFailed();
+    console.error(
+      "[quest-pipeline]",
+      JSON.stringify({
+        stage: "verification",
+        status: "failed",
+        failureCode: "candidate_count",
+      }),
+    );
+    return mathFailed("candidate_count");
   }
 
   return {
@@ -240,6 +216,15 @@ function verifyLoaded(loaded: LoadedContext): VerificationResult {
   });
 
   if (!parsed.success) {
+    console.error(
+      "[quest-pipeline]",
+      JSON.stringify({
+        stage: "verification",
+        status: "failed",
+        failureCode: "invalid_values",
+        zodIssues: sanitiseZodIssues(parsed.error),
+      }),
+    );
     return {
       ok: false,
       reason: "invalid_values",
@@ -270,11 +255,11 @@ async function deleteQuestChallenges(questId: string) {
   }
 }
 
-function hintFor(reason: VerificationReason): RegenerationHint {
-  return { reason, guidance: guidanceForFailure(reason) };
-}
-
-function mathFailed(): { status: "failed"; failure: QuestGenerationFailure } {
+function mathFailed(code?: string): {
+  status: "failed";
+  failure: QuestGenerationFailure;
+  code?: string;
+} {
   return {
     status: "failed",
     failure: QuestGenerationFailureSchema.parse({
@@ -282,5 +267,6 @@ function mathFailed(): { status: "failed"; failure: QuestGenerationFailure } {
       studentMessage: copy.verify.failure,
       recommendedNextAction: "retry",
     }),
+    ...(code === undefined ? {} : { code }),
   };
 }
