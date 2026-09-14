@@ -727,8 +727,54 @@ const walletContainsFact = finalizeChallenge(
 );
 
 check(
-  "FAIL: 'Your wallet contains $20' when $20 was not observed",
-  walletContainsFact.status !== "ok",
+  "PASS: unframed given_in_problem wallet amount is prefixed with Suppose",
+  walletContainsFact.status === "ok" &&
+    walletContainsFact.challenge.question.startsWith(
+      "Suppose your wallet contains $20",
+    ) &&
+    walletContainsFact.repairs.includes("hypothetical_prefix"),
+);
+
+const walletContainsObserved = finalizeChallenge(
+  wire({
+    skillCode: "subtraction",
+    question:
+      "Your wallet contains $20. How much more money would you need to reach $125?",
+    objectConnection: "Your wallet sent us to money and saving.",
+    valuesUsed: [
+      operand("target dollars", 125, "given_in_problem", "dollars"),
+      operand("starting dollars", 20, "observed", "dollars"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 105,
+      numerator: null,
+      denominator: null,
+      unit: "dollars",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "subtract",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("target dollars", 125, "given_in_problem", "dollars"),
+        operand("starting dollars", 20, "observed", "dollars"),
+      ],
+    },
+    solution: "125 − 20 = 105 dollars.",
+  }),
+  ctx(
+    wallet,
+    inspiredFit("subtraction", "money, spending, and saving", "A wallet holds money."),
+  ),
+);
+
+check(
+  "FAIL: 'Your wallet contains $20' labeled observed when $20 was not observed",
+  walletContainsObserved.status !== "ok",
 );
 
 const walletSuppose = finalizeChallenge(
@@ -814,8 +860,55 @@ const cupHoldsFact = finalizeChallenge(
 );
 
 check(
-  "FAIL: 'Your cup holds 500 mL' when capacity was not established",
-  cupHoldsFact.status !== "ok",
+  "PASS: unframed given_in_problem cup capacity is prefixed with Suppose",
+  cupHoldsFact.status === "ok" &&
+    cupHoldsFact.challenge.question.startsWith("Suppose your cup holds 500 mL") &&
+    cupHoldsFact.repairs.includes("hypothetical_prefix"),
+);
+
+const cupHoldsObserved = finalizeChallenge(
+  wire({
+    skillCode: "multiplication",
+    question: "Your cup holds 500 mL. How much water would 2 cups hold?",
+    objectConnection: "Your cup sent us to liquid and servings.",
+    valuesUsed: [
+      operand("cup amount", 500, "observed", "mL"),
+      operand("cups", 2, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 1000,
+      numerator: null,
+      denominator: null,
+      unit: "mL",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "multiply",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("cup amount", 500, "observed", "mL"),
+        operand("cups", 2, "given_in_problem"),
+      ],
+    },
+    solution: "500 × 2 = 1000 mL.",
+  }),
+  ctx(
+    cup,
+    inspiredFit(
+      "multiplication",
+      "liquid, pouring, and servings",
+      "A cup is used for drinking.",
+    ),
+  ),
+);
+
+check(
+  "FAIL: 'Your cup holds 500 mL' labeled observed when capacity was not established",
+  cupHoldsObserved.status !== "ok",
 );
 
 const cupSuppose = finalizeChallenge(

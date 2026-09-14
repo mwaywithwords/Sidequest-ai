@@ -41,8 +41,50 @@ const NUMBER_WORDS: Readonly<Record<number, readonly string[]>> = {
   1000: ["thousand", "one thousand", "a thousand"],
 };
 
+export const HYPOTHETICAL_PREFIX = "Suppose";
+
+export type HypotheticalValue = {
+  origin: string;
+  value: number;
+};
+
 export function questionHasHypotheticalFraming(question: string): boolean {
   return HYPOTHETICAL.test(question);
+}
+
+/**
+ * Narrow inspired-math repair: every relevant quantity is already
+ * `given_in_problem` and written in the question, but the model forgot
+ * an if/suppose/imagine prefix. This never changes an origin.
+ */
+export function canPrefixHypotheticalFraming(
+  question: string,
+  challengeMode: string,
+  values: readonly HypotheticalValue[],
+  maxQuestionLength: number,
+): boolean {
+  if (challengeMode !== "inspired_math") return false;
+  if (values.length === 0) return false;
+  if (values.some((value) => value.origin !== "given_in_problem")) {
+    return false;
+  }
+  if (questionHasHypotheticalFraming(question)) return false;
+  if (!values.every((value) => questionStatesNumber(question, value.value))) {
+    return false;
+  }
+
+  const repaired = prefixHypotheticalFraming(question);
+  return repaired.length > question.trim().length && repaired.length <= maxQuestionLength;
+}
+
+export function prefixHypotheticalFraming(question: string): string {
+  const trimmed = question.trim();
+  if (trimmed.length === 0) return trimmed;
+  if (questionHasHypotheticalFraming(trimmed)) return trimmed;
+
+  const first = trimmed.charAt(0);
+  const rest = trimmed.slice(1);
+  return `${HYPOTHETICAL_PREFIX} ${first.toLowerCase()}${rest}`;
 }
 
 export function sentenceIsHypothetical(sentence: string): boolean {

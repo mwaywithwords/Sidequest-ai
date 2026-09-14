@@ -29,6 +29,8 @@ import {
   structureCount,
 } from "@/lib/math/geometry-forms";
 import {
+  canPrefixHypotheticalFraming,
+  prefixHypotheticalFraming,
   questionHasHypotheticalFraming,
   questionStatesNumber,
   sentenceIsHypothetical,
@@ -49,10 +51,17 @@ import type { Grade, SkillId } from "@/lib/types";
  * next stage.
  */
 
-const QUESTION_MAX = 500;
+export const QUESTION_MAX = 500;
 const HINT_MAX = 280;
-const SOLUTION_MAX = 600;
+export const SOLUTION_MAX = 600;
 const CONNECTION_MAX = 280;
+
+export const CHALLENGE_REPAIRS = [
+  "hypothetical_prefix",
+  "deterministic_solution",
+] as const;
+
+export type ChallengeRepair = (typeof CHALLENGE_REPAIRS)[number];
 
 const MEASUREMENT =
   /\b(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid ounces?|oz|ounces?|mL|ml|millilitres?|milliliters?|L|litres?|liters?|g|grams?|kg|cm|mm|inches|inch|in\.(?=\s|$)|in(?!\s+(?:it|the|your|this|a|an|my|his|her|their|our))|feet|foot|ft|lbs?|pounds?)\b/gi;
@@ -149,7 +158,11 @@ export type ChallengeValidationIssue = {
 };
 
 export type ChallengeFinalization =
-  | { status: "ok"; challenge: GeneratedChallenge }
+  | {
+      status: "ok";
+      challenge: GeneratedChallenge;
+      repairs: ChallengeRepair[];
+    }
   | { status: "poor_fit" }
   | { status: "generation_failure"; issue: ChallengeValidationIssue };
 
@@ -159,8 +172,9 @@ export type ChallengeFinalization =
  *
  * `canGenerate: false` is a poor fit: the approved investigation could not
  * become an honest question. Invented object facts, a missing grounded
- * anchor, or a malformed payload are generation failures. Nothing here
- * rewrites a bad value into a good one.
+ * anchor, or a malformed payload are generation failures. A missing
+ * inspired-math hypothetical prefix may be added when every value is
+ * already `given_in_problem`. Origins and observed facts are never rewritten.
  */
 export function finalizeChallenge(
   wire: WireChallenge,
@@ -170,7 +184,8 @@ export function finalizeChallenge(
     return { status: "poor_fit" };
   }
 
-  const question = wire.question.trim();
+  const repairs: ChallengeRepair[] = [];
+  let question = wire.question.trim();
   const solution = wire.solution.trim();
   const hint1 = wire.hint1.trim();
   const hint2 = wire.hint2.trim();
@@ -276,6 +291,18 @@ export function finalizeChallenge(
     return generationFailure("question", "contextual_as_observed");
   }
 
+  if (
+    canPrefixHypotheticalFraming(
+      question,
+      context.fit.challengeMode,
+      valuesUsed,
+      QUESTION_MAX,
+    )
+  ) {
+    question = prefixHypotheticalFraming(question);
+    repairs.push("hypothetical_prefix");
+  }
+
   if (!hypotheticalsAreFramed(question, valuesUsed)) {
     return generationFailure("question", "unframed_hypothetical");
   }
@@ -314,7 +341,7 @@ export function finalizeChallenge(
     return generationFailureFromZod(parsed.error);
   }
 
-  return { status: "ok", challenge: parsed.data };
+  return { status: "ok", challenge: parsed.data, repairs };
 }
 
 function generationFailure(

@@ -21,10 +21,14 @@ export const PIPELINE_STAGES = [
   "generation_candidate_1",
   "candidate_1_schema",
   "candidate_1_grounding",
+  "candidate_1_framing_repair",
+  "candidate_1_solution_repair",
   "candidate_1_verification",
   "generation_candidate_2",
   "candidate_2_schema",
   "candidate_2_grounding",
+  "candidate_2_framing_repair",
+  "candidate_2_solution_repair",
   "candidate_2_verification",
   "persistence",
   "ready",
@@ -55,6 +59,7 @@ export type QuestPipelineLogEntry = {
   verificationResult?: string;
   computationType?: string;
   answerType?: string;
+  repair?: string;
   grade?: number;
   skill?: string;
   event?: typeof QUEST_GENERATION_FAILED_EVENT | typeof QUEST_READY_EVENT;
@@ -89,6 +94,7 @@ export type QuestLogger = {
     verificationResult?: string;
     computationType?: string;
     answerType?: string;
+    repair?: string;
     grade?: number;
     skill?: string;
   }) => void;
@@ -156,6 +162,7 @@ export function createQuestLogger(
         verificationResult: input.verificationResult,
         computationType: input.computationType,
         answerType: input.answerType,
+        repair: input.repair,
         grade: input.grade,
         skill: input.skill,
       });

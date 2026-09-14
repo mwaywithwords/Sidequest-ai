@@ -159,6 +159,25 @@ check(
     !line.includes("55"),
 );
 
+logger.stage({
+  stage: "candidate_1_solution_repair",
+  status: "passed",
+  attempt: 1,
+  repair: "deterministic_solution",
+});
+
+const repairLog = captured.find(
+  (entry) => entry.payload.stage === "candidate_1_solution_repair",
+);
+
+check(
+  "repair events keep a safe repair tag and drop question or answer keys",
+  repairLog?.payload.repair === "deterministic_solution" &&
+    repairLog.payload.status === "passed" &&
+    !JSON.stringify(repairLog.payload).includes("question") &&
+    !JSON.stringify(repairLog.payload).includes("answer"),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} quest-trace checks failed`);
   process.exit(1);

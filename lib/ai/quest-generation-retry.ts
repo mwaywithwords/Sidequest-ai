@@ -1,6 +1,6 @@
 import type { RegenerationHint } from "@/lib/ai/generation-failure";
 import type { WireChallenge } from "@/lib/ai/challenge-grounding";
-import { finalizeChallenge } from "@/lib/ai/challenge-grounding";
+import { prepareCandidateChallenge } from "@/lib/ai/challenge-repair";
 import {
   candidatePipelineStage,
   hintForDeclinedChallenge,
@@ -76,11 +76,13 @@ type CandidateEvaluation =
   | {
       status: "ok";
       challenge: GeneratedChallenge;
+      repairs: string[];
     }
   | {
       status: "rejected";
       hint: RegenerationHint;
       diagnostic: Omit<CandidateDiagnostic, "candidate_attempt" | "timing_ms">;
+      repairs: string[];
     };
 
 export async function runQuestGenerationWithRetry(
@@ -290,6 +292,7 @@ async function finishCombinedAttempt(
       options.attempt,
       sections.fit.challengeMode,
       originList(evaluated.challenge.valuesUsed),
+      evaluated.repairs,
     );
     return {
       status: "ok",
@@ -366,6 +369,7 @@ async function retryChallengeOnly(
       2,
       sections.fit.challengeMode,
       originList(evaluated.challenge.valuesUsed),
+      evaluated.repairs,
     );
     return {
       status: "ok",
@@ -397,6 +401,7 @@ function evaluateChallengeCandidate(
     return {
       status: "rejected",
       hint: hintForMissingChallenge(),
+      repairs: [],
       diagnostic: {
         failure_stage: "generation_schema_failure",
         challengeMode: sections.fit.challengeMode,
@@ -406,7 +411,7 @@ function evaluateChallengeCandidate(
     };
   }
 
-  const finalized = finalizeChallenge(wire, {
+  const finalized = prepareCandidateChallenge(wire, {
     analysis: input.analysis,
     fit: sections.fit,
     skillId: input.skillId,
@@ -419,6 +424,7 @@ function evaluateChallengeCandidate(
     return {
       status: "rejected",
       hint: hintForDeclinedChallenge(),
+      repairs: [],
       diagnostic: {
         failure_stage: "generation_grounding_failure",
         challengeMode: sections.fit.challengeMode,
@@ -433,6 +439,7 @@ function evaluateChallengeCandidate(
     return {
       status: "rejected",
       hint: hintForIssue(finalized.issue),
+      repairs: [],
       diagnostic: {
         failure_stage: stageForIssue(finalized.issue),
         computationType: wire.computation.type,
@@ -457,7 +464,11 @@ function evaluateChallengeCandidate(
   });
 
   if (planAfterVerification(attempt, verified) === "accept" && verified.ok) {
-    return { status: "ok", challenge: finalized.challenge };
+    return {
+      status: "ok",
+      challenge: finalized.challenge,
+      repairs: finalized.repairs,
+    };
   }
 
   const reason = verified.ok ? "invalid_values" : verified.reason;
@@ -465,6 +476,7 @@ function evaluateChallengeCandidate(
   return {
     status: "rejected",
     hint: hintForVerification(reason),
+    repairs: finalized.repairs,
     diagnostic: {
       failure_stage: "verification_failure",
       computationType: finalized.challenge.computation.type,
@@ -590,11 +602,11 @@ function logPassedCandidateStages(
   attempt: 1 | 2,
   challengeMode: string,
   valueOrigins?: string[],
+  repairs: readonly string[] = [],
 ) {
   for (const stage of [
     `candidate_${attempt}_schema`,
     `candidate_${attempt}_grounding`,
-    `candidate_${attempt}_verification`,
   ]) {
     logger.stage({
       stage,
@@ -604,9 +616,38 @@ function logPassedCandidateStages(
       selectedPath: challengeMode,
       valueOrigins,
       groundingResult: "ok",
-      verificationResult: "ok",
     });
   }
+
+  for (const repair of repairs) {
+    const stage =
+      repair === "deterministic_solution"
+        ? `candidate_${attempt}_solution_repair`
+        : `candidate_${attempt}_framing_repair`;
+    logger.stage({
+      stage,
+      status: "passed",
+      attempt,
+      challengeMode,
+      selectedPath: challengeMode,
+      valueOrigins,
+      repair:
+        repair === "deterministic_solution"
+          ? "deterministic_solution"
+          : "hypothetical_prefix",
+    });
+  }
+
+  logger.stage({
+    stage: `candidate_${attempt}_verification`,
+    status: "passed",
+    attempt,
+    challengeMode,
+    selectedPath: challengeMode,
+    valueOrigins,
+    groundingResult: "ok",
+    verificationResult: "ok",
+  });
 }
 
 function failBoth(

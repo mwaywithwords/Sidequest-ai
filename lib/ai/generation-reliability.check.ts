@@ -1105,6 +1105,99 @@ check(
     recoveredPayload.challenge !== undefined,
 );
 
+const walletTraceCandidate1 = await runCase({
+  analysis: wallet,
+  skillId: "addition",
+  collectLogs: true,
+  combined: {
+    status: "ok",
+    wire: {
+      investigation: inspiredInvestigation(
+        "money, dollars, and budgeting",
+        "A wallet holds money.",
+        ["rectangular form"],
+      ),
+      discovery: discovery({
+        title: "Made to carry cards",
+        text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      }),
+      challenge: {
+        ...walletMoney("addition"),
+        solution: "Add the two amounts together.",
+      },
+    },
+  },
+});
+
+check(
+  "wallet + addition omitted solution is repaired on candidate 1",
+  walletTraceCandidate1.result.status === "ok" &&
+    walletTraceCandidate1.combinedCalls === 1 &&
+    walletTraceCandidate1.challengeCalls === 0 &&
+    walletTraceCandidate1.result.challenge.solution ===
+      "Add $20 and $50. $20 + $50 = $70.",
+);
+
+check(
+  "wallet + addition solution repair logs without a candidate 2 call",
+  walletTraceCandidate1.challengeCalls === 0 &&
+    walletTraceCandidate1.lines.some((line) =>
+      line.includes("candidate_1_solution_repair"),
+    ) &&
+    walletTraceCandidate1.lines.some((line) =>
+      line.includes('"repair":"deterministic_solution"'),
+    ) &&
+    !walletTraceCandidate1.lines.some((line) =>
+      line.includes("generation_candidate_2"),
+    ),
+);
+
+const walletUnframed = await runCase({
+  analysis: wallet,
+  skillId: "addition",
+  collectLogs: true,
+  combined: {
+    status: "ok",
+    wire: {
+      investigation: inspiredInvestigation(
+        "money, dollars, and budgeting",
+        "A wallet holds money.",
+        ["rectangular form"],
+      ),
+      discovery: discovery({
+        title: "Made to carry cards",
+        text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      }),
+      challenge: {
+        ...walletMoney("addition"),
+        question:
+          "Your wallet has $20 and you add $50. How much money do you have?",
+      },
+    },
+  },
+});
+
+check(
+  "wallet unframed given_in_problem question is prefixed on candidate 1",
+  walletUnframed.result.status === "ok" &&
+    walletUnframed.combinedCalls === 1 &&
+    walletUnframed.challengeCalls === 0 &&
+    walletUnframed.result.challenge.question ===
+      "Suppose your wallet has $20 and you add $50. How much money do you have?",
+);
+
+check(
+  "wallet framing repair logs without a candidate 2 call",
+  walletUnframed.challengeCalls === 0 &&
+    walletUnframed.lines.some((line) =>
+      line.includes("candidate_1_framing_repair"),
+    ) &&
+    walletUnframed.lines.some((line) =>
+      line.includes('"repair":"hypothetical_prefix"'),
+    ) &&
+    !walletUnframed.lines.some((line) => line.includes("generation_candidate_2")),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} generation-reliability checks failed`);
   process.exit(1);

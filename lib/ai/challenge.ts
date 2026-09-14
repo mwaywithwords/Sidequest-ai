@@ -4,9 +4,9 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import {
   type StudentEvidenceValue,
-  finalizeChallenge,
   type WireChallenge,
 } from "@/lib/ai/challenge-grounding";
+import { prepareCandidateChallenge } from "@/lib/ai/challenge-repair";
 import {
   type ChallengeGenerationResult,
   challengeFailed,
@@ -292,7 +292,7 @@ export async function generateChallenge({
     return challengeFailed();
   }
 
-  const finalized = finalizeChallenge(requested.wire, {
+  const finalized = prepareCandidateChallenge(requested.wire, {
     analysis,
     fit,
     skillId,

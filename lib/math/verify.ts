@@ -25,7 +25,7 @@ import {
   geometryCitationTokens,
   shapeSupports,
 } from "@/lib/math/geometry-forms";
-import { isFiniteNumber, sameUnit, unitsCompatible } from "@/lib/math/units";
+import { isFiniteNumber, normaliseUnit, sameUnit, unitsCompatible } from "@/lib/math/units";
 import type { Grade, SkillId } from "@/lib/types";
 
 /**
@@ -193,7 +193,8 @@ export function guidanceForFailure(reason: VerificationReason): string {
  * Isolated so the wording check can be tuned without touching arithmetic.
  *
  * Looks for the verified number or an equivalent fraction in the solution
- * text. It does not parse the solution as mathematics.
+ * text. It does not parse the solution as mathematics. Presentation repair
+ * may replace the generated solution before this check runs.
  */
 export function solutionAgreesWithAnswer(
   solution: string,
@@ -207,10 +208,7 @@ export function solutionAgreesWithAnswer(
 
   if (answer.type === "number") {
     if (!numberAppears(text, answer.value)) return false;
-    if (answer.unit && !text.includes(answer.unit.toLowerCase())) {
-      return false;
-    }
-    return true;
+    return unitAppears(text, answer.unit);
   }
 
   const reduced = simplifyFraction(answer.numerator, answer.denominator);
@@ -707,7 +705,8 @@ function numberAppears(text: string, value: number): boolean {
 
 function unitAppears(text: string, unit: string | undefined): boolean {
   if (unit === undefined) return true;
-  return text.includes(unit.toLowerCase());
+  if (text.includes(unit.toLowerCase())) return true;
+  return normaliseUnit(unit) === "dollar" && text.includes("$");
 }
 
 function escapeRegExp(value: string): string {

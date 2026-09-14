@@ -1,8 +1,5 @@
-import {
-  type ChallengeFinalization,
-  type WireChallenge,
-  finalizeChallenge,
-} from "@/lib/ai/challenge-grounding";
+import type { WireChallenge } from "@/lib/ai/challenge-grounding";
+import { prepareCandidateChallenge } from "@/lib/ai/challenge-repair";
 import { resultFromFinalization } from "@/lib/ai/challenge-result";
 import { finalizeDiscovery, type WireDiscovery } from "@/lib/ai/discovery-grounding";
 import { buildContextualPayload } from "@/lib/ai/inspired-context";
@@ -189,17 +186,14 @@ export function finalizeQuestGeneration(
     return generationFailed();
   }
 
-  const finalized: ChallengeFinalization = finalizeChallenge(
-    sections.challengeWire,
-    {
-      analysis,
-      fit: sections.fit,
-      skillId,
-      grade,
-      studentEvidence: [],
-      contextualGrounding: sections.contextualGrounding,
-    },
-  );
+  const finalized = prepareCandidateChallenge(sections.challengeWire, {
+    analysis,
+    fit: sections.fit,
+    skillId,
+    grade,
+    studentEvidence: [],
+    contextualGrounding: sections.contextualGrounding,
+  });
 
   const challenge = resultFromFinalization(finalized, skillId);
 
