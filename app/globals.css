@@ -654,6 +654,59 @@
   outline-offset: 3px;
 }
 
+.math-board {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  min-height: 7.25rem;
+  padding: 1.2rem 1rem 1.35rem;
+  border-radius: 1.15rem;
+  border: 3px solid currentColor;
+  border-bottom-width: 10px;
+  background: color-mix(in oklab, currentColor 16%, var(--color-void));
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.4);
+}
+
+.math-board-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.math-board-step {
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: currentColor;
+}
+
+.math-board-eq {
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.85rem, 8.2vw, 2.7rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--color-cream);
+}
+
+.math-board[data-lines="multi"] {
+  gap: 1.1rem;
+  min-height: 0;
+  padding-block: 1.25rem;
+}
+
+.math-board[data-lines="multi"] .math-board-eq {
+  font-size: clamp(1.45rem, 6.4vw, 2.15rem);
+}
+
 .token {
   display: inline-flex;
   align-items: center;
