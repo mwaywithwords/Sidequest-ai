@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { submitQuestAnswer } from "@/app/quest/actions";
+import {
+  playFeedbackCue,
+  primeFeedbackAudio,
+} from "@/components/game/feedback-audio";
 import { QuestPhotoFrame } from "@/components/quest/quest-photo";
 import {
   ReadAloudButton,
@@ -19,6 +23,11 @@ import {
 } from "@/components/ui/play";
 import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
+import {
+  feedbackCueForSubmission,
+  readStoredSoundPreference,
+} from "@/lib/feedback-sound";
+import { shouldStopReadAloudForStatus } from "@/lib/feedback-cues";
 import {
   spokenMathExpression,
   type StudentMathExpression,
@@ -289,6 +298,7 @@ function ChallengeStage({
     submitLock.current = true;
     setSubmitting(true);
     setInvalid(null);
+    primeFeedbackAudio();
 
     const answer =
       quest.answer.kind === "fraction"
@@ -328,17 +338,21 @@ function ChallengeStage({
       return;
     }
 
+    const cue = feedbackCueForSubmission({
+      previousStatus: progress.status,
+      nextStatus: result.status,
+      enabled: readStoredSoundPreference(),
+    });
+
     setProgress(result);
     if (result.status === "incorrect") {
       setHintOpen(true);
       setHintRevealed(true);
     }
-    if (
-      (result.status === "correct" || result.status === "complete") &&
-      playingId === "hint"
-    ) {
+    if (shouldStopReadAloudForStatus(result.status)) {
       stopSpeech();
     }
+    if (cue) playFeedbackCue(cue);
   }
 
   const skillLabel = skillFromMission(quest.missionLabel);
