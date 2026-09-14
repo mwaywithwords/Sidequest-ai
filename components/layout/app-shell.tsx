@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "@/components/brand/wordmark";
+import { HudXpChip } from "@/components/game/hud-xp";
 import { SoundToggle } from "@/components/game/sound-toggle";
 import { CompassIcon } from "@/components/ui/icons";
 import { copy } from "@/lib/copy";
@@ -43,6 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="game-header-bar">
           <Wordmark />
           <div className="flex items-center gap-2">
+            <HudXpChip />
             <SoundToggle />
             {onProgress ? (
               <span className="game-profile is-current" aria-current="page">

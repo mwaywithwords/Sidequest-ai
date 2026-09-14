@@ -37,18 +37,19 @@ export const SUCCESS_MELODY = ["C5", "E5", "G5", "C6"] as const;
 
 export const CUE_RECIPES: Record<FeedbackCue, CueRecipe> = {
   success: {
-    // ta-ta-ta-TAAA + tiny sparkle. About 0.8s.
-    duration: 0.82,
+    // ta-da-da-TAAAA + sparkle. Final C-major chord is the peak (~0.42s),
+    // lined up with the +XP pop. About 0.86s total.
+    duration: 0.86,
     notes: [
-      { freq: C5, at: 0, dur: 0.13, gain: 0.115, voice: "brass" },
-      { freq: E5, at: 0.1, dur: 0.13, gain: 0.125, voice: "brass" },
-      { freq: G5, at: 0.2, dur: 0.15, gain: 0.13, voice: "brass" },
-      { freq: C6, at: 0.36, dur: 0.32, gain: 0.145, voice: "brass" },
-      { freq: C5, at: 0.36, dur: 0.26, gain: 0.05, voice: "brass" },
-      { freq: E5, at: 0.36, dur: 0.26, gain: 0.05, voice: "brass" },
-      { freq: G5, at: 0.36, dur: 0.26, gain: 0.055, voice: "brass" },
-      { freq: C7, at: 0.62, dur: 0.13, gain: 0.032, voice: "chime" },
-      { freq: E7, at: 0.66, dur: 0.1, gain: 0.024, voice: "chime" },
+      { freq: C5, at: 0, dur: 0.12, gain: 0.1, voice: "brass" },
+      { freq: E5, at: 0.1, dur: 0.12, gain: 0.11, voice: "brass" },
+      { freq: G5, at: 0.2, dur: 0.14, gain: 0.12, voice: "brass" },
+      { freq: C6, at: 0.42, dur: 0.36, gain: 0.158, voice: "brass" },
+      { freq: G5, at: 0.42, dur: 0.3, gain: 0.062, voice: "brass" },
+      { freq: E5, at: 0.42, dur: 0.3, gain: 0.055, voice: "brass" },
+      { freq: C5, at: 0.42, dur: 0.3, gain: 0.048, voice: "brass" },
+      { freq: C7, at: 0.7, dur: 0.12, gain: 0.034, voice: "chime" },
+      { freq: E7, at: 0.74, dur: 0.09, gain: 0.026, voice: "chime" },
     ],
   },
   "try-again": {
@@ -101,15 +102,16 @@ function wave(kind: CueVoice, phase: number): number {
     Math.sin(2 * Math.PI * t) +
     Math.sin(4 * Math.PI * t) / 2 +
     Math.sin(6 * Math.PI * t) / 3 +
-    Math.sin(8 * Math.PI * t) / 4;
+    Math.sin(8 * Math.PI * t) / 4 +
+    Math.sin(10 * Math.PI * t) / 5;
   const octave = Math.sin(4 * Math.PI * t);
   const fifth = Math.sin(6 * Math.PI * t);
-  return saw * 0.55 + octave * 0.28 + fifth * 0.12;
+  return saw * 0.64 + octave * 0.22 + fifth * 0.1;
 }
 
 function envelope(local: number, dur: number): number {
-  const attack = Math.min(0.018, dur * 0.18);
-  const release = Math.min(0.08, dur * 0.4);
+  const attack = Math.min(0.01, dur * 0.12);
+  const release = Math.min(0.08, dur * 0.38);
   if (local < attack) return local / attack;
   if (local > dur - release) return Math.max(0, (dur - local) / release);
   return 1;

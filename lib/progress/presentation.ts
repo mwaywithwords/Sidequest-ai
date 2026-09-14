@@ -41,6 +41,7 @@ export type PresentationInput = {
   grade: Grade | null;
   skillProgress: readonly SkillProgressRecord[];
   completedSidequestCount: number;
+  totalXp: number;
   quests: readonly DiscoveryQuest[];
 };
 
@@ -53,6 +54,7 @@ export type PresentedSkill = {
 
 export type PresentedProgress = {
   explorerLevel: ExplorerLevel;
+  totalXp: number;
   sidequestsCompleted: number;
   objectsDiscovered: number;
   hasProgress: boolean;
@@ -124,11 +126,13 @@ export function presentProgress(input: PresentationInput): PresentedProgress {
     presentSkill(skillId, practiced.get(skillId) ?? null),
   );
   const completed = Math.max(0, Math.floor(input.completedSidequestCount));
+  const xp = Math.max(0, Math.floor(Number.isFinite(input.totalXp) ? input.totalXp : 0));
 
   return {
     explorerLevel: mathExplorerLevel(
       [...practiced.values()].map((row) => row.currentLevel),
     ),
+    totalXp: xp,
     sidequestsCompleted: completed,
     objectsDiscovered: countDiscoveredObjects(input.quests),
     hasProgress: completed > 0,

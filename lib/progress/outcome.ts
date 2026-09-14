@@ -1,5 +1,16 @@
 import type { CorrectAnswer } from "@/lib/ai/schemas";
 import { formatRevealedAnswer } from "@/lib/math/answer";
+import {
+  MAX_ANSWER_ATTEMPTS,
+  canAcceptAttempt,
+  isChallengeComplete,
+  nextAttemptNumber,
+  type StoredAttempt,
+} from "@/lib/progress/attempts";
+import {
+  XP_SOLUTION_REVEALED,
+  xpAwardForCorrectAttempt,
+} from "@/lib/progress/xp";
 
 /**
  * Attempt limits, hint reveal, and the student-facing grade view.
@@ -8,13 +19,13 @@ import { formatRevealedAnswer } from "@/lib/math/answer";
  * the problem — without turning a Sidequest into an unbounded quiz.
  */
 
-export const MAX_ANSWER_ATTEMPTS = 3;
-export const VISUAL_XP = 10;
-
-export type StoredAttempt = {
-  attemptNumber: number;
-  isCorrect: boolean;
+export {
+  MAX_ANSWER_ATTEMPTS,
+  canAcceptAttempt,
+  isChallengeComplete,
+  nextAttemptNumber,
 };
+export type { StoredAttempt };
 
 export type GradeEligibility =
   | { ok: true }
@@ -36,6 +47,7 @@ export type ChallengeProgress =
   | {
       status: "complete";
       attemptNumber: number;
+      xp: number;
       explanation: string;
       solution: string;
       revealedAnswer: string;
@@ -73,29 +85,6 @@ export function questIsGradeable(input: {
   if (input.status !== "ready") return { ok: false, reason: "not_ready" };
   if (input.challengeCount !== 1) return { ok: false, reason: "no_challenge" };
   return { ok: true };
-}
-
-export function nextAttemptNumber(attempts: readonly StoredAttempt[]): number {
-  if (attempts.length === 0) return 1;
-  return Math.max(...attempts.map((attempt) => attempt.attemptNumber)) + 1;
-}
-
-export function isChallengeComplete(
-  attempts: readonly StoredAttempt[],
-): boolean {
-  return attempts.some(
-    (attempt) =>
-      attempt.isCorrect || attempt.attemptNumber >= MAX_ANSWER_ATTEMPTS,
-  );
-}
-
-export function canAcceptAttempt(
-  attempts: readonly StoredAttempt[],
-): boolean {
-  return (
-    !isChallengeComplete(attempts) &&
-    nextAttemptNumber(attempts) <= MAX_ANSWER_ATTEMPTS
-  );
 }
 
 /**
@@ -137,7 +126,7 @@ export function progressAfterAttempt(input: {
     return {
       status: "correct",
       attemptNumber: input.attemptNumber,
-      xp: VISUAL_XP,
+      xp: xpAwardForCorrectAttempt(input.attemptNumber).xp,
       explanation,
       revealedAnswer,
     };
@@ -147,6 +136,7 @@ export function progressAfterAttempt(input: {
     return {
       status: "complete",
       attemptNumber: input.attemptNumber,
+      xp: XP_SOLUTION_REVEALED,
       explanation,
       solution: explanation,
       revealedAnswer,
@@ -166,6 +156,7 @@ export function progressFromAttempts(input: {
   hint2: string | null;
   solution: string | null;
   expected: CorrectAnswer;
+  awardedXp?: number | null;
 }): ChallengeProgress {
   if (input.attempts.length === 0) return { status: "open" };
 
@@ -175,39 +166,55 @@ export function progressFromAttempts(input: {
 
   if (last === undefined) return { status: "open" };
 
-  if (last.isCorrect) {
-    return progressAfterAttempt({
-      isCorrect: true,
-      attemptNumber: last.attemptNumber,
-      hint1: input.hint1,
-      hint2: input.hint2,
-      solution: input.solution,
-      expected: input.expected,
-    });
-  }
+  const view = last.isCorrect
+    ? progressAfterAttempt({
+        isCorrect: true,
+        attemptNumber: last.attemptNumber,
+        hint1: input.hint1,
+        hint2: input.hint2,
+        solution: input.solution,
+        expected: input.expected,
+      })
+    : isChallengeComplete(input.attempts)
+      ? progressAfterAttempt({
+          isCorrect: false,
+          attemptNumber: Math.max(
+            last.attemptNumber,
+            MAX_ANSWER_ATTEMPTS,
+          ),
+          hint1: input.hint1,
+          hint2: input.hint2,
+          solution: input.solution,
+          expected: input.expected,
+        })
+      : progressAfterAttempt({
+          isCorrect: false,
+          attemptNumber: last.attemptNumber,
+          hint1: input.hint1,
+          hint2: input.hint2,
+          solution: input.solution,
+          expected: input.expected,
+        });
 
-  if (isChallengeComplete(input.attempts)) {
-    return progressAfterAttempt({
-      isCorrect: false,
-      attemptNumber: Math.max(
-        last.attemptNumber,
-        MAX_ANSWER_ATTEMPTS,
-      ),
-      hint1: input.hint1,
-      hint2: input.hint2,
-      solution: input.solution,
-      expected: input.expected,
-    });
-  }
+  return applyAwardedXp(view, input.awardedXp);
+}
 
-  return progressAfterAttempt({
-    isCorrect: false,
-    attemptNumber: last.attemptNumber,
-    hint1: input.hint1,
-    hint2: input.hint2,
-    solution: input.solution,
-    expected: input.expected,
-  });
+/**
+ * Overlay the persisted award. `undefined` keeps the policy amount
+ * (fresh completion). `null` or a number is the stored total for this
+ * Sidequest, including 0 for historical rows with no reward.
+ */
+export function applyAwardedXp(
+  view: ChallengeProgress,
+  awardedXp: number | null | undefined,
+): ChallengeProgress {
+  if (view.status !== "correct" && view.status !== "complete") return view;
+  if (awardedXp === undefined) return view;
+  const xp =
+    awardedXp === null || !Number.isFinite(awardedXp)
+      ? 0
+      : Math.max(0, Math.floor(awardedXp));
+  return { ...view, xp };
 }
 
 function emptyToNull(value: string | null | undefined): string | null {

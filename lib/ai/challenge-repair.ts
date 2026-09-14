@@ -14,11 +14,11 @@ import { answersAgree, solutionAgreesWithAnswer } from "@/lib/math/verify";
  * Presentation-level candidate repair.
  *
  * Grounding and arithmetic stay authoritative. valuesUsed may be aligned
- * to the structured computation's source operands, and object_math
- * questions may gain explicit photographed-object attribution, before
- * this step. This module then replaces student-facing solution prose
- * when the structured computation already independently verifies. It
- * never rewrites origins.
+ * to the structured computation's source operands, inspired_math may gain
+ * a hypothetical prefix, and object_math questions may gain explicit
+ * photographed-object attribution, before this step. This module then
+ * replaces student-facing solution prose when the structured computation
+ * already independently verifies. It never rewrites origins.
  */
 
 export function prepareCandidateChallenge(
@@ -36,6 +36,7 @@ export function prepareCandidateChallenge(
       ...finalized.repairs,
       ...(solution.repaired ? (["deterministic_solution"] as const) : []),
     ],
+    framingRepair: finalized.framingRepair,
   };
 }
 

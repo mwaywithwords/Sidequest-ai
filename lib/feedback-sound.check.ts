@@ -9,6 +9,7 @@
 
 import {
   cueDuration,
+  cueRecipe,
   peakGain,
   pcmPeak,
   renderCuePcm,
@@ -173,6 +174,16 @@ check(
 check(
   "success fanfare lasts between 0.6s and 1s",
   cueDuration("success") >= 0.6 && cueDuration("success") <= 1,
+);
+
+const successRecipe = cueRecipe("success");
+const loudest = successRecipe.notes.reduce((best, note) =>
+  note.gain > best.gain ? note : best,
+);
+
+check(
+  "the final C-major chord is the loudest brass moment",
+  Math.round(loudest.freq) === 1047 && loudest.at >= 0.35 && loudest.at <= 0.5,
 );
 
 check(

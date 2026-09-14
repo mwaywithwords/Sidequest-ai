@@ -1198,6 +1198,107 @@ check(
     !walletUnframed.lines.some((line) => line.includes("generation_candidate_2")),
 );
 
+const walletUnframedGrade5 = await runCase({
+  analysis: wallet,
+  skillId: "addition",
+  grade: 5,
+  collectLogs: true,
+  combined: {
+    status: "ok",
+    wire: {
+      investigation: inspiredInvestigation(
+        "money, dollars, and budgeting",
+        "A wallet holds money.",
+        ["rectangular form"],
+      ),
+      discovery: discovery({
+        title: "Made to carry cards",
+        text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      }),
+      challenge: {
+        ...walletMoney("addition"),
+        question:
+          "Your wallet has $20 and you add $50. How much money do you have?",
+      },
+    },
+  },
+});
+
+check(
+  "wallet unframed Grade 5 is prefixed on candidate 1",
+  walletUnframedGrade5.result.status === "ok" &&
+    walletUnframedGrade5.combinedCalls === 1 &&
+    walletUnframedGrade5.challengeCalls === 0 &&
+    walletUnframedGrade5.result.challenge.question ===
+      "Suppose your wallet has $20 and you add $50. How much money do you have?" &&
+    walletUnframedGrade5.lines.some((line) =>
+      line.includes("candidate_1_framing_repair"),
+    ) &&
+    !walletUnframedGrade5.lines.some((line) =>
+      line.includes("generation_candidate_2"),
+    ),
+);
+
+const walletCandidate2Framing = await runCase({
+  analysis: wallet,
+  skillId: "addition",
+  collectLogs: true,
+  combined: {
+    status: "ok",
+    wire: {
+      investigation: inspiredInvestigation(
+        "money, dollars, and budgeting",
+        "A wallet holds money.",
+        ["rectangular form"],
+      ),
+      discovery: discovery({
+        title: "Made to carry cards",
+        text: "A wallet is shaped to hold cards and bills in a flat pocket you can close. That form is what makes it easy to carry.",
+      }),
+      challenge: arithmeticChallenge(
+        "addition",
+        "Your wallet is next to 8 apples and 4 more apples. How many apples is that?",
+        "This question is about your wallet.",
+        [
+          operand("apples", 8, "given_in_problem"),
+          operand("more apples", 4, "given_in_problem"),
+        ],
+        "add",
+        12,
+        "apples",
+      ),
+    },
+  },
+  challenges: [
+    {
+      status: "ok",
+      wire: {
+        ...walletMoney("addition"),
+        question:
+          "Your wallet has $20 and you add $50. How much money do you have?",
+      },
+    },
+  ],
+});
+
+check(
+  "candidate 1 invalid → candidate 2 unframed wallet is prefixed",
+  walletCandidate2Framing.result.status === "ok" &&
+    walletCandidate2Framing.combinedCalls === 1 &&
+    walletCandidate2Framing.challengeCalls === 1 &&
+    walletCandidate2Framing.result.challenge.question ===
+      "Suppose your wallet has $20 and you add $50. How much money do you have?" &&
+    walletCandidate2Framing.lines.some((line) =>
+      line.includes("candidate_2_framing_repair"),
+    ) &&
+    walletCandidate2Framing.lines.some((line) =>
+      line.includes('"repair":"hypothetical_prefix"'),
+    ) &&
+    !walletCandidate2Framing.lines.some((line) =>
+      line.includes("candidate_1_framing_repair"),
+    ),
+);
+
 const beverageCan: ObjectAnalysis = {
   objectName: "beverage can",
   category: "packaged beverage",

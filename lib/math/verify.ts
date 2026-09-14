@@ -24,6 +24,7 @@ import {
 import {
   derivedQuantities,
   isDerivedNonSource,
+  isSourceValue,
   sourceOperands,
 } from "@/lib/math/source-values";
 import {
@@ -391,7 +392,7 @@ function verifyOrigins(
   const given = challenge.valuesUsed.filter(
     (value) =>
       value.origin === "given_in_problem" &&
-      !isDerivedNonSource(value, sources, derived),
+      isSourceValue(value, sources),
   );
   if (given.length > 0) {
     if (!questionHasHypotheticalFraming(challenge.question)) {

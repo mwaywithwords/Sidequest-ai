@@ -7,6 +7,10 @@ import {
 } from "@/lib/progress/outcome";
 import { gradeQuestAnswer } from "@/lib/quest-grade";
 
+/**
+ * Student answer submit. Extra keys such as xp, attempt_number,
+ * is_correct, profile_id, and challenge_id are ignored.
+ */
 export async function submitQuestAnswer(input: {
   questId: unknown;
   answer: unknown;

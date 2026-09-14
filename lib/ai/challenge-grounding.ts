@@ -34,13 +34,16 @@ import {
   repairObjectMathQuestion,
 } from "@/lib/ai/object-math-wording";
 import {
-  canPrefixHypotheticalFraming,
-  prefixHypotheticalFraming,
+  applyHypotheticalFramingRepair,
+  type FramingRepairOutcome,
   questionHasHypotheticalFraming,
   questionStatesNumber,
   sentenceIsHypothetical,
 } from "@/lib/math/hypothetical";
-import { alignValuesUsedWithComputation } from "@/lib/math/source-values";
+import {
+  alignValuesUsedWithComputation,
+  sourceOperands,
+} from "@/lib/math/source-values";
 import { normaliseUnit as foldUnit } from "@/lib/math/units";
 import { getAdaptiveProfile } from "@/lib/progress/adaptation";
 import { sanitiseZodIssues } from "@/lib/quest-trace";
@@ -170,9 +173,19 @@ export type ChallengeFinalization =
       status: "ok";
       challenge: GeneratedChallenge;
       repairs: ChallengeRepair[];
+      framingRepair: FramingRepairOutcome;
     }
-  | { status: "poor_fit" }
-  | { status: "generation_failure"; issue: ChallengeValidationIssue };
+  | {
+      status: "poor_fit";
+      repairs: ChallengeRepair[];
+      framingRepair: FramingRepairOutcome;
+    }
+  | {
+      status: "generation_failure";
+      issue: ChallengeValidationIssue;
+      repairs: ChallengeRepair[];
+      framingRepair: FramingRepairOutcome;
+    };
 
 /**
  * Turns a parsed model answer into a challenge the application may store,
@@ -181,18 +194,24 @@ export type ChallengeFinalization =
  * `canGenerate: false` is a poor fit: the approved investigation could not
  * become an honest question. Invented object facts, a missing grounded
  * anchor, or a malformed payload are generation failures. A missing
- * inspired-math hypothetical prefix may be added when every value is
- * already `given_in_problem`. Object_math may add photographed-object
+ * inspired-math hypothetical prefix may be added after object relevance
+ * and before the unframed-hypothetical grounding check, using the
+ * computation's source values. Object_math may add photographed-object
  * attribution when a grounded observed value is already in the question,
  * and may align valuesUsed to the structured computation's source
  * operands. Origins and observed facts are never rewritten.
+ *
+ * Order: field parse → valuesUsed alignment → application schema →
+ * value/anchor grounding → object relevance → hypothetical framing
+ * repair → remaining grounding including unframed hypotheticals →
+ * ChallengeSchema of the repaired question.
  */
 export function finalizeChallenge(
   wire: WireChallenge,
   context: ChallengeContext,
 ): ChallengeFinalization {
   if (!wire.canGenerate) {
-    return { status: "poor_fit" };
+    return failPoorFit();
   }
 
   const repairs: ChallengeRepair[] = [];
@@ -269,27 +288,49 @@ export function finalizeChallenge(
     repairs.push("values_used");
   }
 
+  const schema = ChallengeSchema.safeParse({
+    question,
+    skillCode: context.skillId,
+    correctAnswer,
+    solution,
+    hint1,
+    hint2,
+    difficulty: wire.difficulty,
+    objectConnection,
+    valuesUsed,
+    ...(shapesUsed.length > 0 ? { shapesUsed } : {}),
+    verificationStrategy,
+    computation,
+  });
+  if (!schema.success) {
+    return generationFailureFromZod(schema.error, repairs);
+  }
+
   const valueGrounding = valuesGroundingIssue(valuesUsed, context);
   if (valueGrounding !== null) {
-    return generationFailure("valuesUsed", valueGrounding);
+    return generationFailure("valuesUsed", valueGrounding, repairs);
   }
 
   if (!shapesAreGrounded(shapesUsed, context)) {
-    return generationFailure("shapesUsed", "ungrounded_shape");
+    return generationFailure("shapesUsed", "ungrounded_shape", repairs);
   }
 
   if (!hasUsableAnchor(valuesUsed, context, shapesUsed)) {
-    return { status: "poor_fit" };
+    return failPoorFit(repairs);
   }
 
   if (
     !computationUsesUsableAnchor(computation, valuesUsed, context, shapesUsed)
   ) {
-    return { status: "poor_fit" };
+    return failPoorFit(repairs);
   }
 
   if (!computationMatchesValues(computation, valuesUsed)) {
-    return generationFailure("computation", "computation_value_mismatch");
+    return generationFailure(
+      "computation",
+      "computation_value_mismatch",
+      repairs,
+    );
   }
 
   if (!refersToObject(question, context.analysis)) {
@@ -309,7 +350,7 @@ export function finalizeChallenge(
   }
 
   if (!refersToObject(question, context.analysis)) {
-    return generationFailure("question", "missing_object_reference");
+    return generationFailure("question", "missing_object_reference", repairs);
   }
 
   if (
@@ -320,35 +361,110 @@ export function finalizeChallenge(
       shapesUsed,
     )
   ) {
-    return generationFailure("objectConnection", "missing_anchor_citation");
+    return generationFailure(
+      "objectConnection",
+      "missing_anchor_citation",
+      repairs,
+    );
   }
 
   if (!inspiredStaysOnTopic(question, objectConnection, context)) {
-    return generationFailure("question", "inspired_off_topic");
+    return generationFailure("question", "inspired_off_topic", repairs);
   }
 
-  if (attributesContextualAsObserved(question, valuesUsed, context)) {
-    return generationFailure("question", "contextual_as_observed");
-  }
-
-  if (
-    canPrefixHypotheticalFraming(
-      question,
-      context.fit.challengeMode,
-      valuesUsed,
-      QUESTION_MAX,
-    )
-  ) {
-    question = prefixHypotheticalFraming(question);
+  const sourceValues = sourceOperands(computation);
+  const framingValues =
+    sourceValues.length > 0 ? sourceValues : valuesUsed;
+  const framing = applyHypotheticalFramingRepair({
+    question,
+    challengeMode: context.fit.challengeMode,
+    values: framingValues,
+    maxQuestionLength: QUESTION_MAX,
+    objectRelevant: true,
+  });
+  question = framing.question;
+  if (framing.applied) {
     repairs.push("hypothetical_prefix");
   }
 
-  if (!hypotheticalsAreFramed(question, valuesUsed)) {
-    return generationFailure("question", "unframed_hypothetical");
+  const grounded = groundRepairedChallenge({
+    question,
+    solution,
+    hint1,
+    hint2,
+    objectConnection,
+    verificationStrategy,
+    valuesUsed,
+    shapesUsed,
+    correctAnswer,
+    computation,
+    difficulty: wire.difficulty,
+    context,
+    repairs,
+    framingRepair: framing.outcome,
+  });
+  return grounded;
+}
+
+function groundRepairedChallenge(input: {
+  question: string;
+  solution: string;
+  hint1: string;
+  hint2: string;
+  objectConnection: string;
+  verificationStrategy: string;
+  valuesUsed: UsedValue[];
+  shapesUsed: UsedShape[];
+  correctAnswer: CorrectAnswer;
+  computation: Computation;
+  difficulty: number;
+  context: ChallengeContext;
+  repairs: ChallengeRepair[];
+  framingRepair: FramingRepairOutcome;
+}): ChallengeFinalization {
+  const {
+    question,
+    solution,
+    hint1,
+    hint2,
+    objectConnection,
+    verificationStrategy,
+    valuesUsed,
+    shapesUsed,
+    correctAnswer,
+    computation,
+    context,
+    repairs,
+    framingRepair,
+  } = input;
+
+  if (attributesContextualAsObserved(question, valuesUsed, context)) {
+    return generationFailure(
+      "question",
+      "contextual_as_observed",
+      repairs,
+      framingRepair,
+    );
+  }
+
+  const sourceValues = sourceOperands(computation);
+  const framingValues = sourceValues.length > 0 ? sourceValues : valuesUsed;
+  if (!hypotheticalsAreFramed(question, framingValues)) {
+    return generationFailure(
+      "question",
+      "unframed_hypothetical",
+      repairs,
+      framingRepair,
+    );
   }
 
   if (attributesUnobservedMeasurement(question, context.analysis, valuesUsed)) {
-    return generationFailure("question", "invented_measurement");
+    return generationFailure(
+      "question",
+      "invented_measurement",
+      repairs,
+      framingRepair,
+    );
   }
 
   if (
@@ -359,7 +475,12 @@ export function finalizeChallenge(
       correctAnswer,
     )
   ) {
-    return generationFailure("question", "invented_object_fact");
+    return generationFailure(
+      "question",
+      "invented_object_fact",
+      repairs,
+      framingRepair,
+    );
   }
 
   const parsed = ChallengeSchema.safeParse({
@@ -369,7 +490,7 @@ export function finalizeChallenge(
     solution,
     hint1,
     hint2,
-    difficulty: wire.difficulty,
+    difficulty: input.difficulty,
     objectConnection,
     valuesUsed,
     ...(shapesUsed.length > 0 ? { shapesUsed } : {}),
@@ -378,17 +499,36 @@ export function finalizeChallenge(
   });
 
   if (!parsed.success) {
-    return generationFailureFromZod(parsed.error);
+    return generationFailureFromZod(parsed.error, repairs, framingRepair);
   }
 
-  return { status: "ok", challenge: parsed.data, repairs };
+  return {
+    status: "ok",
+    challenge: parsed.data,
+    repairs,
+    framingRepair,
+  };
+}
+
+function failPoorFit(
+  repairs: ChallengeRepair[] = [],
+  framingRepair: FramingRepairOutcome = "not_considered",
+): Extract<ChallengeFinalization, { status: "poor_fit" }> {
+  return { status: "poor_fit", repairs, framingRepair };
 }
 
 function generationFailure(
   path: string,
   code: string,
+  repairs: ChallengeRepair[] = [],
+  framingRepair: FramingRepairOutcome = "not_considered",
 ): Extract<ChallengeFinalization, { status: "generation_failure" }> {
-  return { status: "generation_failure", issue: { path, code } };
+  return {
+    status: "generation_failure",
+    issue: { path, code },
+    repairs,
+    framingRepair,
+  };
 }
 
 export function sanitiseZodIssue(error: {
@@ -404,14 +544,18 @@ export function sanitiseZodIssueList(error: {
   return sanitiseZodIssues(error);
 }
 
-function generationFailureFromZod(error: {
-  issues: readonly unknown[];
-}): Extract<ChallengeFinalization, { status: "generation_failure" }> {
+function generationFailureFromZod(
+  error: { issues: readonly unknown[] },
+  repairs: ChallengeRepair[] = [],
+  framingRepair: FramingRepairOutcome = "not_considered",
+): Extract<ChallengeFinalization, { status: "generation_failure" }> {
   const issues = sanitiseZodIssueList(error);
   const first = issues[0] ?? { path: "challenge", code: "invalid" };
   return {
     status: "generation_failure",
     issue: { ...first, issues },
+    repairs,
+    framingRepair,
   };
 }
 

@@ -24,8 +24,13 @@ import {
   progressFromAttempts,
   questIsGradeable,
   toStudentGradeView,
-  VISUAL_XP,
 } from "@/lib/progress/outcome";
+import {
+  XP_CORRECT_ATTEMPT_1,
+  XP_CORRECT_ATTEMPT_2,
+  XP_CORRECT_ATTEMPT_3,
+  XP_SOLUTION_REVEALED,
+} from "@/lib/progress/xp";
 
 let failed = 0;
 
@@ -104,6 +109,10 @@ check(
 );
 check("third miss completes the Sidequest", thirdMiss.status === "complete");
 check(
+  "third miss awards solution XP, not a zero",
+  thirdMiss.status === "complete" && thirdMiss.xp === XP_SOLUTION_REVEALED,
+);
+check(
   "third miss reveals the solution, not the raw answer object",
   thirdMiss.status === "complete" &&
     thirdMiss.solution === "7 minus the leftover." &&
@@ -111,10 +120,28 @@ check(
     !("correct_answer" in thirdMiss) &&
     !("correctAnswer" in thirdMiss),
 );
-check("correct first attempt awards visual XP", firstHit.status === "correct" && firstHit.xp === VISUAL_XP);
 check(
-  "correct after one miss still succeeds",
-  laterHit.status === "correct" && laterHit.attemptNumber === 2,
+  "correct first attempt awards 10 XP",
+  firstHit.status === "correct" && firstHit.xp === XP_CORRECT_ATTEMPT_1,
+);
+check(
+  "correct after one miss awards 7 XP",
+  laterHit.status === "correct" &&
+    laterHit.attemptNumber === 2 &&
+    laterHit.xp === XP_CORRECT_ATTEMPT_2,
+);
+
+const thirdHit = progressAfterAttempt({
+  isCorrect: true,
+  attemptNumber: 3,
+  hint1: "Hint one",
+  hint2: "Hint two",
+  solution: "7 minus the leftover.",
+  expected,
+});
+check(
+  "correct on the third try awards 5 XP",
+  thirdHit.status === "correct" && thirdHit.xp === XP_CORRECT_ATTEMPT_3,
 );
 
 check("next attempt after none is 1", nextAttemptNumber([]) === 1);
@@ -383,6 +410,32 @@ check(
   replayA.totalAttempts === replayB.totalAttempts &&
     replayA.currentLevel === replayB.currentLevel &&
     replayA.masteryScore === replayB.masteryScore,
+);
+
+const historicalCorrect = progressFromAttempts({
+  attempts: [{ attemptNumber: 1, isCorrect: true }],
+  hint1: "Hint one",
+  hint2: "Hint two",
+  solution: "Worked out.",
+  expected,
+  awardedXp: 0,
+});
+check(
+  "a historical Sidequest without XP remains a valid correct state",
+  historicalCorrect.status === "correct" && historicalCorrect.xp === 0,
+);
+
+const refreshedReward = progressFromAttempts({
+  attempts: [{ attemptNumber: 1, isCorrect: true }],
+  hint1: "Hint one",
+  hint2: "Hint two",
+  solution: "Worked out.",
+  expected,
+  awardedXp: 10,
+});
+check(
+  "refresh after success shows the stored XP, not a second award",
+  refreshedReward.status === "correct" && refreshedReward.xp === 10,
 );
 
 if (failed > 0) {

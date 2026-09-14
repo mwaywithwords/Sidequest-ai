@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { BoltIcon, CameraIcon, SearchIcon, SparkIcon } from "@/components/ui/icons";
+import { BoltIcon, CameraIcon, SearchIcon } from "@/components/ui/icons";
 
 export function ViewfinderCorners({
   scanning = false,
@@ -48,14 +48,7 @@ export function CollectibleToken({
 
 export { TOKEN_MARKS };
 
-export function XpBadge({ amount }: { amount: number }) {
-  return (
-    <span className="xp-badge animate-xp-pop">
-      <SparkIcon className="size-4" />
-      +{amount} XP
-    </span>
-  );
-}
+export { XpBadge } from "@/components/quest/xp-celebration";
 
 export function SparkField({ className }: { className?: string }) {
   return (

@@ -27,6 +27,7 @@ import type {
   ReadySkillFit,
 } from "@/lib/ai/schemas";
 import { inferSemanticPurpose } from "@/lib/ai/semantic-purpose";
+import type { FramingRepairOutcome } from "@/lib/math/hypothetical";
 import { createQuestLogger, type QuestLogger, type SafeZodIssue } from "@/lib/quest-trace";
 import { planAfterVerification, verifyChallenge } from "@/lib/math/verify";
 import type { Grade, SkillId } from "@/lib/types";
@@ -77,12 +78,14 @@ type CandidateEvaluation =
       status: "ok";
       challenge: GeneratedChallenge;
       repairs: string[];
+      framingRepair: FramingRepairOutcome;
     }
   | {
       status: "rejected";
       hint: RegenerationHint;
       diagnostic: Omit<CandidateDiagnostic, "candidate_attempt" | "timing_ms">;
       repairs: string[];
+      framingRepair: FramingRepairOutcome;
     };
 
 export async function runQuestGenerationWithRetry(
@@ -293,6 +296,7 @@ async function finishCombinedAttempt(
       sections.fit.challengeMode,
       originList(evaluated.challenge.valuesUsed),
       evaluated.repairs,
+      evaluated.framingRepair,
     );
     return {
       status: "ok",
@@ -309,7 +313,13 @@ async function finishCombinedAttempt(
     timing_ms: options.timing,
     ...evaluated.diagnostic,
   };
-  logCandidate(logger, first, input, evaluated.diagnostic.zodIssues);
+  logCandidate(
+    logger,
+    first,
+    input,
+    evaluated.diagnostic.zodIssues,
+    evaluated.framingRepair,
+  );
 
   if (!options.allowChallengeRetry) {
     return failBoth(logger, input, options.previous ?? first, {
@@ -370,6 +380,7 @@ async function retryChallengeOnly(
       sections.fit.challengeMode,
       originList(evaluated.challenge.valuesUsed),
       evaluated.repairs,
+      evaluated.framingRepair,
     );
     return {
       status: "ok",
@@ -386,7 +397,13 @@ async function retryChallengeOnly(
     timing_ms: timing,
     ...evaluated.diagnostic,
   };
-  logCandidate(logger, second, input, evaluated.diagnostic.zodIssues);
+  logCandidate(
+    logger,
+    second,
+    input,
+    evaluated.diagnostic.zodIssues,
+    evaluated.framingRepair,
+  );
   return failBoth(logger, input, first, second);
 }
 
@@ -402,6 +419,7 @@ function evaluateChallengeCandidate(
       status: "rejected",
       hint: hintForMissingChallenge(),
       repairs: [],
+      framingRepair: "not_considered",
       diagnostic: {
         failure_stage: "generation_schema_failure",
         challengeMode: sections.fit.challengeMode,
@@ -424,7 +442,8 @@ function evaluateChallengeCandidate(
     return {
       status: "rejected",
       hint: hintForDeclinedChallenge(),
-      repairs: [],
+      repairs: finalized.repairs,
+      framingRepair: finalized.framingRepair,
       diagnostic: {
         failure_stage: "generation_grounding_failure",
         challengeMode: sections.fit.challengeMode,
@@ -439,7 +458,8 @@ function evaluateChallengeCandidate(
     return {
       status: "rejected",
       hint: hintForIssue(finalized.issue),
-      repairs: [],
+      repairs: finalized.repairs,
+      framingRepair: finalized.framingRepair,
       diagnostic: {
         failure_stage: stageForIssue(finalized.issue),
         computationType: wire.computation.type,
@@ -468,6 +488,7 @@ function evaluateChallengeCandidate(
       status: "ok",
       challenge: finalized.challenge,
       repairs: finalized.repairs,
+      framingRepair: finalized.framingRepair,
     };
   }
 
@@ -477,6 +498,7 @@ function evaluateChallengeCandidate(
     status: "rejected",
     hint: hintForVerification(reason),
     repairs: finalized.repairs,
+    framingRepair: finalized.framingRepair,
     diagnostic: {
       failure_stage: "verification_failure",
       computationType: finalized.challenge.computation.type,
@@ -537,6 +559,7 @@ function logCandidate(
   diagnostic: CandidateDiagnostic,
   input: QuestGenerationRetryInput,
   zodIssues?: SafeZodIssue[],
+  framingRepair: FramingRepairOutcome = "not_considered",
 ) {
   const failedStage = candidatePipelineStage(
     diagnostic.candidate_attempt,
@@ -559,12 +582,13 @@ function logCandidate(
     skill: input.skillId,
     ...analysisTrace(input.analysis),
   });
-  skipRemainingCandidateStages(logger, diagnostic);
+  skipRemainingCandidateStages(logger, diagnostic, framingRepair);
 }
 
 function skipRemainingCandidateStages(
   logger: QuestLogger,
   diagnostic: CandidateDiagnostic,
+  framingRepair: FramingRepairOutcome,
 ) {
   const attempt = diagnostic.candidate_attempt;
   const failed = candidatePipelineStage(attempt, diagnostic.failure_stage);
@@ -586,6 +610,16 @@ function skipRemainingCandidateStages(
         attempt,
         challengeMode: diagnostic.challengeMode,
       });
+      if (stage === `candidate_${attempt}_schema`) {
+        logFramingRepairStage(
+          logger,
+          attempt,
+          diagnostic.challengeMode,
+          framingRepair,
+          diagnostic.valueOrigins,
+          true,
+        );
+      }
       continue;
     }
     logger.stage({
@@ -603,35 +637,60 @@ function logPassedCandidateStages(
   challengeMode: string,
   valueOrigins?: string[],
   repairs: readonly string[] = [],
+  framingRepair: FramingRepairOutcome = "not_considered",
 ) {
-  for (const stage of [
-    `candidate_${attempt}_schema`,
-    `candidate_${attempt}_grounding`,
-  ]) {
-    logger.stage({
-      stage,
-      status: "passed",
-      attempt,
-      challengeMode,
-      selectedPath: challengeMode,
-      valueOrigins,
-      groundingResult: "ok",
-    });
-  }
+  logger.stage({
+    stage: `candidate_${attempt}_schema`,
+    status: "passed",
+    attempt,
+    challengeMode,
+    selectedPath: challengeMode,
+    valueOrigins,
+    groundingResult: "ok",
+  });
 
-  for (const repair of repairs) {
-    const mapped = repairLogFor(attempt, repair);
-    if (mapped === null) continue;
-    logger.stage({
-      stage: mapped.stage,
-      status: "passed",
-      attempt,
-      challengeMode,
-      selectedPath: challengeMode,
-      valueOrigins,
-      repair: mapped.repair,
-    });
-  }
+  logRepairIfPresent(
+    logger,
+    attempt,
+    challengeMode,
+    valueOrigins,
+    repairs,
+    "values_used",
+  );
+  logRepairIfPresent(
+    logger,
+    attempt,
+    challengeMode,
+    valueOrigins,
+    repairs,
+    "object_reference",
+  );
+  logFramingRepairStage(
+    logger,
+    attempt,
+    challengeMode,
+    framingRepair,
+    valueOrigins,
+  );
+
+  logger.stage({
+    stage: `candidate_${attempt}_grounding`,
+    status: "passed",
+    attempt,
+    challengeMode,
+    selectedPath: challengeMode,
+    valueOrigins,
+    groundingResult: "ok",
+  });
+
+  logRepairIfPresent(
+    logger,
+    attempt,
+    challengeMode,
+    valueOrigins,
+    repairs,
+    "deterministic_solution",
+  );
 
   logger.stage({
     stage: `candidate_${attempt}_verification`,
@@ -642,6 +701,64 @@ function logPassedCandidateStages(
     valueOrigins,
     groundingResult: "ok",
     verificationResult: "ok",
+  });
+}
+
+function logRepairIfPresent(
+  logger: QuestLogger,
+  attempt: 1 | 2,
+  challengeMode: string,
+  valueOrigins: string[] | undefined,
+  repairs: readonly string[],
+  repair: string,
+) {
+  if (repair === "hypothetical_prefix") return;
+  if (!repairs.includes(repair)) return;
+  const mapped = repairLogFor(attempt, repair);
+  if (mapped === null) return;
+  logger.stage({
+    stage: mapped.stage,
+    status: "passed",
+    attempt,
+    challengeMode,
+    selectedPath: challengeMode,
+    valueOrigins,
+    repair: mapped.repair,
+  });
+}
+
+function logFramingRepairStage(
+  logger: QuestLogger,
+  attempt: 1 | 2,
+  challengeMode: string | undefined,
+  framingRepair: FramingRepairOutcome,
+  valueOrigins?: string[],
+  includeNotApplicable = false,
+) {
+  if (framingRepair === "not_considered") return;
+
+  if (framingRepair === "hypothetical_prefix") {
+    logger.stage({
+      stage: `candidate_${attempt}_framing_repair`,
+      status: "passed",
+      attempt,
+      challengeMode,
+      selectedPath: challengeMode,
+      valueOrigins,
+      repair: "hypothetical_prefix",
+    });
+    return;
+  }
+
+  if (!includeNotApplicable) return;
+
+  logger.stage({
+    stage: `candidate_${attempt}_framing_repair`,
+    status: "skipped",
+    attempt,
+    challengeMode,
+    selectedPath: challengeMode,
+    failureCode: "repair_not_applicable",
   });
 }
 

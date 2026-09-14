@@ -1,7 +1,7 @@
 import {
   isChallengeComplete,
   MAX_ANSWER_ATTEMPTS,
-} from "@/lib/progress/outcome";
+} from "@/lib/progress/attempts";
 
 /**
  * Skill-progress rules for completed Sidequests.
