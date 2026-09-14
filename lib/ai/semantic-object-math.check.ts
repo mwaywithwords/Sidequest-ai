@@ -1833,6 +1833,198 @@ verifyNamed(
   }),
 );
 
+function objectFit(skill: SkillId, property: string): ReadySkillFit {
+  return {
+    selectedSkillCode: skill,
+    fitScore: 0.8,
+    challengeMode: "object_math",
+    canGenerateChallenge: true,
+    usableProperties: [property],
+    reason: "A grounded path exists.",
+    suggestedObjectCharacteristics: [],
+    alternativeSkillCodes: [],
+    anchors: [{ property, origin: "observed" }],
+    evidenceRequest: null,
+    inspirationContext: null,
+  };
+}
+
+const beverageCan = reading("beverage can", "packaged beverage", {
+  visibleText: ["222 mL"],
+  visibleMeasurements: [
+    { value: 222, unit: "mL", label: "printed can volume" },
+  ],
+  shapeProperties: ["cylinder"],
+  observableProperties: ["pull tab"],
+  typicalUses: [
+    "drinking",
+    "holding a flavored beverage",
+    "single-serve beverage container",
+  ],
+});
+
+const proteinBottle = reading("protein shake bottle", "packaged beverage", {
+  visibleText: ["Premier Protein", "11 FL OZ"],
+  visibleMeasurements: [
+    { value: 11, unit: "fl oz", label: "printed bottle volume" },
+  ],
+  shapeProperties: ["rectangular carton with a screw cap"],
+  observableProperties: ["purple plastic cap"],
+});
+
+const waterBottle = reading("water bottle", "packaged beverage", {
+  visibleText: ["12 FL OZ"],
+  visibleMeasurements: [
+    { value: 12, unit: "fl oz", label: "printed bottle volume" },
+  ],
+  shapeProperties: ["cylinder"],
+  observableProperties: ["screw cap"],
+});
+
+verifyNamed(
+  "beverage can + Grade 4 addition repairs missing object reference",
+  beverageCan,
+  objectFit("addition", "printed can volume: 222 mL"),
+  wire({
+    skillCode: "addition",
+    question: "222 mL plus another 100 mL equals how much?",
+    objectConnection:
+      "Your can shows 222 mL, so that printed volume starts the addition.",
+    valuesUsed: [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("added volume", 100, "given_in_problem", "mL"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 322,
+      numerator: null,
+      denominator: null,
+      unit: "mL",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "add",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("printed can volume", 222, "observed", "mL"),
+        operand("added volume", 100, "given_in_problem", "mL"),
+      ],
+    },
+    solution: "222 + 100 = 322 mL.",
+  }),
+);
+
+verifyNamed(
+  "protein bottle + subtraction repairs missing object reference",
+  proteinBottle,
+  objectFit("subtraction", "printed bottle volume: 11 fl oz"),
+  wire({
+    skillCode: "subtraction",
+    question: "11 fl oz minus 4 fl oz equals how much?",
+    objectConnection:
+      "Your bottle shows 11 fl oz, so that real measurement becomes the starting amount.",
+    valuesUsed: [
+      operand("printed bottle volume", 11, "observed", "fl oz"),
+      operand("amount poured out", 4, "given_in_problem", "fl oz"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 7,
+      numerator: null,
+      denominator: null,
+      unit: "fl oz",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "subtract",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("printed bottle volume", 11, "observed", "fl oz"),
+        operand("amount poured out", 4, "given_in_problem", "fl oz"),
+      ],
+    },
+    solution: "11 − 4 = 7 fl oz.",
+  }),
+);
+
+verifyNamed(
+  "can + multiplication repairs missing object reference",
+  beverageCan,
+  objectFit("multiplication", "printed can volume: 222 mL"),
+  wire({
+    skillCode: "multiplication",
+    question: "222 mL times 3 equals how much?",
+    objectConnection:
+      "Your can shows 222 mL, so that printed volume is the group we scale up.",
+    valuesUsed: [
+      operand("printed can volume", 222, "observed", "mL"),
+      operand("number of cans", 3, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 666,
+      numerator: null,
+      denominator: null,
+      unit: "mL",
+    },
+    computation: {
+      type: "arithmetic",
+      operation: "multiply",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("printed can volume", 222, "observed", "mL"),
+        operand("number of cans", 3, "given_in_problem"),
+      ],
+    },
+    solution: "222 × 3 = 666 mL.",
+  }),
+);
+
+verifyNamed(
+  "bottle + division repairs missing object reference",
+  waterBottle,
+  objectFit("division", "printed bottle volume: 12 fl oz"),
+  wire({
+    skillCode: "division",
+    question: "12 fl oz split into 3 equal groups equals how much each?",
+    objectConnection:
+      "Your bottle shows 12 fl oz, so that printed volume is shared into groups.",
+    valuesUsed: [
+      operand("printed bottle volume", 12, "observed", "fl oz"),
+      operand("number of groups", 3, "given_in_problem"),
+    ],
+    correctAnswer: {
+      type: "number",
+      value: 4,
+      numerator: null,
+      denominator: null,
+      unit: "fl oz",
+    },
+    computation: {
+      type: "division",
+      operation: "quotient",
+      shape: null,
+      numerator: null,
+      denominator: null,
+      simplify: null,
+      operands: [
+        operand("printed bottle volume", 12, "observed", "fl oz"),
+        operand("number of groups", 3, "given_in_problem"),
+      ],
+    },
+    solution: "12 ÷ 3 = 4 fl oz.",
+  }),
+);
+
 if (failed > 0) {
   console.error(`\n${failed} semantic-object math check(s) failed`);
   process.exit(1);

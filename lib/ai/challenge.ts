@@ -157,9 +157,11 @@ If you cannot produce a legitimate challenge for this skill from the reading wit
 
 Write for the grade you are given. Aim for the target difficulty you are given (automatic targets are 1 to 4). Do not add artificial complexity to reach a higher difficulty. If the object's real properties only support a simple problem, write that simple grounded problem. Do not invent extra object properties to make the problem harder. Extra numbers must be given_in_problem. Grade rules still win: difficulty does not unlock decimals, conversions, fraction denominators, or geometry the grade does not allow. The operation must stay aligned with the selected skill.
 
+For Grade 3 and Grade 4 addition, subtraction, multiplication, and division, prefer a single-step arithmetic challenge when it satisfies the selected skill and the adaptation target. Example: a can showing 222 mL plus addition can be "the can in your photo contains 222 mL; suppose another 100 mL is added." Use multi_step_arithmetic only when one operation cannot represent the problem or adaptation specifically asks for a second related step.
+
 Answer with:
 - "canGenerate": false only when no honest challenge exists.
-- "question": the student-facing problem. It must clearly refer to the photographed object ("your bottle", "the sneaker in your photo").
+- "question": the student-facing problem. It must clearly refer to the photographed object and make clear which value came from it ("your can", "the bottle in your photo", "the 222 mL shown on your can"). A short unambiguous name is enough: "beverage can" may be called "can".
 - "skillCode": exactly the selected skill.
 - "correctAnswer": { "type": "number" | "fraction" | "choice", "value": number or null, "numerator": number or null, "denominator": number or null, "unit": string or null, "label": string or null, "set": string or null }. For type "number", fill value and optional unit. For type "fraction", fill numerator and denominator. For type "choice", fill label with one schema-controlled geometry word (circle, rectangle, square, triangle, sphere, cylinder, cone, cube, rectangular prism, line of symmetry, right angle, parallel lines) and set with solid, plane, or symmetry.
 - "solution": a short age-appropriate explanation of the calculation. Not a lecture.
@@ -168,14 +170,14 @@ Answer with:
 - "difficulty": integer 1 to 5, aiming for the target difficulty you are given.
 - "objectConnection": why THIS photographed object matters. Not "this problem is about your bottle." Example: "Your bottle shows 11 fl oz, so that real measurement becomes the starting amount in the subtraction problem."
 - "verificationStrategy": one short instruction a later verifier should follow, such as "subtract the poured-out amount from the printed volume".
-- "valuesUsed": every number in the challenge, each with label, value, optional unit, and origin. Empty only for qualitative or structure geometry that uses shapesUsed instead. Copy observed labels from the reading.
+- "valuesUsed": every SOURCE number in the challenge (observed, student_provided, contextual, or given_in_problem), each with label, value, optional unit, and origin. Do not include intermediate step results or the final answer. Empty only for qualitative or structure geometry that uses shapesUsed instead. Copy observed labels from the reading.
 - "shapesUsed": observed 2D/3D forms from the reading. Each has label, form, aspect (solid | plane | cross_section | symmetry), and origin observed or student_provided. Required for shape_identify and shape_count. Empty array otherwise.
 - "computation": a structured representation a later stage will evaluate. Not JavaScript. Not a free expression.
   { "type": "arithmetic" | "multi_step_arithmetic" | "division" | "fraction_of" | "fraction_remaining" | "conversion" | "geometry" | "shape_identify" | "shape_count", "operation": string, "shape": string or null, "numerator": number or null, "denominator": number or null, "simplify": boolean or null, "operands": [values], "steps": array or null }
 
 Computation shapes:
 - arithmetic: operation is add, subtract, or multiply. operands are the values in order.
-- multi_step_arithmetic: two to four ordered steps. Each step is add, subtract, or multiply. An operand is either a declared value (kind "value") or an earlier step result (kind "step_result", step = 0-based index). The last step must be the selected skill's operation. Use this only when one operation cannot represent the problem. Example: add 50 and 20, then subtract that result from 125. Set top-level operands to the declared values and fill steps. Never use eval or a free expression.
+- multi_step_arithmetic: two to four ordered steps. Each step is add, subtract, or multiply. An operand is either a declared value (kind "value") or an earlier step result (kind "step_result", step = 0-based index). The last step must be the selected skill's operation. Use this only when one operation cannot represent the problem. Example: add 50 and 20, then subtract that result from 125. Set top-level operands to the declared source values and fill steps. valuesUsed lists those source operands only — not the 70 or the 55. Never use eval or a free expression.
 - division: operation is quotient, whole_groups, or remainder. operands[0] is the dividend, operands[1] is the divisor.
 - fraction_of: operands[0] is the whole quantity. numerator and denominator are the fraction.
 - fraction_remaining: operands[0] is the total parts, operands[1] is the parts used. simplify is whether to reduce.
@@ -184,7 +186,7 @@ Computation shapes:
 - shape_identify: operation is the aspect (solid, plane, cross_section, or symmetry). shape is the schema-controlled label. operands are empty. correctAnswer type is choice.
 - shape_count: operation is faces, edges, vertices, or sides. shape is the identified form. operands are empty. The count comes from the established form catalog, not from inventing a measurement.
 
-Every computation operand must also appear in valuesUsed. The grounded observed or student_provided value must appear in the computation.
+Every computation source operand must also appear in valuesUsed. Do not put step_result intermediates or the final answer in valuesUsed. The grounded observed or student_provided value must appear in the computation.
 
 If canGenerate is false, still fill every field with empty strings, empty arrays, zeros, and nulls as needed so the shape is complete. Those fields will be discarded.
 

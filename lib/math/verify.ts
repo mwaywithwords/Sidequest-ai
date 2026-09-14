@@ -22,6 +22,11 @@ import {
   valuesMatch,
 } from "@/lib/math/grounding";
 import {
+  derivedQuantities,
+  isDerivedNonSource,
+  sourceOperands,
+} from "@/lib/math/source-values";
+import {
   geometryCitationTokens,
   shapeSupports,
 } from "@/lib/math/geometry-forms";
@@ -312,7 +317,20 @@ function verifyOrigins(
   evidence: readonly StudentEvidenceValue[],
   payload: ContextualPayload | null,
 ): VerificationResult | null {
+  const sources = sourceOperands(challenge.computation);
+  const derived = derivedQuantities(
+    challenge.computation,
+    challenge.correctAnswer,
+  );
+
   for (const value of challenge.valuesUsed) {
+    if (
+      value.origin === "given_in_problem" &&
+      isDerivedNonSource(value, sources, derived)
+    ) {
+      continue;
+    }
+
     if (value.origin === "observed" && !isObservedValue(value, analysis, fit)) {
       return fail(
         "ungrounded_value",
@@ -371,7 +389,9 @@ function verifyOrigins(
   }
 
   const given = challenge.valuesUsed.filter(
-    (value) => value.origin === "given_in_problem",
+    (value) =>
+      value.origin === "given_in_problem" &&
+      !isDerivedNonSource(value, sources, derived),
   );
   if (given.length > 0) {
     if (!questionHasHypotheticalFraming(challenge.question)) {
