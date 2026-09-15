@@ -8,7 +8,9 @@ import {
 } from "@/components/scan/clue-panel";
 import { DetourPanel } from "@/components/scan/detour-panel";
 import { HuntIdeas } from "@/components/scan/hunt-ideas";
+import { CameraWell } from "@/components/scan/camera-well";
 import { ProcessingOverlay } from "@/components/scan/processing-overlay";
+import { useScanCamera } from "@/components/scan/use-scan-camera";
 import { Button } from "@/components/ui/button";
 import {
   CameraIcon,
@@ -24,6 +26,11 @@ import {
   MAX_IMAGE_MB,
   validateImageFile,
 } from "@/lib/image-capture";
+import {
+  cameraSurface,
+  takePhotoAction,
+  usesRetryPrimary,
+} from "@/lib/camera";
 import {
   HUNT_RECENT_KEY,
   parseHuntRecent,
@@ -124,6 +131,8 @@ export function ScanStage({
   const [huntRecent, setHuntRecent] = useState<string[]>(
     () => readHuntRecent()[skill.id] ?? [],
   );
+  const cameraActive = stage === "idle";
+  const camera = useScanCamera(cameraActive);
 
   const revokeCluePreview = useCallback(() => {
     setClueCollection((current) => {
@@ -199,12 +208,7 @@ export function ScanStage({
     setStage("idle");
   }, [clearPicked]);
 
-  function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
-    const picked = event.target.files?.[0];
-    event.target.value = "";
-
-    if (!picked) return;
-
+  function acceptFile(picked: File) {
     const problem = validateImageFile(picked);
     if (problem) {
       reject(problem);
@@ -221,6 +225,29 @@ export function ScanStage({
     setFile(picked);
     setPreviewUrl(URL.createObjectURL(picked));
     setStage("preview");
+  }
+
+  function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!picked) return;
+    acceptFile(picked);
+  }
+
+  async function handleTakePhoto() {
+    const action = takePhotoAction(camera.status);
+    if (action === "wait") return;
+    if (action === "fallback_capture") {
+      cameraInput.current?.click();
+      return;
+    }
+    if (action === "capture") {
+      const snapshot = await camera.capture();
+      if (snapshot) acceptFile(snapshot);
+      return;
+    }
+    await camera.start();
   }
 
   /**
@@ -319,6 +346,7 @@ export function ScanStage({
 
   const notice = problemNotice(rejection, uploadFailed, generationFailed);
   const investigating = clue !== null;
+  const cameraHelp = cameraActive && cameraSurface(camera.status) === "recovery";
   const showHunt =
     !investigating &&
     !detour &&
@@ -416,9 +444,11 @@ export function ScanStage({
         className={
           previewUrl
             ? "photo-frame scan-frame is-hero"
-            : showHunt
-              ? "photo-frame scan-frame has-ideas"
-              : "photo-frame scan-frame"
+            : cameraHelp
+              ? "photo-frame scan-frame is-camera-help"
+              : showHunt
+                ? "photo-frame scan-frame has-ideas"
+                : "photo-frame scan-frame"
         }
         aria-busy={stage === "processing"}
       >
@@ -435,12 +465,12 @@ export function ScanStage({
             className="h-full w-full object-contain"
           />
         ) : (
-          <div className="px-8 text-center">
-            <CameraIcon className="mx-auto size-11 text-faint" />
-            <p className="mt-3 text-sm font-bold text-faint">
-              {rejection ? copy.scan.rejectedPreview : copy.scan.emptyPreview}
-            </p>
-          </div>
+          <CameraWell
+            status={camera.status}
+            videoRef={camera.videoRef}
+            hasPhoto={false}
+            rejection={rejection !== null}
+          />
         )}
 
         {stage === "processing" ? (
@@ -534,11 +564,14 @@ export function ScanStage({
         <div className="game-actions">
           <Button
             size="lg"
-            onClick={() => cameraInput.current?.click()}
+            onClick={() => void handleTakePhoto()}
+            disabled={takePhotoAction(camera.status) === "wait"}
             className="w-full"
           >
             <CameraIcon className="size-6" />
-            {copy.scan.takePhoto}
+            {usesRetryPrimary(camera.status)
+              ? copy.scan.tryCameraAgain
+              : copy.scan.takePhoto}
           </Button>
           <Button
             variant="ghost"

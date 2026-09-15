@@ -326,6 +326,46 @@ html {
   height: clamp(13.5rem, calc(100dvh - 34.5rem), 18.25rem);
 }
 
+.scan-frame.is-camera-help {
+  min-height: 16.5rem;
+  height: clamp(16.5rem, calc(100dvh - 30rem), 22rem);
+}
+
+.scan-live {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--frame-well);
+  pointer-events: none;
+}
+
+.scan-live.is-off {
+  opacity: 0;
+}
+
+.scan-live.is-on {
+  opacity: 1;
+}
+
+.scan-camera-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 18rem;
+  padding: 1rem 1.15rem;
+  text-align: center;
+  color: var(--on-game);
+}
+
+.scan-camera-copy h2 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
 .game-path {
   display: flex;
   width: 100%;
