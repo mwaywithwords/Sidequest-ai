@@ -125,7 +125,7 @@ export function RevealLink({
         <span className="text-[0.7rem] font-semibold tracking-wide text-muted uppercase">
           {fromLabel}
         </span>
-        <span className="mt-1 font-display text-2xl font-extrabold tracking-tight text-cream">
+        <span className="mt-1 font-display text-2xl font-extrabold tracking-tight text-on-game">
           {fromValue}
         </span>
       </div>
@@ -151,13 +151,14 @@ export function CameraMission() {
         <div className="flex h-full items-center justify-center">
           <div
             aria-hidden
-            className="relative flex size-36 items-center justify-center rounded-[1.6rem] border-2 border-[#3a3458] border-b-[6px] bg-raised"
+            className="relative flex size-36 items-center justify-center rounded-[1.6rem] border-2 border-b-[6px] bg-raised"
+            style={{ borderColor: "var(--border-strong)", borderBottomColor: "var(--edge)" }}
           >
             <span className="absolute -top-2 right-5 size-3 rounded-full bg-coral" />
             <span className="absolute top-4 right-3 size-3 rounded-full bg-lime" />
             <span className="grid size-24 place-items-center rounded-full border-4 border-lime bg-void">
               <span className="grid size-12 place-items-center rounded-full bg-aqua/30">
-                <CameraIcon className="size-6 text-cream" />
+                <CameraIcon className="size-6 text-on-game" />
               </span>
             </span>
           </div>

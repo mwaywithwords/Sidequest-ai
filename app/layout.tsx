@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/layout/app-shell";
 import { copy } from "@/lib/copy";
+import { THEME_BOOTSTRAP_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({
@@ -32,15 +33,22 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0e0c18",
+  themeColor: THEME_COLORS.light,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      data-theme="light"
+      suppressHydrationWarning
       className={`${display.variable} ${sans.variable} ${mono.variable} antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
+        />
+      </head>
       <body className="min-h-[100dvh] overflow-x-hidden bg-ink font-sans text-cream">
         <AppShell>{children}</AppShell>
       </body>

@@ -328,7 +328,10 @@ export function ScanStage({
       ) : (
         <div className="text-center">
           <p className="game-moment">{copy.scan.missionLabel}</p>
-          <p className="mt-1 font-display text-lg font-extrabold" style={{ color: skill.accent }}>
+          <p
+            className="mt-1 font-display text-lg font-extrabold accent-ink"
+            style={{ ["--accent" as string]: skill.accent }}
+          >
             {skill.label}
           </p>
           {notice ? (

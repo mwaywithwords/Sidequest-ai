@@ -15,8 +15,8 @@ export function SkillCard({ skill }: { skill: PresentedSkill }) {
       <div className="flex items-center gap-3">
         <span
           aria-hidden
-          className="font-display text-4xl leading-none font-extrabold"
-          style={{ color: catalogue.accent }}
+          className="skill-mark font-display text-4xl leading-none font-extrabold"
+          style={{ ["--accent" as string]: catalogue.accent }}
         >
           {catalogue.symbol}
         </span>
@@ -25,7 +25,10 @@ export function SkillCard({ skill }: { skill: PresentedSkill }) {
             {catalogue.label}
           </p>
           {skill.practiced && skill.masteryPercent !== null ? (
-            <p className="text-sm font-extrabold" style={{ color: catalogue.accent }}>
+            <p
+              className="accent-ink text-sm font-extrabold"
+              style={{ ["--accent" as string]: catalogue.accent }}
+            >
               {skill.masteryPercent}%
             </p>
           ) : null}

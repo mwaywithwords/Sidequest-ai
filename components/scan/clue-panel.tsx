@@ -46,7 +46,10 @@ export function CluePanel({
       <span hidden data-quest-id={questId} />
       <div className="flex items-center justify-center gap-2">
         <SparkIcon className="size-5" style={{ color: accent }} />
-        <p className="game-moment" style={{ color: accent }}>
+        <p
+          className="game-moment accent-ink"
+          style={{ ["--accent" as string]: accent }}
+        >
           {presentation.title}
         </p>
       </div>
@@ -111,7 +114,7 @@ function ClueAction({
           src={collection.previewUrl}
           alt={copy.scan.previewAlt}
           className="h-24 w-24 rounded-2xl object-cover"
-          style={{ boxShadow: "0 6px 0 #07060d" }}
+          style={{ boxShadow: "0 6px 0 var(--frame-shelf)" }}
         />
         <Button
           type="button"

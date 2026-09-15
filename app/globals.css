@@ -1,19 +1,98 @@
 @import "tailwindcss";
 
+/*
+ * Semantic appearance tokens. Light Mode is the default HTML experience.
+ * Dark Mode is an explicit saved preference — never prefers-color-scheme.
+ */
+:root {
+  color-scheme: light;
+
+  --bg: #efe4c8;
+  --surface: #f6ebd3;
+  --surface-raised: #fff6e0;
+  --surface-hover: #ffeec8;
+  --surface-well: #e4d4b0;
+  --text: #1a1528;
+  --text-muted: #453f57;
+  --text-faint: #5c5570;
+  --border: #2c2744;
+  --border-strong: #3a3458;
+  --edge: #2c2744;
+  --brand: #c8ff4d;
+  --brand-edge: #5e8610;
+  --brand-shine: #e4ff96;
+  --brand-rim: #b6e63a;
+  --brand-ink: #3a6400;
+  --warning: #9a4a00;
+  --shadow: rgb(48 32 12 / 0.22);
+  --game-ink: #08070f;
+  --on-game: #f6f1e4;
+  --hair: rgba(28, 22, 48, 0.14);
+  --hair-strong: rgba(28, 22, 48, 0.28);
+  --control-face: #fff6e0;
+  --header-from: #fff4dc;
+  --header-to: #efe4c8;
+  --header-shine: #fffaf0;
+  --frame-well: #100e1a;
+  --frame-shelf: #2c2744;
+
+  --shell-max: 28rem;
+  --shell-gutter: 1.25rem;
+  --shell-header-h: 3.15rem;
+  --shell-main-top: 1rem;
+  --shell-main-bottom: 1.15rem;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #100e1a;
+  --surface: #1c1830;
+  --surface-raised: #1c1830;
+  --surface-hover: #272245;
+  --surface-well: #0a0814;
+  --text: #f6f1e4;
+  --text-muted: #b7b0c6;
+  --text-faint: #7c758d;
+  --border: #2c2744;
+  --border-strong: #3a3458;
+  --edge: #0b0914;
+  --brand: #c8ff4d;
+  --brand-edge: #6f9a12;
+  --brand-shine: #e4ff96;
+  --brand-rim: #d8ff7a;
+  --brand-ink: #c8ff4d;
+  --warning: #ffc94d;
+  --shadow: rgb(0 0 0 / 0.35);
+  --game-ink: #08070f;
+  --on-game: #f6f1e4;
+  --hair: rgba(246, 241, 228, 0.12);
+  --hair-strong: rgba(246, 241, 228, 0.22);
+  --control-face: #241f3c;
+  --header-from: #171322;
+  --header-to: #0f0d18;
+  --header-shine: #3a3458;
+  --frame-well: #0a0814;
+  --frame-shelf: #07060d;
+}
+
 @theme {
-  /* Surfaces: warm dark, with a hard edge so layers read as objects. */
-  --color-void: #08070f;
-  --color-ink: #100e1a;
-  --color-raised: #1c1830;
-  --color-hover: #272245;
-  --color-well: #0a0814;
+  /* Surfaces resolve through theme tokens so one component works in both. */
+  --color-void: var(--game-ink);
+  --color-ink: var(--bg);
+  --color-raised: var(--surface-raised);
+  --color-hover: var(--surface-hover);
+  --color-well: var(--surface-well);
 
-  --color-cream: #f6f1e4;
-  --color-muted: #b7b0c6;
-  --color-faint: #7c758d;
+  --color-cream: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-on-game: var(--on-game);
+  --color-warning: var(--warning);
+  --color-lime-ink: var(--brand-ink);
 
-  --color-hair: rgba(246, 241, 228, 0.12);
-  --color-hair-strong: rgba(246, 241, 228, 0.22);
+  --color-hair: var(--hair);
+  --color-hair-strong: var(--hair-strong);
 
   /* Brand + one accent family per math skill. */
   --color-lime: #c8ff4d;
@@ -60,19 +139,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
-:root {
-  color-scheme: dark;
-  --shell-max: 28rem;
-  --shell-gutter: 1.25rem;
-  --shell-header-h: 3.15rem;
-  --shell-main-top: 1rem;
-  --shell-main-bottom: 1.15rem;
-}
-
 @media (min-width: 768px) {
   :root {
     --shell-max: 32rem;
   }
+}
+
+html {
+  background: var(--bg);
 }
 
 .game-app {
@@ -89,12 +163,12 @@
   top: 0;
   z-index: 20;
   padding-top: env(safe-area-inset-top, 0px);
-  border-bottom: 2px solid #2c2744;
+  border-bottom: 2px solid var(--border);
   background:
-    linear-gradient(180deg, #171322 0%, color-mix(in oklab, var(--color-ink) 94%, #000) 100%);
+    linear-gradient(180deg, var(--header-from) 0%, var(--header-to) 100%);
   box-shadow:
-    0 1px 0 #3a3458,
-    0 10px 18px -18px rgb(0 0 0 / 0.8);
+    0 1px 0 var(--header-shine),
+    0 10px 18px -18px var(--shadow);
 }
 
 .game-header-bar {
@@ -104,26 +178,42 @@
   max-width: var(--shell-max);
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   margin-inline: auto;
   padding-inline: var(--shell-gutter);
+}
+
+.game-hud-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.game-hud-secondary {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .game-profile {
   display: inline-flex;
   width: 2.5rem;
   height: 2.5rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 0.7rem;
-  border: 2px solid #4a4468;
+  border: 2px solid var(--border-strong);
   border-bottom-width: 4px;
-  background: #241f3c;
-  color: var(--color-lime);
-  box-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+  background: var(--control-face);
+  color: var(--brand-ink);
+  box-shadow: 0 2px 0 var(--shadow);
 }
 
 .game-profile:hover {
-  color: var(--color-lime);
+  color: var(--brand-ink);
 }
 
 .game-profile:active {
@@ -145,6 +235,11 @@
 
 .game-profile[data-sound="off"] {
   color: var(--color-muted);
+}
+
+[data-theme="dark"] .theme-icon-light,
+[data-theme="light"] .theme-icon-dark {
+  display: none;
 }
 
 .game-main {
@@ -209,7 +304,7 @@
   z-index: 10;
   margin-top: 1.1rem;
   padding: 0.85rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  background: var(--color-ink);
+  background: var(--bg);
 }
 
 .scan-frame {
@@ -271,7 +366,7 @@
   height: 0.18rem;
   width: 0.55rem;
   border-radius: 999px;
-  background: #2c2744;
+  background: var(--border);
 }
 
 .game-path-rail.is-done {
@@ -284,7 +379,7 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-lime);
+  color: var(--brand-ink);
 }
 
 .game-title {
@@ -375,7 +470,7 @@
   position: relative;
   z-index: 1;
   margin: 0 1rem 1rem;
-  border: 2px solid #2c2744;
+  border: 2px solid var(--border);
   border-bottom-width: 5px;
   border-radius: 0.85rem;
   background: color-mix(in oklab, var(--color-void) 82%, transparent);
@@ -384,7 +479,7 @@
   font-family: var(--font-display), sans-serif;
   font-size: 1.05rem;
   font-weight: 800;
-  color: var(--color-cream);
+  color: var(--color-on-game);
 }
 
 .answer-nudge {
@@ -509,19 +604,19 @@
 @keyframes hud-xp-pulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+    box-shadow: 0 2px 0 var(--shadow);
   }
   40% {
     transform: scale(1.12);
     border-color: var(--color-lime-shine);
     box-shadow:
       0 0 0 3px color-mix(in oklab, var(--color-lime) 45%, transparent),
-      0 2px 0 rgb(0 0 0 / 0.35);
+      0 2px 0 var(--shadow);
   }
   100% {
     transform: scale(1);
     border-color: var(--color-lime);
-    box-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+    box-shadow: 0 2px 0 var(--shadow);
   }
 }
 
@@ -593,7 +688,7 @@
   letter-spacing: -0.02em;
   line-height: 1;
   text-align: center;
-  box-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+  box-shadow: 0 2px 0 var(--shadow);
   transition:
     transform 120ms ease,
     border-width 120ms ease,
@@ -621,15 +716,15 @@
 .btn-tactile-primary {
   background: linear-gradient(180deg, var(--color-lime-shine) 0%, var(--color-lime) 58%);
   color: var(--color-void);
-  border-color: #d8ff7a;
+  border-color: var(--brand-rim);
   border-bottom-color: var(--color-lime-edge);
 }
 
 .btn-tactile-secondary {
   background: var(--color-raised);
   color: var(--color-cream);
-  border-color: #3a3458;
-  border-bottom-color: #0b0914;
+  border-color: var(--border-strong);
+  border-bottom-color: var(--edge);
 }
 
 .btn-tactile-ghost {
@@ -644,8 +739,8 @@
 .btn-tactile-ghost:hover {
   color: var(--color-cream);
   background: var(--color-raised);
-  border-color: #3a3458;
-  border-bottom-color: #0b0914;
+  border-color: var(--border-strong);
+  border-bottom-color: var(--edge);
 }
 
 .btn-tactile-md {
@@ -673,7 +768,7 @@
   min-height: 4.25rem;
   scroll-margin-bottom: 8rem;
   border-radius: var(--radius-btn);
-  border: 2px solid #3a3458;
+  border: 2px solid var(--border-strong);
   border-bottom-width: 5px;
   background: var(--color-well);
   color: var(--color-cream);
@@ -703,7 +798,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.85rem;
-  border: 3px solid #3a3458;
+  border: 3px solid var(--border-strong);
   border-bottom-width: 7px;
   background: var(--color-raised);
   padding: 0.85rem 1rem;
@@ -739,7 +834,7 @@
   border: 3px solid currentColor;
   border-bottom-width: 10px;
   background: color-mix(in oklab, currentColor 16%, var(--color-void));
-  box-shadow: 0 3px 0 rgb(0 0 0 / 0.4);
+  box-shadow: 0 3px 0 var(--shadow);
 }
 
 .math-board-line {
@@ -766,7 +861,7 @@
   line-height: 1.15;
   text-align: center;
   text-wrap: balance;
-  color: var(--color-cream);
+  color: var(--color-on-game);
 }
 
 .math-board[data-lines="multi"] {
@@ -788,7 +883,7 @@
   gap: 0.45rem;
   padding: 0.45rem 0.9rem;
   border-radius: 0.75rem;
-  border: 2px solid #3a3458;
+  border: 2px solid var(--border-strong);
   border-bottom-width: 5px;
   background: var(--color-raised);
   color: var(--color-cream);
@@ -797,7 +892,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
-  box-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+  box-shadow: 0 2px 0 var(--shadow);
   transition:
     transform 120ms ease,
     border-width 120ms ease,
@@ -977,13 +1072,13 @@
   border-radius: 0.7rem;
   border: 2px solid var(--color-lime);
   border-bottom-width: 4px;
-  background: color-mix(in oklab, var(--color-lime) 16%, #241f3c);
-  color: var(--color-lime);
+  background: color-mix(in oklab, var(--color-lime) 22%, var(--control-face));
+  color: var(--brand-ink);
   font-family: var(--font-display), sans-serif;
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  box-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+  box-shadow: 0 2px 0 var(--shadow);
 }
 
 .hud-xp.is-celebrating {
@@ -1030,11 +1125,11 @@
   position: relative;
   overflow: hidden;
   border-radius: 1.6rem;
-  border: 3px solid #2c2744;
-  background: var(--color-well);
+  border: 3px solid var(--border);
+  background: var(--frame-well);
   box-shadow:
-    0 10px 0 #07060d,
-    0 18px 28px -16px rgb(0 0 0 / 0.7);
+    0 10px 0 var(--frame-shelf),
+    0 18px 28px -16px var(--shadow);
 }
 
 .vf-corners {
@@ -1110,10 +1205,10 @@
   flex-shrink: 0;
   place-items: center;
   border-radius: 0.9rem;
-  border: 2px solid #3a3458;
+  border: 2px solid var(--border-strong);
   border-bottom-width: 4px;
   background: var(--color-raised);
-  color: var(--color-lime);
+  color: var(--brand-ink);
 }
 
 .mission-path-line {
@@ -1140,7 +1235,7 @@
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: var(--color-lime);
+  color: var(--brand-ink);
 }
 
 .mission-path-title {
@@ -1177,7 +1272,29 @@
   border-radius: 0.9rem;
   border: 3px solid currentColor;
   border-bottom-width: 6px;
+  background: color-mix(in oklab, currentColor 14%, var(--game-ink));
   padding: 0.85rem 1.1rem;
+}
+
+.accent-ink {
+  color: color-mix(in oklab, var(--accent, var(--brand)) 38%, var(--text) 62%);
+}
+
+html[data-theme="dark"] .accent-ink {
+  color: var(--accent, var(--brand-ink));
+}
+
+.skill-mark {
+  color: var(--accent, var(--brand));
+}
+
+html[data-theme="light"] .skill-mark {
+  -webkit-text-stroke: 0.03em var(--text);
+  paint-order: stroke fill;
+}
+
+html[data-theme="light"] .xp-spark {
+  filter: drop-shadow(0 1px 0 var(--text));
 }
 
 .skill-bar {
@@ -1185,10 +1302,17 @@
   overflow: hidden;
   border-radius: 999px;
   background: var(--color-well);
-  border: 2px solid #2c2744;
+  border: 2px solid var(--border);
 }
 
 .ambient-glow {
+  background:
+    radial-gradient(34rem 22rem at 50% -12%, color-mix(in oklab, var(--brand) 22%, transparent), transparent 72%),
+    radial-gradient(18rem 16rem at 0% 90%, rgba(255, 176, 72, 0.14), transparent 70%),
+    radial-gradient(16rem 14rem at 100% 78%, rgba(255, 143, 212, 0.1), transparent 70%);
+}
+
+html[data-theme="dark"] .ambient-glow {
   background:
     radial-gradient(34rem 22rem at 50% -12%, rgba(200, 255, 77, 0.12), transparent 72%),
     radial-gradient(18rem 16rem at 0% 90%, rgba(87, 226, 255, 0.07), transparent 70%),
@@ -1196,6 +1320,14 @@
 }
 
 .play-specks {
+  background-image:
+    radial-gradient(circle at 12% 22%, color-mix(in oklab, var(--brand) 28%, transparent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 84% 18%, rgba(87, 226, 255, 0.28) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 72%, rgba(255, 201, 77, 0.24) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 24% 78%, rgba(199, 155, 255, 0.24) 0 2px, transparent 2.5px);
+}
+
+html[data-theme="dark"] .play-specks {
   background-image:
     radial-gradient(circle at 12% 22%, rgba(200, 255, 77, 0.16) 0 2px, transparent 2.5px),
     radial-gradient(circle at 84% 18%, rgba(87, 226, 255, 0.16) 0 2px, transparent 2.5px),

@@ -33,7 +33,10 @@ export function DetourPanel({
     <div className="animate-rise text-center">
       <div className="flex items-center justify-center gap-2">
         <CompassIcon className="size-5" style={{ color: tone }} />
-        <p className="game-moment" style={{ color: tone }}>
+        <p
+          className="game-moment accent-ink"
+          style={{ ["--accent" as string]: tone }}
+        >
           {presentation.title}
         </p>
       </div>

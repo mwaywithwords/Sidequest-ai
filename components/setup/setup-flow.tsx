@@ -82,7 +82,10 @@ export function SetupFlow({
           {ready && grade !== null && skillId !== null ? (
             <>
               Grade {grade} ·{" "}
-              <span style={{ color: getSkill(skillId).accent }}>
+              <span
+                className="accent-ink"
+                style={{ ["--accent" as string]: getSkill(skillId).accent }}
+              >
                 {getSkill(skillId).label}
               </span>
             </>
