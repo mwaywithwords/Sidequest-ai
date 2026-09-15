@@ -67,6 +67,18 @@ export const copy = {
     previewAlt: "The object you photographed",
     takePhoto: "Take a Photo",
     choosePhoto: "Choose from photos",
+    tryCameraAgain: "Try Camera Again",
+    cameraRequesting: "Starting the camera...",
+    cameraNeededHeading: "Camera access needed",
+    cameraNeededBody:
+      "We need the camera to find something for your Sidequest.",
+    cameraNeededHint:
+      "Camera access may be turned off for this site. Allow Camera access in your browser or site settings, then try again.",
+    cameraUnavailableHeading: "Camera isn't available",
+    cameraUnavailableBody:
+      "That's okay — you can still choose a photo you already have.",
+    cameraPlaybackHeading: "The camera didn't start",
+    cameraPlaybackBody: "Try again, or choose a photo you already have.",
     usePhoto: "Use This Photo",
     cluePhotoFailed:
       "That extra photo didn't come through. Try another one — your first photo is still here.",
