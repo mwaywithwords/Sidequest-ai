@@ -388,7 +388,10 @@ function ChallengeStage({
           size="remnant"
         />
         <div>
-          <p className="game-moment" style={{ color: quest.accent }}>
+          <p
+            className="game-moment accent-ink"
+            style={{ ["--accent" as string]: quest.accent }}
+          >
             {skillLabel}
           </p>
           <p className="font-display text-lg font-extrabold tracking-tight text-cream">
@@ -563,7 +566,7 @@ function FinishedState({
             <span
               aria-hidden
               className="reward-seal grid size-[4.75rem] place-items-center rounded-2xl border-b-4 text-void"
-              style={{ background: quest.accent, borderColor: "#0b0914" }}
+              style={{ background: quest.accent, borderColor: "var(--edge)" }}
             >
               <CheckIcon className="size-10" />
             </span>
@@ -603,7 +606,10 @@ function FinishedState({
           onToggle={onToggleSpeech}
         />
       </div>
-      <p className="mt-4 font-display text-lg font-extrabold" style={{ color: quest.accent }}>
+      <p
+        className="mt-4 font-display text-lg font-extrabold accent-ink"
+        style={{ ["--accent" as string]: quest.accent }}
+      >
         {progress.revealedAnswer}
       </p>
 

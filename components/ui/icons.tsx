@@ -135,3 +135,27 @@ export function SpeakerOffIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SunIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="3.6" />
+      <path d="M12 3.2v1.8" />
+      <path d="M12 19v1.8" />
+      <path d="M4.9 4.9l1.3 1.3" />
+      <path d="M17.8 17.8l1.3 1.3" />
+      <path d="M3.2 12h1.8" />
+      <path d="M19 12h1.8" />
+      <path d="M4.9 19.1l1.3-1.3" />
+      <path d="M17.8 6.2l1.3-1.3" />
+    </Icon>
+  );
+}
+
+export function MoonIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M16.4 13.6A6.4 6.4 0 0 1 10.2 5.2 6.6 6.6 0 1 0 18.8 14a6.3 6.3 0 0 1-2.4-.4Z" />
+    </Icon>
+  );
+}

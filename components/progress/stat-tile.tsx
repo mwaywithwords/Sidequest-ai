@@ -15,7 +15,7 @@ export function StatTile({
       style={{ color: accent }}
     >
       {mark ? <span aria-hidden>{mark}</span> : null}
-      <span className="text-cream">{value}</span>
+      <span className="text-on-game">{value}</span>
       <span className="text-sm font-bold tracking-wide text-muted normal-case">
         {label}
       </span>

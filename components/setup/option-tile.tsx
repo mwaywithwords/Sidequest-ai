@@ -34,12 +34,12 @@ export function OptionTile({
         variant === "grade" ? "min-h-[6.5rem] sm:min-h-[7.25rem]" : "min-h-[7.5rem] sm:min-h-[8.25rem]",
       )}
       style={{
-        borderColor: selected ? accent : "#3a3458",
-        borderBottomColor: selected ? accent : "#0b0914",
+        borderColor: selected ? accent : "var(--border-strong)",
+        borderBottomColor: selected ? accent : "var(--edge)",
         background: selected
-          ? `linear-gradient(180deg, ${accent}55, #1c1830 68%)`
-          : `linear-gradient(180deg, ${accent}22, #1c1830 62%)`,
-        boxShadow: selected ? `0 0 0 3px ${accent}` : "0 2px 0 rgb(0 0 0 / 0.35)",
+          ? `linear-gradient(180deg, color-mix(in oklab, ${accent} 34%, var(--surface-raised)), var(--surface-raised) 68%)`
+          : `linear-gradient(180deg, color-mix(in oklab, ${accent} 16%, var(--surface-raised)), var(--surface-raised) 62%)`,
+        boxShadow: selected ? `0 0 0 3px ${accent}` : "0 2px 0 var(--shadow)",
         transform: selected ? "translateY(3px)" : undefined,
       }}
     >
@@ -55,10 +55,10 @@ export function OptionTile({
       <span
         aria-hidden
         className={cn(
-          "font-display leading-none font-extrabold",
+          "skill-mark font-display leading-none font-extrabold",
           variant === "grade" ? "text-4xl sm:text-5xl" : "text-5xl sm:text-6xl",
         )}
-        style={{ color: accent }}
+        style={{ ["--accent" as string]: accent }}
       >
         {mark}
       </span>

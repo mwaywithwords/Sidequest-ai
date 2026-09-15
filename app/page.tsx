@@ -8,7 +8,7 @@ export default function LandingPage() {
       <section className="flex w-full flex-col items-center animate-rise">
         <h1 className="font-display text-[2.7rem] leading-[0.86] font-extrabold tracking-tight sm:text-6xl">
           <span className="block text-cream">SIDE</span>
-          <span className="block text-lime">QUEST</span>
+          <span className="block text-lime-ink">QUEST</span>
         </h1>
         <p className="mt-3 max-w-[15.5rem] text-base font-medium text-cream sm:max-w-xs sm:text-lg">
           {copy.landing.tagline}

@@ -16,7 +16,7 @@ export default async function ProgressPage() {
     <div className="game-page">
       <div className="text-center">
         <h1 className="game-title uppercase">{copy.progress.heading}</h1>
-        <p className="mt-2 font-display text-2xl font-extrabold text-lime">
+        <p className="mt-2 font-display text-2xl font-extrabold text-lime-ink">
           {copy.progress.explorerStat} {progress.explorerLevel}
         </p>
         {!progress.hasProgress ? (

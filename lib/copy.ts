@@ -24,6 +24,8 @@ export const copy = {
   hud: {
     soundOn: "Sound on",
     soundOff: "Sound off",
+    themeToDark: "Switch to dark mode",
+    themeToLight: "Switch to light mode",
     xpStat: "XP",
   },
 

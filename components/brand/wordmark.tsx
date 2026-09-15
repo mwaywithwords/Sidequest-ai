@@ -20,7 +20,7 @@ export function Wordmark({
       )}
     >
       <span className="text-cream">SIDE</span>
-      <span className="text-lime">QUEST</span>
+      <span className="text-lime-ink">QUEST</span>
     </span>
   );
 
