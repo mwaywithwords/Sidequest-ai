@@ -321,6 +321,11 @@ html {
   height: clamp(16.5rem, calc(100dvh - 26rem), 22rem);
 }
 
+.scan-frame.has-ideas {
+  min-height: 12.5rem;
+  height: clamp(13.5rem, calc(100dvh - 34.5rem), 18.25rem);
+}
+
 .game-path {
   display: flex;
   width: 100%;
@@ -406,6 +411,87 @@ html {
   font-size: 0.92rem;
   line-height: 1.4;
   color: var(--color-muted);
+}
+
+.did-you-know {
+  display: flex;
+  max-width: 22rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.did-you-know-fact {
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-wrap: pretty;
+  color: var(--color-cream);
+}
+
+.hunt-ideas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hunt-ideas-heading {
+  font-size: 0.92rem;
+}
+
+.hunt-chip-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.hunt-chip,
+.hunt-surprise {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 0.8rem;
+  border: 2px solid var(--border-strong);
+  border-bottom-width: 5px;
+  background: color-mix(in oklab, var(--accent, var(--color-lime)) 14%, var(--color-raised));
+  padding: 0.35rem 0.4rem;
+  text-align: center;
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--color-cream);
+  box-shadow: 0 2px 0 var(--shadow);
+}
+
+.hunt-chip-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.hunt-surprise {
+  width: 100%;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  background: color-mix(in oklab, var(--accent, var(--color-lime)) 28%, var(--color-raised));
+  color: var(--color-cream);
+}
+
+.hunt-surprise:focus-visible {
+  outline: 3px solid var(--color-lime);
+  outline-offset: 3px;
+}
+
+.hunt-surprise:active {
+  border-bottom-width: 2px;
+  box-shadow: none;
+  transform: translateY(3px);
 }
 
 .processing-veil {
@@ -933,6 +1019,10 @@ html {
   .read-aloud:hover:not([data-playing="true"]) {
     background: var(--color-hover);
   }
+
+  .hunt-surprise:hover {
+    background: color-mix(in oklab, var(--accent, var(--color-lime)) 38%, var(--color-raised));
+  }
 }
 
 .token {
@@ -1345,6 +1435,10 @@ html[data-theme="dark"] .play-specks {
   }
 
   .btn-tactile:active:not(:disabled) {
+    transform: none;
+  }
+
+  .hunt-surprise:active {
     transform: none;
   }
 

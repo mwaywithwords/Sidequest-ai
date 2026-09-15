@@ -16,9 +16,14 @@ import {
   type WireDiscovery,
 } from "@/lib/ai/discovery-grounding";
 import {
-  type Discovery,
+  hasGenericDescriptionLanguage,
+  matchFallbackFact,
+  wordCount,
+} from "@/lib/ai/did-you-know";
+import {
   DiscoverySchema,
   type ObjectAnalysis,
+  UsedValueSchema,
 } from "@/lib/ai/schemas";
 
 const bottle: ObjectAnalysis = {
@@ -70,16 +75,12 @@ function schemaFails(name: string, value: unknown) {
 
 function wire(overrides: Partial<WireDiscovery> = {}): WireDiscovery {
   return {
-    title: "Made to carry a drink",
-    text: "Drink bottles are designed to hold liquids securely while being easy to carry. Their shape and labels also help people quickly see how much they contain.",
-    category: "design",
+    title: "A lid that travels",
+    text: "Bottles use a narrow opening and a cap so liquid does not spill while you carry them. That simple idea is why people can take drinks from place to place.",
+    category: "engineering",
     factSupport: "well_known",
     ...overrides,
   };
-}
-
-function isObservation(discovery: Discovery): boolean {
-  return discovery.category === "observation";
 }
 
 // --- DiscoverySchema is the persist contract --------------------------------
@@ -128,11 +129,11 @@ for (const category of [
 
 const bottleDesign = finalizeDiscovery(wire(), bottle);
 check(
-  "preferred bottle design fact is accepted",
+  "preferred bottle how-it-works fact is accepted",
   bottleDesign.status === "ok" &&
     bottleDesign.usedFallback === false &&
-    bottleDesign.discovery.category === "design" &&
-    bottleDesign.discovery.title === "Made to carry a drink",
+    bottleDesign.discovery.category === "engineering" &&
+    bottleDesign.discovery.title === "A lid that travels",
 );
 
 const observedVolume = finalizeDiscovery(
@@ -165,15 +166,15 @@ check(
 
 const modelObservation = finalizeDiscovery(
   wire({
-    title: "Designed to be easy to hold",
-    text: "This container has a tall shape that makes it easy to carry and pour. Its printed label also gives useful information about what's inside.",
+    title: "A lid that travels",
+    text: "Bottles use a narrow opening and a cap so liquid does not spill while you carry them. That simple idea is why people can take drinks from place to place.",
     category: "observation",
     factSupport: "observation",
   }),
   bottle,
 );
 check(
-  "a clean model observation is kept",
+  "a clean general fallback fact can be kept as observation",
   modelObservation.status === "ok" &&
     modelObservation.usedFallback === false &&
     modelObservation.discovery.category === "observation",
@@ -194,7 +195,6 @@ check(
   "invented year and inventor are not persisted",
   inventedYear.status === "ok" &&
     inventedYear.usedFallback === true &&
-    isObservation(inventedYear.discovery) &&
     !inventedYear.discovery.text.includes("1987") &&
     !inventedYear.discovery.title.includes("1987"),
 );
@@ -287,19 +287,21 @@ check(
   "observation support with a non-observation category uses the fallback",
   mismatchedSupport.status === "ok" &&
     mismatchedSupport.usedFallback === true &&
-    mismatchedSupport.discovery.category === "observation",
+    !mismatchedSupport.discovery.text.toLowerCase().includes("for a very long time"),
 );
 
 const oneSentence = finalizeDiscovery(
   wire({
-    title: "Easy to carry",
-    text: "Drink bottles are designed to hold liquids securely while being easy to carry.",
+    title: "Light that travels",
+    text: "A lid or cap keeps liquid from spilling while you carry a bottle from place to place.",
   }),
   bottle,
 );
 check(
-  "a single sentence is a generation failure, not a repaired paragraph",
-  oneSentence.status === "generation_failure",
+  "a single interesting sentence can be a Did You Know fact",
+  oneSentence.status === "ok" &&
+    oneSentence.usedFallback === false &&
+    sentenceCount(oneSentence.discovery.text) === 1,
 );
 
 const fiveSentences = finalizeDiscovery(
@@ -330,23 +332,63 @@ check(
   tooLong.status === "generation_failure",
 );
 
+const genericCaption = finalizeDiscovery(
+  wire({
+    title: "A useful container",
+    text: "This container is designed to hold a drink safely. This object is commonly used for sipping.",
+    category: "design",
+    factSupport: "well_known",
+  }),
+  bottle,
+);
+check(
+  "generic AI object-description language is not kept",
+  genericCaption.status === "ok" &&
+    genericCaption.usedFallback === true &&
+    !hasGenericDescriptionLanguage(genericCaption.discovery.text),
+);
+
+const typeLevelAluminum = finalizeDiscovery(
+  wire({
+    title: "Metal that can start over",
+    text: "Aluminum cans can be recycled and made into new cans again. Aluminum can be reused many times instead of being thrown away.",
+    category: "culture",
+    factSupport: "well_known",
+  }),
+  {
+    objectName: "beverage can",
+    category: "packaged beverage",
+    confidence: 0.9,
+    visibleText: ["Cola"],
+    visibleMeasurements: [{ value: 12, unit: "fl oz", label: "volume" }],
+    countableProperties: [],
+    shapeProperties: ["cylinder"],
+    observableProperties: [],
+  },
+);
+check(
+  "a type-level aluminum fact is not treated as a claim about this specimen",
+  typeLevelAluminum.status === "ok" && typeLevelAluminum.usedFallback === false,
+);
+
 check("sentenceCount counts 2 sentences", sentenceCount("One fact. Two fact.") === 2);
 check("sentenceCount counts 1 sentence", sentenceCount("Only one fact.") === 1);
+check(
+  "Did You Know length stays compact",
+  wordCount(wire().text) >= 8 && wordCount(wire().text) <= 45,
+);
 
-// --- observation fallback is grounded in the reading ------------------------
+// --- fallback is a type-level fact, not a photo description -----------------
 
 const fallback = observationDiscovery(bottle);
+const bottleFact = matchFallbackFact(bottle);
 check(
-  "fallback category is observation",
-  fallback.category === "observation",
-);
-check(
-  "fallback mentions the object name from the reading",
-  fallback.text.includes("protein shake bottle"),
-);
-check(
-  "fallback mentions a recorded shape",
-  fallback.text.includes("rectangular carton with a screw cap"),
+  "bottle fallback uses the type-level fact, not the photograph",
+  fallback.title === bottleFact.title &&
+    fallback.text === bottleFact.text &&
+    !fallback.text.includes("protein shake bottle") &&
+    !fallback.text.includes("rectangular carton with a screw cap") &&
+    !fallback.text.includes("11"),
 );
 check(
   "fallback does not invent a year or inventor",
@@ -357,23 +399,29 @@ check(
   !fallback.text.includes("Premier Protein"),
 );
 check(
-  "fallback is 2 to 4 sentences",
-  sentenceCount(fallback.text) >= 2 && sentenceCount(fallback.text) <= 4,
-);
-check(
-  "fallback title is the hold-friendly wording for a screw-cap carton",
-  fallback.title === "Designed to be easy to hold",
+  "fallback is 1 to 3 compact sentences",
+  sentenceCount(fallback.text) >= 1 &&
+    sentenceCount(fallback.text) <= 3 &&
+    wordCount(fallback.text) <= 45,
 );
 
 const sneakerFallback = observationDiscovery(unlabeledSneaker);
 check(
-  "fallback without a label uses a recorded observation",
-  sneakerFallback.text.includes("worn fabric") ||
-    sneakerFallback.text.includes("curved sole"),
+  "sneaker fallback is a science fact about shoes, not worn fabric",
+  sneakerFallback.text.toLowerCase().includes("friction") &&
+    !sneakerFallback.text.includes("worn fabric") &&
+    !sneakerFallback.text.includes("curved sole"),
 );
 check(
   "sneaker fallback does not invent a capacity",
   !sneakerFallback.text.includes("oz") && !sneakerFallback.text.includes("ml"),
+);
+
+check(
+  "a discovery cannot be parsed as observed math evidence",
+  !UsedValueSchema.safeParse(fallback).success &&
+    !("origin" in fallback) &&
+    !("value" in fallback),
 );
 
 const accepted = finalizeDiscovery(wire(), bottle);

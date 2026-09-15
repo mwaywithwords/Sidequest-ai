@@ -31,7 +31,6 @@ const C6 = 1046.5;
 const C7 = 2093;
 const E7 = 2637.02;
 const G4 = 392.0;
-const E4 = 329.63;
 
 export const SUCCESS_MELODY = ["C5", "E5", "G5", "C6"] as const;
 
@@ -53,15 +52,17 @@ export const CUE_RECIPES: Record<FeedbackCue, CueRecipe> = {
     ],
   },
   "try-again": {
-    duration: 0.28,
+    // Soft descending fifth: clearly audible on a phone, not a buzzer.
+    // Previous recipe was G4/E4 sine at 0.028/0.022 for 0.28s — near silent.
+    duration: 0.42,
     notes: [
-      { freq: G4, at: 0, dur: 0.12, gain: 0.028, voice: "soft" },
-      { freq: E4, at: 0.1, dur: 0.16, gain: 0.022, voice: "soft" },
+      { freq: C5, at: 0, dur: 0.18, gain: 0.1, voice: "soft" },
+      { freq: G4, at: 0.14, dur: 0.26, gain: 0.088, voice: "soft" },
     ],
   },
   reveal: {
-    duration: 0.12,
-    notes: [{ freq: G4, at: 0, dur: 0.1, gain: 0.02, voice: "soft" }],
+    duration: 0.16,
+    notes: [{ freq: G4, at: 0, dur: 0.14, gain: 0.055, voice: "soft" }],
   },
 };
 
@@ -78,18 +79,28 @@ export function peakGain(cue: FeedbackCue): number {
 }
 
 export function shouldSkipCueDuringSpeech(cue: FeedbackCue): boolean {
-  return cue === "try-again";
+  void cue;
+  return false;
 }
 
 export function shouldStopReadAloudForStatus(
   nextStatus: StudentGradeView["status"],
 ): boolean {
-  return nextStatus === "correct" || nextStatus === "complete";
+  return (
+    nextStatus === "correct" ||
+    nextStatus === "complete" ||
+    nextStatus === "incorrect"
+  );
+}
+
+function triangle(phase: number): number {
+  const t = phase - Math.floor(phase);
+  return t < 0.5 ? 4 * t - 1 : 3 - 4 * t;
 }
 
 function wave(kind: CueVoice, phase: number): number {
   const t = phase - Math.floor(phase);
-  if (kind === "soft") return Math.sin(2 * Math.PI * t);
+  if (kind === "soft") return triangle(phase);
   if (kind === "chime") {
     return (
       Math.sin(2 * Math.PI * t) * 0.7 +

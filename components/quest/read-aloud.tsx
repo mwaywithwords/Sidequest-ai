@@ -10,7 +10,12 @@ import {
 import { SpeakerIcon, StopIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
-import { reduceSpeechPlayback } from "@/lib/speech";
+import {
+  preferSpeechVoice,
+  reduceSpeechPlayback,
+  SPEECH_NARRATION,
+  type SpeechVoiceCandidate,
+} from "@/lib/speech";
 
 /**
  * Browser-only read-aloud. Uses `speechSynthesis` / SpeechSynthesisUtterance.
@@ -22,6 +27,7 @@ type SpeechEnd = () => void;
 
 let generation = 0;
 let queued: number | null = null;
+let cachedVoices: SpeechSynthesisVoice[] = [];
 
 function hasSpeechSynthesis(): boolean {
   return (
@@ -44,16 +50,45 @@ function speechLocale(lang: string): string {
   return trimmed;
 }
 
-function voiceFor(lang: string): SpeechSynthesisVoice | undefined {
+function asVoiceCandidate(voice: SpeechSynthesisVoice): SpeechVoiceCandidate {
+  return {
+    name: voice.name,
+    lang: voice.lang,
+    localService: voice.localService,
+    default: voice.default,
+  };
+}
+
+function refreshVoices(): SpeechSynthesisVoice[] {
+  if (!hasSpeechSynthesis()) return cachedVoices;
   const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) cachedVoices = voices;
+  return cachedVoices;
+}
+
+function voiceFor(lang: string): SpeechSynthesisVoice | undefined {
+  const voices = refreshVoices();
   if (voices.length === 0) return undefined;
 
-  const locale = speechLocale(lang).toLowerCase();
-  const exact = voices.find((voice) => voice.lang.toLowerCase() === locale);
-  if (exact) return exact;
+  const preferred = preferSpeechVoice(voices.map(asVoiceCandidate), lang);
+  if (!preferred) return undefined;
+  return (
+    voices.find(
+      (voice) =>
+        voice.name === preferred.name &&
+        voice.lang === preferred.lang,
+    ) ?? voices.find((voice) => voice.name === preferred.name)
+  );
+}
 
-  const prefix = locale.slice(0, 2);
-  return voices.find((voice) => voice.lang.toLowerCase().startsWith(prefix));
+function logSelectedVoice(voice: SpeechSynthesisVoice | undefined, lang: string) {
+  if (process.env.NODE_ENV === "production") return;
+  console.info("[speech]", {
+    voice: voice?.name ?? "(browser default)",
+    lang: voice?.lang ?? speechLocale(lang),
+    rate: SPEECH_NARRATION.rate,
+    pitch: SPEECH_NARRATION.pitch,
+  });
 }
 
 function subscribeSpeechSupport(): () => void {
@@ -77,9 +112,12 @@ function startSpeech(text: string, lang: string, onEnd: SpeechEnd) {
   const myGeneration = generation;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = speechLocale(lang);
-  utterance.rate = 0.95;
+  utterance.rate = SPEECH_NARRATION.rate;
+  utterance.pitch = SPEECH_NARRATION.pitch;
+  utterance.volume = SPEECH_NARRATION.volume;
   const voice = voiceFor(lang);
   if (voice) utterance.voice = voice;
+  logSelectedVoice(voice, lang);
 
   const finish = () => {
     if (myGeneration !== generation) return;
@@ -123,7 +161,7 @@ export function useReadAloud() {
     if (!supported) return;
 
     const warmVoices = () => {
-      window.speechSynthesis.getVoices();
+      refreshVoices();
     };
     warmVoices();
     window.speechSynthesis.addEventListener("voiceschanged", warmVoices);

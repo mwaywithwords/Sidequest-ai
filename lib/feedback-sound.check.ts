@@ -18,9 +18,14 @@ import {
   SUCCESS_MELODY,
 } from "@/lib/feedback-cues";
 import {
+  cueAudioEvent,
+  feedbackCueForResult,
   feedbackCueForSubmission,
+  feedbackPlaybackPlan,
   parseSoundPreference,
+  planAnswerFeedback,
   serializeSoundPreference,
+  submissionFeedbackKey,
   withAudioGuard,
 } from "@/lib/feedback-sound";
 
@@ -155,15 +160,15 @@ check(
 );
 
 check(
-  "correct stops read-aloud before the fanfare",
-  shouldStopReadAloudForStatus("correct") === true &&
-    shouldSkipCueDuringSpeech("success") === false,
+  "incorrect stops read-aloud so the gentle cue can play",
+  shouldStopReadAloudForStatus("incorrect") === true &&
+    shouldSkipCueDuringSpeech("try-again") === false,
 );
 
 check(
-  "incorrect cue is skipped while read-aloud is speaking",
-  shouldStopReadAloudForStatus("incorrect") === false &&
-    shouldSkipCueDuringSpeech("try-again") === true,
+  "correct still stops read-aloud before the fanfare",
+  shouldStopReadAloudForStatus("correct") === true &&
+    shouldSkipCueDuringSpeech("success") === false,
 );
 
 check(
@@ -188,12 +193,12 @@ check(
 
 check(
   "incorrect cue is a short gentle pair",
-  cueDuration("try-again") >= 0.2 && cueDuration("try-again") <= 0.35,
+  cueDuration("try-again") >= 0.32 && cueDuration("try-again") <= 0.55,
 );
 
 check(
-  "success is substantially louder than incorrect",
-  peakGain("success") > peakGain("try-again") * 2,
+  "success stays the louder celebration",
+  peakGain("success") > peakGain("try-again"),
 );
 
 check(
@@ -211,6 +216,11 @@ check(
 );
 
 check(
+  "rendered incorrect cue is well above the near-silent floor",
+  pcmPeak(tryAgainPcm) >= 0.06,
+);
+
+check(
   "audio exceptions cannot escape the playback wrapper",
   (() => {
     let threw = false;
@@ -223,6 +233,330 @@ check(
     }
     return threw === false;
   })(),
+);
+
+check(
+  "incorrect submissions map to the incorrect diagnostic event",
+  cueAudioEvent("try-again") === "incorrect" &&
+    cueAudioEvent("success") === "success",
+);
+
+check(
+  "a running context plays the cue without an extra resume",
+  feedbackPlaybackPlan({
+    cue: "success",
+    contextState: "running",
+    soundEnabled: true,
+  }).play === true &&
+    feedbackPlaybackPlan({
+      cue: "success",
+      contextState: "running",
+      soundEnabled: true,
+    }).resumeFirst === false,
+);
+
+check(
+  "a suspended context resumes before scheduling",
+  feedbackPlaybackPlan({
+    cue: "try-again",
+    contextState: "suspended",
+    soundEnabled: true,
+  }).resumeFirst === true &&
+    feedbackPlaybackPlan({
+      cue: "try-again",
+      contextState: "suspended",
+      soundEnabled: true,
+    }).play === true,
+);
+
+check(
+  "an interrupted Safari context also resumes first",
+  feedbackPlaybackPlan({
+    cue: "success",
+    contextState: "interrupted",
+    soundEnabled: true,
+  }).resumeFirst === true,
+);
+
+check(
+  "sound off never attempts playback",
+  feedbackPlaybackPlan({
+    cue: "success",
+    contextState: "running",
+    soundEnabled: false,
+  }).attempted === false &&
+    feedbackPlaybackPlan({
+      cue: "success",
+      contextState: "running",
+      soundEnabled: false,
+    }).play === false,
+);
+
+check(
+  "a missing AudioContext cannot play",
+  feedbackPlaybackPlan({
+    cue: "try-again",
+    contextState: "missing",
+    soundEnabled: true,
+  }).play === false &&
+    feedbackPlaybackPlan({
+      cue: "try-again",
+      contextState: "missing",
+      soundEnabled: true,
+    }).attempted === true,
+);
+
+check(
+  "duplicate React status is not required for a second incorrect cue",
+  feedbackCueForSubmission({
+    previousStatus: "incorrect",
+    nextStatus: "incorrect",
+    enabled: true,
+  }) === "try-again",
+);
+
+const PREVIOUS_TRY_AGAIN_PEAK_GAIN = 0.028;
+const tryAgainRecipe = cueRecipe("try-again");
+
+check(
+  "incorrect cue has non-zero gain",
+  tryAgainRecipe.notes.every((note) => note.gain > 0) &&
+    peakGain("try-again") > 0,
+);
+
+check(
+  "incorrect cue has a meaningful duration",
+  cueDuration("try-again") >= 0.32 &&
+    tryAgainRecipe.notes.every((note) => note.dur >= 0.12),
+);
+
+check(
+  "incorrect cue stays in an audible phone-speaker range",
+  tryAgainRecipe.notes.every((note) => note.freq >= 300 && note.freq <= 1200),
+);
+
+check(
+  "incorrect cue is substantially louder than the near-silent recipe",
+  peakGain("try-again") >= PREVIOUS_TRY_AGAIN_PEAK_GAIN * 2.5,
+);
+
+check(
+  "incorrect cue is a descending pair, not a buzzer",
+  tryAgainRecipe.notes.length === 2 &&
+    tryAgainRecipe.notes[0]!.freq > tryAgainRecipe.notes[1]!.freq &&
+    tryAgainRecipe.notes.every((note) => note.voice === "soft"),
+);
+
+const incorrectAttempt1 = {
+  status: "incorrect" as const,
+  attemptNumber: 1,
+  hint: "Look at the first amount.",
+};
+const incorrectAttempt2 = {
+  status: "incorrect" as const,
+  attemptNumber: 2,
+  hint: "Split the total.",
+};
+const correctAttempt2 = {
+  status: "correct" as const,
+  attemptNumber: 2,
+  xp: 7,
+  explanation: "Subtract the leftover.",
+  revealedAnswer: "7",
+};
+const revealedAttempt3 = {
+  status: "complete" as const,
+  attemptNumber: 3,
+  xp: 2,
+  explanation: "Subtract the leftover.",
+  solution: "Subtract the leftover.",
+  revealedAnswer: "7",
+};
+const correctAttempt1 = {
+  status: "correct" as const,
+  attemptNumber: 1,
+  xp: 10,
+  explanation: "Add the amounts.",
+  revealedAnswer: "12",
+};
+
+check(
+  "submission 1 incorrect plays exactly one incorrect cue",
+  (() => {
+    const first = planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: true,
+      lastPlayedKey: null,
+    });
+    const replay = planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: true,
+      lastPlayedKey: first.nextPlayedKey,
+    });
+    return (
+      first.play === true &&
+      first.event === "incorrect" &&
+      first.cue === "try-again" &&
+      replay.play === false &&
+      replay.skipReason === "duplicate_submission"
+    );
+  })(),
+);
+
+check(
+  "submission 2 still plays incorrect when the UI was already incorrect",
+  (() => {
+    const first = planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: true,
+      lastPlayedKey: null,
+    });
+    const second = planAnswerFeedback({
+      result: incorrectAttempt2,
+      soundEnabled: true,
+      lastPlayedKey: first.nextPlayedKey,
+    });
+    return (
+      first.event === "incorrect" &&
+      second.play === true &&
+      second.event === "incorrect" &&
+      second.cue === "try-again" &&
+      second.nextPlayedKey !== first.nextPlayedKey
+    );
+  })(),
+);
+
+check(
+  "incorrect then correct plays try-again then success",
+  (() => {
+    const miss = planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: true,
+      lastPlayedKey: null,
+    });
+    const hit = planAnswerFeedback({
+      result: correctAttempt2,
+      soundEnabled: true,
+      lastPlayedKey: miss.nextPlayedKey,
+    });
+    return miss.event === "incorrect" && hit.play === true && hit.event === "success";
+  })(),
+);
+
+check(
+  "final incorrect that reveals the solution plays reveal only",
+  (() => {
+    const second = planAnswerFeedback({
+      result: incorrectAttempt2,
+      soundEnabled: true,
+      lastPlayedKey: "incorrect:1",
+    });
+    const revealed = planAnswerFeedback({
+      result: revealedAttempt3,
+      soundEnabled: true,
+      lastPlayedKey: second.nextPlayedKey,
+    });
+    return (
+      second.event === "incorrect" &&
+      revealed.play === true &&
+      revealed.event === "reveal" &&
+      revealed.cue === "reveal"
+    );
+  })(),
+);
+
+check(
+  "correct plays success only",
+  (() => {
+    const hit = planAnswerFeedback({
+      result: correctAttempt1,
+      soundEnabled: true,
+      lastPlayedKey: null,
+    });
+    return hit.play === true && hit.event === "success" && hit.cue === "success";
+  })(),
+);
+
+check(
+  "rerender after incorrect does not play another cue",
+  planAnswerFeedback({
+    result: incorrectAttempt1,
+    soundEnabled: true,
+    lastPlayedKey: submissionFeedbackKey(incorrectAttempt1),
+  }).play === false,
+);
+
+check(
+  "a completed refresh has no live playback key until a new submission",
+  feedbackCueForSubmission({
+    previousStatus: "complete",
+    nextStatus: "complete",
+    enabled: true,
+  }) === null &&
+    feedbackCueForResult({ status: "complete", enabled: true }) === "reveal",
+);
+
+check(
+  "sound disabled skips the incorrect cue",
+  planAnswerFeedback({
+    result: incorrectAttempt1,
+    soundEnabled: false,
+    lastPlayedKey: null,
+  }).play === false &&
+    planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: false,
+      lastPlayedKey: null,
+    }).skipReason === "sound_disabled",
+);
+
+check(
+  "sound re-enabled plays the next submission",
+  (() => {
+    const muted = planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: false,
+      lastPlayedKey: null,
+    });
+    const next = planAnswerFeedback({
+      result: incorrectAttempt2,
+      soundEnabled: true,
+      lastPlayedKey: muted.nextPlayedKey,
+    });
+    return muted.play === false && next.play === true && next.event === "incorrect";
+  })(),
+);
+
+check(
+  "speech does not suppress an incorrect cue",
+  shouldSkipCueDuringSpeech("try-again") === false &&
+    shouldStopReadAloudForStatus("incorrect") === true &&
+    planAnswerFeedback({
+      result: incorrectAttempt1,
+      soundEnabled: true,
+      lastPlayedKey: null,
+    }).play === true,
+);
+
+check(
+  "a suspended AudioContext still plans to play incorrect",
+  feedbackPlaybackPlan({
+    cue: "try-again",
+    contextState: "suspended",
+    soundEnabled: true,
+  }).play === true &&
+    feedbackPlaybackPlan({
+      cue: "try-again",
+      contextState: "suspended",
+      soundEnabled: true,
+    }).resumeFirst === true,
+);
+
+check(
+  "result mapping does not use a previous UI status",
+  feedbackCueForResult({ status: "incorrect", enabled: true }) === "try-again" &&
+    submissionFeedbackKey(incorrectAttempt1) === "incorrect:1" &&
+    submissionFeedbackKey(incorrectAttempt2) === "incorrect:2",
 );
 
 if (failed > 0) {

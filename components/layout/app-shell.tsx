@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "@/components/brand/wordmark";
+import { FeedbackAudioDebug } from "@/components/game/feedback-audio-debug";
 import { HudXpChip } from "@/components/game/hud-xp";
 import { SoundToggle } from "@/components/game/sound-toggle";
 import { ThemeToggle } from "@/components/game/theme-toggle";
@@ -67,7 +68,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="game-main">{children}</main>
+      <main className="game-main">
+        <FeedbackAudioDebug />
+        {children}
+      </main>
 
       {showFooter ? (
         <footer className="game-footer">

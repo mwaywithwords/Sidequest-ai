@@ -15,7 +15,9 @@ import { presentStudentQuest } from "@/lib/quest-present";
 import {
   formatSpokenExpression,
   formatSpokenProse,
+  preferSpeechVoice,
   reduceSpeechPlayback,
+  SPEECH_NARRATION,
   spokenChallengeReadout,
   spokenConnectReadout,
   spokenDiscoverReadout,
@@ -265,7 +267,7 @@ check(
 const walletDiscover = spokenDiscoverReadout({
   objectName: "WALLET",
   discoveryText:
-    "This wallet has a rectangular shape, visible stitching, and compartments for carrying cards and money.",
+    "Wallets were made so people could keep money and important cards together in a pocket. Folding them flat made them easier to carry than a bag of loose coins.",
   observations: [
     { label: "Shape", display: "RECTANGLE" },
     { label: "Use", display: "cards" },
@@ -273,21 +275,22 @@ const walletDiscover = spokenDiscoverReadout({
 });
 
 check(
-  "discover reads the object name then the visible description",
+  "discover reads object, one token, Did you know, then the fact",
   walletDiscover ===
-    "Wallet. This wallet has a rectangular shape, visible stitching, and compartments for carrying cards and money.",
+    "Wallet. Rectangle. Did you know? Wallets were made so people could keep money and important cards together in a pocket. Folding them flat made them easier to carry than a bag of loose coins.",
 );
 
 check(
-  "discover does not narrate collectible chips already in the description",
-  !walletDiscover.includes("RECTANGLE") &&
-    walletDiscover.indexOf("rectangular") === walletDiscover.lastIndexOf("rectangular"),
+  "discover does not narrate extra collectible chips",
+  !walletDiscover.toLowerCase().includes("cards") ||
+    walletDiscover.toLowerCase().indexOf("cards") ===
+      walletDiscover.toLowerCase().lastIndexOf("cards"),
 );
 
 const canDiscover = spokenDiscoverReadout({
   objectName: "Beverage can",
   discoveryText:
-    "This beverage can contains twelve fluid ounces and has a cylindrical shape.",
+    "Aluminum cans can be recycled and made into new cans again. Aluminum can be reused many times instead of being thrown away.",
   observations: [
     { label: "Volume", display: "12 fl oz" },
     { label: "Form", display: "Cylinder" },
@@ -295,19 +298,31 @@ const canDiscover = spokenDiscoverReadout({
 });
 
 check(
-  "discover prefers the student description over token measurements",
+  "discover reads one useful measurement before Did you know",
   canDiscover ===
-    "Beverage can. This beverage can contains twelve fluid ounces and has a cylindrical shape." &&
-    !canDiscover.includes("12 fluid ounces. This beverage"),
+    "Beverage can. 12 fluid ounces. Did you know? Aluminum cans can be recycled and made into new cans again. Aluminum can be reused many times instead of being thrown away.",
 );
 
 check(
-  "discover falls back to visible measurements when there is no description",
+  "discover falls back to a visible measurement when there is no fact yet",
   spokenDiscoverReadout({
     objectName: "Soda can",
     discoveryText: "",
     observations: [{ label: "Volume", display: "12 fl oz" }],
   }) === "Soda can. 12 fluid ounces.",
+);
+
+const candleDiscover = spokenDiscoverReadout({
+  objectName: "LIDDED CANDLE JAR",
+  discoveryText:
+    "Candles have been used for thousands of years. Long ago, people used them as an important source of light before electric lights existed.",
+  observations: [{ label: "Measurement", display: "11 OZ" }],
+});
+
+check(
+  "candle discover matches the student-facing narration",
+  candleDiscover ===
+    "Lidded candle jar. 11 ounces. Did you know? Candles have been used for thousands of years. Long ago, people used them as an important source of light before electric lights existed.",
 );
 
 const presentedQuest = presentStudentQuest({
@@ -347,9 +362,9 @@ const presentedDiscover = spokenDiscoverReadout({
 });
 
 check(
-  "discover speech uses the presented object name and discovery text",
+  "discover speech uses the presented object name, token, and Did you know",
   presentedDiscover ===
-    "Soda can. The 12 ounces can stayed this size because it was comfortable to hold.",
+    "Soda can. 12 fluid ounces. Did you know? The 12 ounces can stayed this size because it was comfortable to hold.",
 );
 
 check(
@@ -498,6 +513,64 @@ check(
   "tapping the same control stops rather than overlapping",
   reduceSpeechPlayback({ playingId: "challenge" }, { type: "toggle", id: "challenge" })
     .effect === "cancel",
+);
+
+check(
+  "empty voice lists fall back to the browser default",
+  preferSpeechVoice([]) === null,
+);
+
+check(
+  "an enhanced English voice beats a compact default",
+  preferSpeechVoice([
+    {
+      name: "Samantha Compact",
+      lang: "en-US",
+      localService: true,
+      default: true,
+    },
+    {
+      name: "Samantha (Enhanced)",
+      lang: "en-US",
+      localService: true,
+      default: false,
+    },
+  ])?.name === "Samantha (Enhanced)",
+);
+
+check(
+  "novelty voices lose to a natural English voice",
+  preferSpeechVoice([
+    { name: "Zarvox", lang: "en-US", localService: true, default: true },
+    {
+      name: "Google US English",
+      lang: "en-US",
+      localService: false,
+      default: false,
+    },
+  ])?.name === "Google US English",
+);
+
+check(
+  "an English voice is preferred over a non-English default",
+  preferSpeechVoice([
+    { name: "Thomas", lang: "fr-FR", localService: true, default: true },
+    {
+      name: "Google UK English Female",
+      lang: "en-GB",
+      localService: false,
+      default: false,
+    },
+  ])?.lang.toLowerCase().startsWith("en") === true,
+);
+
+check(
+  "narration stays warm and clear instead of slow GPS",
+  SPEECH_NARRATION.rate > 0.9 &&
+    SPEECH_NARRATION.rate < 1.15 &&
+    SPEECH_NARRATION.pitch > 1 &&
+    SPEECH_NARRATION.pitch < 1.2 &&
+    SPEECH_NARRATION.volume === 1,
 );
 
 if (failed > 0) {

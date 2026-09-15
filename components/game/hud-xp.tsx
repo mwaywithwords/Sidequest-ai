@@ -4,19 +4,16 @@ import { useSyncExternalStore } from "react";
 import { BoltIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import {
+  getServerHudXpView,
   readHudXpView,
   subscribeHudXpView,
 } from "@/lib/hud-xp-view";
-
-function serverHudXp() {
-  return { amount: 0, celebrate: false };
-}
 
 export function HudXpChip() {
   const { amount, celebrate } = useSyncExternalStore(
     subscribeHudXpView,
     readHudXpView,
-    serverHudXp,
+    getServerHudXpView,
   );
 
   if (amount <= 0) return null;

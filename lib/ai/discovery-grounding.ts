@@ -1,4 +1,9 @@
 import {
+  didYouKnowFallback,
+  hasGenericDescriptionLanguage,
+  wordCount,
+} from "@/lib/ai/did-you-know";
+import {
   type Discovery,
   type DiscoveryCategory,
   DISCOVERY_CATEGORIES,
@@ -10,10 +15,11 @@ import {
  * Grounding and fallback for Discovery, kept out of the model call so they
  * can be tested without a network.
  *
- * The model proposes a short fact. This module decides whether that fact is
- * safe to persist. It does not edit a shaky claim into a better one: a
- * malformed answer is a failure, and an unsupported claim is discarded in
- * favour of a separately built observation.
+ * The model proposes a short Did You Know fact. This module decides
+ * whether that fact is safe to persist. It does not edit a shaky claim
+ * into a better one: a malformed answer is a failure, and an unsupported
+ * claim is discarded in favour of a separately built general fact about
+ * the object type. Photographic restatements are not educational facts.
  */
 
 export const FACT_SUPPORTS = [
@@ -40,7 +46,9 @@ export type DiscoveryFinalization =
   | { status: "generation_failure" };
 
 const TITLE_MAX = 80;
-const TEXT_MAX = 800;
+const TEXT_MAX = 400;
+const TEXT_MIN_WORDS = 8;
+const TEXT_MAX_WORDS = 70;
 
 const YEAR = /\b(?:1[0-9]{3}|20[0-9]{2})\b/;
 
@@ -100,14 +108,23 @@ export function finalizeDiscovery(
   }
 
   const sentences = sentenceCount(text);
-  if (sentences < 2 || sentences > 4) {
+  if (sentences < 1 || sentences > 3) {
+    return { status: "generation_failure" };
+  }
+
+  const words = wordCount(text);
+  if (words < TEXT_MIN_WORDS || words > TEXT_MAX_WORDS) {
     return { status: "generation_failure" };
   }
 
   const inconsistentObservation =
     wire.factSupport === "observation" && wire.category !== "observation";
 
-  if (inconsistentObservation || hasUnsupportedClaims(title, text, analysis)) {
+  if (
+    inconsistentObservation ||
+    hasUnsupportedClaims(title, text, analysis) ||
+    hasGenericDescriptionLanguage(`${title}\n${text}`)
+  ) {
     return observationResult(analysis);
   }
 
@@ -125,37 +142,14 @@ export function finalizeDiscovery(
 }
 
 /**
- * A short observation built only from the reading.
+ * A short Did You Know built from the identified object type.
  *
  * Used when the model cannot support a richer fact, and when a proposed
- * fact fails the unsupported-claim checks. The wording is plain on purpose:
- * it restates what the photograph already established.
+ * fact fails the unsupported-claim checks. This is a general fact about
+ * the kind of object, never a restatement of the photograph.
  */
 export function observationDiscovery(analysis: ObjectAnalysis): Discovery {
-  const objectName = analysis.objectName.trim();
-  const shape = first(analysis.shapeProperties);
-  const observable = first(analysis.observableProperties);
-  const countable = first(analysis.countableProperties);
-  const hasLabel =
-    analysis.visibleText.length > 0 || analysis.visibleMeasurements.length > 0;
-
-  const firstSentence = shape
-    ? `Looking at this ${objectName}, you can see ${asComplement(shape)}.`
-    : `This ${objectName} is something you can look at closely and describe.`;
-
-  const secondSentence = hasLabel
-    ? "Its printed label also gives useful information about what's inside."
-    : observable
-      ? `You can also see that it is ${observable}.`
-      : countable
-        ? `Looking closely, you can notice ${countable}.`
-        : "Looking at its shape tells you how it was made to be used.";
-
-  return DiscoverySchema.parse({
-    title: observationTitle({ shape, hasLabel }),
-    text: `${firstSentence} ${secondSentence}`,
-    category: "observation",
-  });
+  return didYouKnowFallback(analysis);
 }
 
 export function hasUnsupportedClaims(
@@ -194,30 +188,6 @@ function observationResult(analysis: ObjectAnalysis): DiscoveryFinalization {
   }
 }
 
-function observationTitle({
-  shape,
-  hasLabel,
-}: {
-  shape: string | undefined;
-  hasLabel: boolean;
-}): string {
-  const shapeText = shape?.toLowerCase() ?? "";
-
-  if (/(tall|handle|grip|narrow|screw cap|cap)/.test(shapeText)) {
-    return "Designed to be easy to hold";
-  }
-
-  if (hasLabel) {
-    return "Made so you can read it";
-  }
-
-  if (shape) {
-    return "A shape you can notice";
-  }
-
-  return "A closer look";
-}
-
 function hasInventedMeasurement(
   text: string,
   analysis: ObjectAnalysis,
@@ -251,10 +221,17 @@ function hasInventedMaterial(
 ): boolean {
   const established = establishedText(analysis);
 
-  return INVENTED_MATERIAL.some(
-    (material) =>
-      hasPhrase(text, material) && !hasPhrase(established, material),
-  );
+  return INVENTED_MATERIAL.some((material) => {
+    if (!hasPhrase(text, material) || hasPhrase(established, material)) {
+      return false;
+    }
+
+    const escaped = material.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    return new RegExp(
+      `\\b(?:this|your)\\b[^.!?]{0,90}${escaped}|${escaped}[^.!?]{0,40}\\b(?:this|your)\\b`,
+      "i",
+    ).test(text);
+  });
 }
 
 function establishedText(analysis: ObjectAnalysis): string {
@@ -298,19 +275,6 @@ function normaliseUnit(unit: string): string {
   }
 
   return folded;
-}
-
-function asComplement(property: string): string {
-  if (/^(a|an|the|approximately|almost|roughly|about)\b/i.test(property)) {
-    return property;
-  }
-
-  return /^[aeiou]/i.test(property) ? `an ${property}` : `a ${property}`;
-}
-
-function first(values: readonly string[]): string | undefined {
-  const value = values[0]?.trim();
-  return value && value.length > 0 ? value : undefined;
 }
 
 function isDiscoveryCategory(value: string): value is DiscoveryCategory {
