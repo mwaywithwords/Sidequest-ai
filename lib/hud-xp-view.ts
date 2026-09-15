@@ -10,11 +10,17 @@ export type HudXpView = {
   celebrate: boolean;
 };
 
+const EMPTY_HUD_XP_VIEW: HudXpView = { amount: 0, celebrate: false };
+
 const listeners = new Set<() => void>();
-let view: HudXpView = { amount: 0, celebrate: false };
+let view: HudXpView = EMPTY_HUD_XP_VIEW;
 
 export function readHudXpView(): HudXpView {
   return view;
+}
+
+export function getServerHudXpView(): HudXpView {
+  return EMPTY_HUD_XP_VIEW;
 }
 
 export function setHudXpView(next: HudXpView): void {
@@ -24,7 +30,10 @@ export function setHudXpView(next: HudXpView): void {
       : 0;
   const celebrate = amount > 0 && next.celebrate === true;
   if (view.amount === amount && view.celebrate === celebrate) return;
-  view = { amount, celebrate };
+  view =
+    amount === 0 && celebrate === false
+      ? EMPTY_HUD_XP_VIEW
+      : { amount, celebrate };
   for (const listener of listeners) listener();
 }
 

@@ -73,6 +73,27 @@ export type SpokenObservation = {
   display: string;
 };
 
+export type SpeechVoiceCandidate = {
+  name: string;
+  lang: string;
+  localService: boolean;
+  default: boolean;
+};
+
+export const SPEECH_NARRATION = {
+  rate: 1.02,
+  pitch: 1.08,
+  volume: 1,
+} as const;
+
+export const DID_YOU_KNOW_SPOKEN = "Did you know?";
+
+const ENHANCED_VOICE = /enhanced|premium|neural|natural|online/i;
+const QUALITY_VOICE = /siri|google|microsoft|samsung|eloquence|premium|enhanced|neural|natural/i;
+const NOVELTY_VOICE =
+  /zarvox|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|albert|agnes|deranged|hysterical|princess|junior|kathy|pipe organ|grandma|grandpa|nicky compact|samantha compact/i;
+const COMPACT_VOICE = /\bcompact\b/i;
+
 export type SpeechPlaybackState = {
   playingId: string | null;
 };
@@ -132,9 +153,9 @@ export function spokenChallengeReadout(input: {
 }
 
 /**
- * Object Found / Discover. Reads the visible object name and discovery
- * copy. Collectible tokens are skipped when the description already
- * carries that observation, so the student does not hear the chips twice.
+ * Object Found / Discover. Reads the visible object name, one useful
+ * grounded token, "Did you know?", and the educational fact. Hidden
+ * ObjectAnalysis, confidence, and challenge data are never passed in.
  */
 export function spokenDiscoverReadout(input: {
   objectName: string;
@@ -142,16 +163,67 @@ export function spokenDiscoverReadout(input: {
   observations?: readonly SpokenObservation[];
 }): string {
   const name = spokenObjectHeading(input.objectName);
-  const discovery = formatSpokenProse(input.discoveryText);
-  const body = joinSpokenSentences(name, discovery);
+  const token = firstSpokenObservation(input.observations);
+  const fact = formatSpokenProse(input.discoveryText);
+  const leadIn = fact.length > 0 ? DID_YOU_KNOW_SPOKEN : "";
 
-  if (discovery.length > 0) return body;
+  return joinSpokenSentences(name, token, leadIn, fact);
+}
 
-  const extras = (input.observations ?? [])
-    .map((observation) => formatSpokenProse(observation.display))
-    .filter((spoken) => spoken.length > 0 && !alreadySpoken(spoken, body));
+export function preferSpeechVoice(
+  voices: readonly SpeechVoiceCandidate[],
+  preferredLang = "en-US",
+): SpeechVoiceCandidate | null {
+  if (voices.length === 0) return null;
 
-  return joinSpokenSentences(body, ...extras);
+  const locale = speechLocale(preferredLang).toLowerCase();
+  let best: SpeechVoiceCandidate | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const voice of voices) {
+    const score = scoreSpeechVoice(voice, locale);
+    if (score > bestScore) {
+      best = voice;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
+function speechLocale(lang: string): string {
+  const trimmed = lang.trim();
+  if (trimmed.length === 0 || trimmed === "en") return "en-US";
+  return trimmed;
+}
+
+function scoreSpeechVoice(voice: SpeechVoiceCandidate, preferredLocale: string): number {
+  const lang = voice.lang.trim().toLowerCase().replace("_", "-");
+  const name = voice.name;
+  let score = 0;
+
+  if (NOVELTY_VOICE.test(name) || COMPACT_VOICE.test(name)) score -= 120;
+  if (lang.startsWith("en")) score += 40;
+  else score -= 40;
+
+  if (lang === preferredLocale) score += 28;
+  else if (lang.startsWith("en-us")) score += 22;
+  else if (lang.startsWith("en")) score += 12;
+
+  if (ENHANCED_VOICE.test(name)) score += 80;
+  if (QUALITY_VOICE.test(name)) score += 36;
+  if (voice.localService && lang.startsWith("en")) score += 18;
+  if (voice.default && lang.startsWith("en")) score += 6;
+
+  return score;
+}
+
+function firstSpokenObservation(
+  observations: readonly SpokenObservation[] | undefined,
+): string {
+  const display = observations?.[0]?.display;
+  if (!display) return "";
+  return spokenObjectHeading(display);
 }
 
 /**
@@ -267,17 +339,6 @@ function spokenObjectHeading(name: string): string {
       : trimmed;
 
   return formatSpokenProse(normalised);
-}
-
-function alreadySpoken(needle: string, haystack: string): boolean {
-  const spokenNeedle = tidySpoken(needle).toLowerCase();
-  const spokenHaystack = haystack.toLowerCase();
-  if (spokenNeedle.length === 0) return true;
-  if (spokenHaystack.includes(spokenNeedle)) return true;
-
-  const compactNeedle = spokenNeedle.replace(/[^a-z0-9]+/g, "");
-  const compactHaystack = spokenHaystack.replace(/[^a-z0-9]+/g, "");
-  return compactNeedle.length > 0 && compactHaystack.includes(compactNeedle);
 }
 
 function tidySpoken(text: string): string {

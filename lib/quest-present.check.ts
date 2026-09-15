@@ -120,6 +120,14 @@ check(
 );
 
 check(
+  "Did You Know copy is not turned into a grounded measurement chip",
+  presented.discoveryText.includes("comfortable to hold") &&
+    !presented.highlightedValues.some((value) =>
+      value.display.toLowerCase().includes("comfortable"),
+    ),
+);
+
+check(
   "a hypothetical problem value is not shown as if it were on the object",
   !presented.highlightedValues.some((value) => value.display.includes("11")),
 );

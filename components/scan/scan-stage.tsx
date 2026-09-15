@@ -7,6 +7,7 @@ import {
   CluePanel,
 } from "@/components/scan/clue-panel";
 import { DetourPanel } from "@/components/scan/detour-panel";
+import { HuntIdeas } from "@/components/scan/hunt-ideas";
 import { ProcessingOverlay } from "@/components/scan/processing-overlay";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,12 @@ import {
   MAX_IMAGE_MB,
   validateImageFile,
 } from "@/lib/image-capture";
+import {
+  HUNT_RECENT_KEY,
+  parseHuntRecent,
+  rememberHuntIds,
+  serializeHuntRecent,
+} from "@/lib/photo-suggestions";
 import { uploadQuestImage } from "@/lib/quest-upload";
 import type { Grade, Skill } from "@/lib/types";
 
@@ -32,6 +39,23 @@ type Stage = "idle" | "preview" | "processing";
 const STEP_MS = 2200;
 
 const STEPS = copy.scan.processingSteps;
+
+function readHuntRecent() {
+  if (typeof window === "undefined") return parseHuntRecent(null);
+  try {
+    return parseHuntRecent(window.sessionStorage.getItem(HUNT_RECENT_KEY));
+  } catch {
+    return parseHuntRecent(null);
+  }
+}
+
+function writeHuntRecent(stored: ReturnType<typeof rememberHuntIds>) {
+  try {
+    window.sessionStorage.setItem(HUNT_RECENT_KEY, serializeHuntRecent(stored));
+  } catch {
+    // Private mode can refuse sessionStorage.
+  }
+}
 
 /**
  * The heading and body to show when something went wrong, or null when the
@@ -97,6 +121,9 @@ export function ScanStage({
   const [cluePhotoFailed, setCluePhotoFailed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const uploadLock = useRef(false);
+  const [huntRecent, setHuntRecent] = useState<string[]>(
+    () => readHuntRecent()[skill.id] ?? [],
+  );
 
   const revokeCluePreview = useCallback(() => {
     setClueCollection((current) => {
@@ -292,6 +319,20 @@ export function ScanStage({
 
   const notice = problemNotice(rejection, uploadFailed, generationFailed);
   const investigating = clue !== null;
+  const showHunt =
+    !investigating &&
+    !detour &&
+    !notice &&
+    stage === "idle";
+
+  const persistHunt = useCallback((ids: readonly string[]) => {
+    const next = rememberHuntIds(readHuntRecent(), skill.id, ids);
+    writeHuntRecent(next);
+    setHuntRecent((current) => {
+      const remembered = next[skill.id] ?? [];
+      return remembered.join("|") === current.join("|") ? current : remembered;
+    });
+  }, [skill.id]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -354,6 +395,17 @@ export function ScanStage({
         </div>
       )}
 
+      {showHunt ? (
+        <HuntIdeas
+          key={skill.id}
+          skillId={skill.id}
+          grade={grade}
+          accent={skill.accent}
+          recentIds={huntRecent}
+          onRemember={persistHunt}
+        />
+      ) : null}
+
       {cluePhotoFailed ? (
         <p role="alert" className="text-sm leading-relaxed text-muted sm:text-base">
           {copy.scan.cluePhotoFailed}
@@ -364,7 +416,9 @@ export function ScanStage({
         className={
           previewUrl
             ? "photo-frame scan-frame is-hero"
-            : "photo-frame scan-frame"
+            : showHunt
+              ? "photo-frame scan-frame has-ideas"
+              : "photo-frame scan-frame"
         }
         aria-busy={stage === "processing"}
       >
@@ -494,9 +548,6 @@ export function ScanStage({
           >
             {copy.scan.choosePhoto}
           </Button>
-          {!notice ? (
-            <p className="text-center text-sm text-muted">{copy.scan.tip}</p>
-          ) : null}
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import { submitQuestAnswer } from "@/app/quest/actions";
 import {
   playFeedbackCue,
   primeFeedbackAudio,
+  releasePrimedFeedbackAudio,
 } from "@/components/game/feedback-audio";
 import { QuestPhotoFrame } from "@/components/quest/quest-photo";
 import {
@@ -28,7 +29,7 @@ import {
   hudXpAmountForProgress,
 } from "@/lib/feedback-celebration";
 import {
-  feedbackCueForSubmission,
+  planAnswerFeedback,
   readStoredSoundPreference,
 } from "@/lib/feedback-sound";
 import { shouldStopReadAloudForStatus } from "@/lib/feedback-cues";
@@ -132,7 +133,12 @@ function DiscoverStage({
       ) : null}
 
       {quest.discoveryText ? (
-        <p className="game-support">{quest.discoveryText}</p>
+        <section className="did-you-know" aria-labelledby="did-you-know-heading">
+          <p id="did-you-know-heading" className="game-moment">
+            {copy.quest.experience.didYouKnow}
+          </p>
+          <p className="did-you-know-fact">{quest.discoveryText}</p>
+        </section>
       ) : null}
 
       <ReadAloudButton
@@ -243,6 +249,11 @@ function ConnectStage({
   );
 }
 
+function logAnswerFeedback(info: Record<string, unknown>) {
+  if (process.env.NODE_ENV === "production") return;
+  console.info("[answer-feedback]", info);
+}
+
 function ChallengeStage({
   quest,
   readAloud,
@@ -252,6 +263,7 @@ function ChallengeStage({
 }) {
   const startedAt = useRef(0);
   const submitLock = useRef(false);
+  const lastPlayedKey = useRef<string | null>(null);
   const [value, setValue] = useState("");
   const [numerator, setNumerator] = useState("");
   const [denominator, setDenominator] = useState("");
@@ -314,6 +326,11 @@ function ChallengeStage({
     submitLock.current = true;
     setSubmitting(true);
     setInvalid(null);
+    const soundEnabled = readStoredSoundPreference();
+    logAnswerFeedback({
+      stage: "submit",
+      soundEnabled,
+    });
     primeFeedbackAudio();
 
     const answer =
@@ -339,6 +356,12 @@ function ChallengeStage({
 
   function applyGrade(result: StudentGradeView) {
     if (result.status === "invalid") {
+      releasePrimedFeedbackAudio();
+      logAnswerFeedback({
+        stage: "grade_received",
+        result: result.status,
+        soundEnabled: readStoredSoundPreference(),
+      });
       setInvalid(
         quest.answer.kind === "fraction"
           ? copy.quest.experience.invalidFraction
@@ -350,15 +373,39 @@ function ChallengeStage({
     }
 
     if (result.status === "unavailable") {
+      releasePrimedFeedbackAudio();
+      logAnswerFeedback({
+        stage: "grade_received",
+        result: result.status,
+        soundEnabled: readStoredSoundPreference(),
+      });
       setInvalid(copy.quest.experience.unavailable);
       return;
     }
 
-    const cue = feedbackCueForSubmission({
-      previousStatus: progress.status,
-      nextStatus: result.status,
-      enabled: readStoredSoundPreference(),
+    const soundEnabled = readStoredSoundPreference();
+    logAnswerFeedback({
+      stage: "grade_received",
+      result: result.status,
+      attemptNumber:
+        "attemptNumber" in result ? result.attemptNumber : null,
+      soundEnabled,
     });
+
+    const feedback = planAnswerFeedback({
+      result,
+      soundEnabled,
+      lastPlayedKey: lastPlayedKey.current,
+    });
+    lastPlayedKey.current = feedback.nextPlayedKey;
+
+    logAnswerFeedback({
+      stage: "cue_selected",
+      cue: feedback.event,
+      play: feedback.play,
+      skipReason: feedback.skipReason,
+    });
+
     const celebration = celebrationForSubmission({
       previousStatus: progress.status,
       nextStatus: result.status,
@@ -374,7 +421,11 @@ function ChallengeStage({
     if (shouldStopReadAloudForStatus(result.status)) {
       stopSpeech();
     }
-    if (cue) playFeedbackCue(cue);
+    if (feedback.play && feedback.cue) {
+      playFeedbackCue(feedback.cue, { soundEnabled });
+    } else {
+      releasePrimedFeedbackAudio();
+    }
   }
 
   const skillLabel = skillFromMission(quest.missionLabel);

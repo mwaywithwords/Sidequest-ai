@@ -5,6 +5,10 @@
  *
  * Writes short WAVs and plays them with afplay when available.
  * Not imported by the app.
+ *
+ * In the browser during `next dev`, you can also run:
+ *   window.__SIDEQUEST_FEEDBACK_AUDIO__.playIncorrect()
+ * or open any page with ?debugFeedbackAudio=1
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";

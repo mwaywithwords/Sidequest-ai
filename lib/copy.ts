@@ -54,6 +54,13 @@ export const copy = {
     missionLabel: "Your mission",
     heading: "Find something interesting.",
     tip: "Try a toy, snack, shoe, ball, book, or anything nearby.",
+    needAnIdea: "Need an idea?",
+    huntNote:
+      "These are ideas only. You can ignore them and photograph any safe object.",
+    surpriseMe: "Surprise me",
+    surpriseMeAria: "Surprise me with another object to find",
+    surpriseFind: (object: string) => `Can you find ${object}?`,
+    huntChipAria: (label: string) => `${label}. This is just an idea — you can photograph any safe object.`,
     /** Precedes the skill's own "look for" phrase, which stays highlighted. */
     lookForLead: (skill: string) => `For ${skill}, look for `,
     emptyPreview: "Point the camera at something real.",
@@ -315,6 +322,7 @@ export const copy = {
       discoverEyebrow: "Object found!",
       connectEyebrow: "Math found!",
       challengeEyebrow: "The challenge",
+      didYouKnow: "Did you know?",
       readAloud: "Read to me",
       readAloudStop: "Stop",
       readAloudChallenge: "Read the challenge aloud",
