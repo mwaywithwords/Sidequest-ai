@@ -109,35 +109,61 @@ export function RevealArrow({ accent }: { accent?: string }) {
 }
 
 export function RevealLink({
+  fromCaption,
   fromLabel,
   fromValue,
-  toLabel,
+  toCaption,
+  skillSymbol,
+  skillLabel,
+  sentence,
   accent,
 }: {
+  fromCaption?: string;
   fromLabel: string;
   fromValue: string;
-  toLabel: string;
+  toCaption?: string;
+  skillSymbol: string;
+  skillLabel: string;
+  sentence?: string | null;
   accent: string;
 }) {
   return (
-    <div className="reveal-stack">
-      <div className="reveal-chip" style={{ color: accent }}>
+    <div className="reveal-stack connect-reveal">
+      {fromCaption ? (
+        <p className="game-moment connect-reveal-kicker">{fromCaption}</p>
+      ) : null}
+      <div className="reveal-chip connect-reveal-observation" style={{ color: accent }}>
         <span className="text-[0.7rem] font-semibold tracking-wide text-muted uppercase">
           {fromLabel}
         </span>
-        <span className="mt-1 font-display text-2xl font-extrabold tracking-tight text-on-game">
+        <span className="mt-1 font-display text-3xl font-extrabold tracking-tight text-on-game">
           {fromValue}
         </span>
       </div>
-      <RevealArrow accent={accent} />
-      <div className="reveal-chip" style={{ color: accent }}>
+      <div className="connect-reveal-arrow flex flex-col items-center gap-1">
+        <RevealArrow accent={accent} />
+        {toCaption ? (
+          <p className="game-moment connect-reveal-practice">{toCaption}</p>
+        ) : null}
+      </div>
+      <div className="reveal-chip connect-reveal-skill" style={{ color: accent }}>
         <span
-          className="font-display text-3xl font-extrabold tracking-tight"
+          className="flex items-center gap-2 font-display text-2xl font-extrabold tracking-wide uppercase"
           style={{ color: accent }}
         >
-          {toLabel}
+          {skillSymbol.trim() ? (
+            <span aria-hidden className="text-[1.65rem] leading-none">
+              {skillSymbol}
+            </span>
+          ) : null}
+          <span>{skillLabel}</span>
         </span>
       </div>
+      {sentence ? (
+        <p className="connect-reveal-sentence max-w-[16.5rem] text-sm font-semibold leading-snug text-cream">
+          {sentence}
+        </p>
+      ) : null}
     </div>
   );
 }

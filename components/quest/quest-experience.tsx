@@ -48,7 +48,10 @@ import type {
   ChallengeProgress,
   StudentGradeView,
 } from "@/lib/progress/outcome";
-import type { StudentQuest } from "@/lib/quest-present";
+import {
+  visibleConnectContent,
+  type StudentQuest,
+} from "@/lib/quest-present";
 
 type Stage = "discover" | "connect" | "challenge";
 
@@ -169,58 +172,34 @@ function ConnectStage({
   readAloud: ReadAloudControls;
   onContinue: () => void;
 }) {
-  const skillLabel = skillFromMission(quest.missionLabel);
-  const property = quest.highlightedValues[0];
-  const lookCloselyVisible = Boolean(
-    quest.lookClosely && (quest.worldContext || !property),
-  );
+  const connect = visibleConnectContent(quest);
   const connectSpeech = spokenConnectReadout({
-    connection: quest.connection,
-    lookClosely: quest.lookClosely,
-    lookCloselyVisible,
+    observation: connect.observationValue,
+    skill: connect.skillLabel,
+    kind: connect.observationKind,
   });
 
   return (
-    <div key="connect" className="flex flex-col items-center gap-5 text-center animate-rise">
-      <p className="game-moment">{copy.quest.experience.connectEyebrow}</p>
+    <div key="connect" className="flex flex-col items-center gap-4 text-center">
+      <p className="game-moment connect-heading">{copy.quest.experience.connectEyebrow}</p>
 
       <QuestPhotoFrame
         photo={quest.photo}
         accent={quest.accent}
-        size="companion"
-        className="w-full"
+        size="bridge"
+        className="mx-auto"
       />
 
-      {quest.worldContext ? (
-        <RevealLink
-          fromLabel="Your object"
-          fromValue={quest.objectName}
-          toLabel={skillLabel}
-          accent={quest.accent}
-        />
-      ) : property ? (
-        <RevealLink
-          fromLabel={property.label}
-          fromValue={property.display}
-          toLabel={skillLabel}
-          accent={quest.accent}
-        />
-      ) : (
-        <RevealLink
-          fromLabel="Your find"
-          fromValue={quest.objectName}
-          toLabel={skillLabel}
-          accent={quest.accent}
-        />
-      )}
-
-      {lookCloselyVisible && quest.lookClosely ? (
-        <p className="max-w-sm text-base font-medium leading-relaxed text-cream">
-          {quest.lookClosely}
-        </p>
-      ) : null}
-
-      <p className="game-support">{quest.connection}</p>
+      <RevealLink
+        fromCaption={copy.quest.experience.connectFromPhoto}
+        fromLabel={connect.observationLabel}
+        fromValue={connect.observationValue}
+        toCaption={copy.quest.experience.connectPractice}
+        skillSymbol={connect.skillSymbol}
+        skillLabel={connect.skillLabel}
+        sentence={connect.sentence}
+        accent={quest.accent}
+      />
 
       <ReadAloudButton
         id="connect"
@@ -231,14 +210,6 @@ function ConnectStage({
         accent={quest.accent}
         onToggle={readAloud.toggle}
       />
-
-      {quest.imaginedSituation ? (
-        <p className="max-w-sm text-sm leading-relaxed text-faint">
-          {quest.worldContext
-            ? copy.quest.experience.inspiredSituation
-            : copy.quest.experience.imaginedSituation}
-        </p>
-      ) : null}
 
       <div className="game-actions">
         <Button size="lg" onClick={onContinue} className="w-full">

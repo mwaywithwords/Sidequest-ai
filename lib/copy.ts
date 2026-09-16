@@ -13,6 +13,12 @@ function topicSentence(topic: string): string {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
+function challengeArticle(skill: string): "a" | "an" {
+  const trimmed = skill.trim().toLowerCase();
+  if (trimmed.length === 0) return "a";
+  return /^[aeiou]/.test(trimmed) ? "an" : "a";
+}
+
 export const copy = {
   brand: {
     metaTitle: "SIDEQUEST — Find the math hiding in your world",
@@ -319,7 +325,7 @@ export const copy = {
   quest: {
     objectFoundLabel: "Object found!",
     discoverLabel: "Discover",
-    connectionLabel: "Math found!",
+    connectionLabel: "We found the math!",
     challengeLabel: "The challenge",
     correct: (answer: number, unit: string) => `That's it. ${answer} ${unit}.`,
     solutionLabel: "How it works out",
@@ -332,7 +338,16 @@ export const copy = {
      */
     experience: {
       discoverEyebrow: "Object found!",
-      connectEyebrow: "Math found!",
+      connectEyebrow: "We found the math!",
+      connectFromPhoto: "From your photo",
+      connectPractice: "We can practice",
+      connectMeasurementLine: (value: string, skill: string) =>
+        `We can use ${value} in ${challengeArticle(skill)} ${skill} challenge!`,
+      connectCountLine: (value: string, skill: string) =>
+        `We found ${value} for ${challengeArticle(skill)} ${skill} challenge!`,
+      connectShapeLine: (shape: string, skill: string) =>
+        `We found ${challengeArticle(shape)} ${shape} for ${challengeArticle(skill)} ${skill} challenge!`,
+      connectSkillLine: (skill: string) => `We can practice ${skill}!`,
       challengeEyebrow: "The challenge",
       didYouKnow: "Did you know?",
       readAloud: "Read to me",

@@ -11,7 +11,7 @@
 import type { Computation, UsedValue } from "@/lib/ai/schemas";
 import { evaluateComputation } from "@/lib/math/evaluate";
 import { presentMathExpression } from "@/lib/math/expression";
-import { presentStudentQuest } from "@/lib/quest-present";
+import { presentStudentQuest, visibleConnectContent } from "@/lib/quest-present";
 import {
   formatSpokenExpression,
   formatSpokenProse,
@@ -378,19 +378,35 @@ check(
     !presentedDiscover.includes("given_in_problem"),
 );
 
+const presentedConnectView = visibleConnectContent(presentedQuest);
 const presentedConnect = spokenConnectReadout({
-  connection: presentedQuest.connection,
-  lookClosely: presentedQuest.lookClosely,
-  lookCloselyVisible: Boolean(
-    presentedQuest.lookClosely &&
-      (presentedQuest.worldContext || !presentedQuest.highlightedValues[0]),
-  ),
+  observation: presentedConnectView.observationValue,
+  skill: presentedConnectView.skillLabel,
+  kind: presentedConnectView.observationKind,
 });
 
 check(
-  "connect speech reads the visible math connection",
+  "connect speech reads a concise natural measurement line",
   presentedConnect ===
-    "Your can tells us exactly how much it holds: 12 fluid ounces.",
+    "We found 12 fluid ounces. We can use it in a division challenge.",
+);
+
+check(
+  "connect speech does not narrate every UI label",
+  !presentedConnect.toLowerCase().includes("from your photo") &&
+    !presentedConnect.toLowerCase().includes("we can practice") &&
+    !presentedConnect.toLowerCase().includes("volume"),
+);
+
+check(
+  "connect speech does not read hidden objectConnection prose",
+  !presentedConnect.includes("tells us exactly") &&
+    !presentedConnect.includes(presentedQuest.connection) &&
+    !presentedConnect.includes("Look closely") &&
+    !presentedConnect.includes("real number to start from") &&
+    !presentedConnect.includes("situation around it") &&
+    !presentedConnect.includes("grounding") &&
+    !presentedConnect.includes("given_in_problem"),
 );
 
 check(
@@ -438,21 +454,25 @@ const inspiredQuest = presentStudentQuest({
   skillId: "geometry",
 });
 
+const inspiredConnectView = visibleConnectContent(inspiredQuest);
 const inspiredConnect = spokenConnectReadout({
-  connection: inspiredQuest.connection,
-  lookClosely: inspiredQuest.lookClosely,
-  lookCloselyVisible: Boolean(
-    inspiredQuest.lookClosely &&
-      (inspiredQuest.worldContext || !inspiredQuest.highlightedValues[0]),
-  ),
+  observation: inspiredConnectView.observationValue,
+  skill: inspiredConnectView.skillLabel,
+  kind: inspiredConnectView.observationKind,
 });
 
 check(
-  "connect speech can read the inspired_math trail already on screen",
-  inspiredConnect.includes("another trail") &&
-    inspiredConnect.includes(
-      "Your wallet has a rectangular form. Geometry helps us explore shapes and their properties.",
-    ),
+  "inspired connect speech reads a short practice line",
+  inspiredConnect === "We can practice geometry.",
+);
+
+check(
+  "inspired connect speech does not read hidden trail or objectConnection prose",
+  !inspiredConnect.includes("another trail") &&
+    !inspiredConnect.includes("wider world") &&
+    !inspiredConnect.includes(inspiredQuest.connection) &&
+    !inspiredConnect.includes("rectangular form") &&
+    !inspiredConnect.includes("From your photo"),
 );
 
 check(
@@ -463,12 +483,39 @@ check(
 );
 
 check(
-  "hidden look-closely copy is not spoken when that sentence is off screen",
+  "connect speech for a printed measurement is observation then skill",
   spokenConnectReadout({
-    connection: "Geometry helps us explore shapes and their properties.",
-    lookClosely: "Look closely — your wallet shows RECTANGLE.",
-    lookCloselyVisible: false,
-  }) === "Geometry helps us explore shapes and their properties.",
+    observation: "311 G",
+    skill: "Addition",
+    kind: "measurement",
+  }) === "We found 311 grams. We can use it in an addition challenge.",
+);
+
+check(
+  "connect speech for a visible geometry property is observation then skill",
+  spokenConnectReadout({
+    observation: "RECTANGLE",
+    skill: "Geometry",
+    kind: "shape",
+  }) === "We found a rectangle. We can use it in a geometry challenge.",
+);
+
+check(
+  "connect speech for a count is natural and brief",
+  spokenConnectReadout({
+    observation: "6",
+    skill: "Multiplication",
+    kind: "count",
+  }) === "We found 6. We can use that in a multiplication challenge.",
+);
+
+check(
+  "hidden look-closely copy is not spoken",
+  spokenConnectReadout({
+    observation: "12 FL OZ",
+    skill: "Division",
+    kind: "measurement",
+  }) === "We found 12 fluid ounces. We can use it in a division challenge.",
 );
 
 const idle = reduceSpeechPlayback({ playingId: null }, { type: "stop" });

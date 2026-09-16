@@ -2,6 +2,10 @@ import {
   spokenMathExpression,
   type StudentMathExpression,
 } from "@/lib/math/expression";
+import {
+  indefiniteArticle,
+  type ConnectObservationKind,
+} from "@/lib/quest-connect";
 
 /**
  * Child-readable speech for SIDEQUEST student-facing copy.
@@ -227,20 +231,51 @@ function firstSpokenObservation(
 }
 
 /**
- * Math Found / Connect. Reads the visible connection, and the look-closely
- * or inspired-math trail only when that sentence is on screen.
+ * Connect. Speaks the meaning of the math reveal, not every UI label.
+ * Hidden objectConnection, look-closely, and challenge copy are never
+ * passed in.
  */
 export function spokenConnectReadout(input: {
-  connection: string;
-  lookClosely?: string | null;
-  lookCloselyVisible?: boolean;
+  observation: string;
+  skill: string;
+  kind: ConnectObservationKind;
 }): string {
-  const trail =
-    input.lookCloselyVisible && input.lookClosely
-      ? formatSpokenProse(input.lookClosely)
-      : "";
-  const connection = formatSpokenProse(input.connection);
-  return joinSpokenSentences(trail, connection);
+  const skill = input.skill.trim().toLowerCase();
+  if (skill.length === 0) return "";
+
+  const practice = `We can use it in ${indefiniteArticle(skill)} ${skill} challenge`;
+
+  if (input.kind === "measurement") {
+    const found = spokenObjectHeading(input.observation);
+    if (found.length === 0) {
+      return joinSpokenSentences(`We can practice ${skill}`);
+    }
+    return joinSpokenSentences(`We found ${found}`, practice);
+  }
+
+  if (input.kind === "count") {
+    const found = spokenObjectHeading(input.observation);
+    if (found.length === 0) {
+      return joinSpokenSentences(`We can practice ${skill}`);
+    }
+    return joinSpokenSentences(
+      `We found ${found}`,
+      `We can use that in ${indefiniteArticle(skill)} ${skill} challenge`,
+    );
+  }
+
+  if (input.kind === "shape") {
+    const shape = spokenObjectHeading(input.observation).toLowerCase();
+    if (shape.length === 0) {
+      return joinSpokenSentences(`We can practice ${skill}`);
+    }
+    return joinSpokenSentences(
+      `We found ${indefiniteArticle(shape)} ${shape}`,
+      practice,
+    );
+  }
+
+  return joinSpokenSentences(`We can practice ${skill}`);
 }
 
 export function formatSpokenProse(text: string): string {
