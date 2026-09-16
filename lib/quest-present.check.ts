@@ -14,8 +14,10 @@ import {
   groundedValuesForDisplay,
   presentStudentQuest,
   studentAnswerInput,
+  visibleConnectContent,
   type PresentReadyQuestInput,
 } from "@/lib/quest-present";
+import { copy } from "@/lib/copy";
 
 let failed = 0;
 
@@ -119,6 +121,65 @@ check(
     presented.highlightedValues[0]?.label === "Volume",
 );
 
+const presentedConnect = visibleConnectContent(presented);
+
+check(
+  "Connect still displays the observed mathematical value",
+  presentedConnect.observationLabel === "Volume" &&
+    presentedConnect.observationValue === "12 FL OZ",
+);
+
+check(
+  "Connect still displays the selected skill",
+  presentedConnect.skillLabel === "Division",
+);
+
+check(
+  "Connect uses the catalogue skill symbol",
+  presentedConnect.skillSymbol === "÷" &&
+    presentedConnect.skillDisplay === "÷ Division",
+);
+
+check(
+  "Connect sentence uses the grounded measurement",
+  presentedConnect.sentence === "We can use 12 fl oz in a division challenge!",
+);
+
+check(
+  "Connect heading copy is WE FOUND THE MATH!",
+  copy.quest.experience.connectEyebrow === "We found the math!",
+);
+
+check(
+  "long objectConnection prose is not part of the visible Connect bridge",
+  presentedConnect.observationValue !== presented.connection &&
+    !JSON.stringify(presentedConnect).includes(
+      "Your can tells us exactly how much it holds",
+    ),
+);
+
+check(
+  "generic explanation prose is not part of the visible Connect bridge",
+  !JSON.stringify(presentedConnect).includes(
+    "Your object gives us the real number to start from",
+  ) &&
+    !JSON.stringify(presentedConnect).includes(
+      "The challenge may set up a situation around it",
+    ) &&
+    !JSON.stringify(presentedConnect).includes(
+      copy.quest.experience.imaginedSituation,
+    ) &&
+    !JSON.stringify(presentedConnect).includes(
+      copy.quest.experience.inspiredSituation,
+    ),
+);
+
+check(
+  "objectConnection remains on the payload for internal use",
+  presented.connection ===
+    "Your can tells us exactly how much it holds: 12 fluid ounces.",
+);
+
 check(
   "Did You Know copy is not turned into a grounded measurement chip",
   presented.discoveryText.includes("comfortable to hold") &&
@@ -170,6 +231,127 @@ check(
     !inspiredPresented.lookClosely.includes("shows 1") &&
     inspiredPresented.worldContext === true &&
     inspiredPresented.highlightedValues.length === 0,
+);
+
+const inspiredConnect = visibleConnectContent(inspiredPresented);
+
+check(
+  "inspired_math Connect shows the object and skill, not trail prose",
+  inspiredConnect.observationValue === "Basketball" &&
+    inspiredConnect.skillLabel === "Division" &&
+    inspiredConnect.observationKind === "object" &&
+    inspiredConnect.sentence === "We can practice division!" &&
+    !JSON.stringify(inspiredConnect).includes("another trail") &&
+    !JSON.stringify(inspiredConnect).includes("basketball scores"),
+);
+
+const shapeCountQuest = presentStudentQuest(
+  readyInput({
+    skillLabel: "Geometry",
+    skillId: "geometry",
+    skillAccent: "#ff8fd4",
+    valuesUsed: [],
+    computation: {
+      type: "shape_count",
+      shape: "rectangle",
+      feature: "faces",
+    },
+    answer: { type: "number", value: 6 },
+  }),
+);
+const shapeCountConnect = visibleConnectContent(shapeCountQuest);
+
+check(
+  "shape/geometry observation uses the grounded form, not a manufactured number",
+  shapeCountQuest.groundedShape === "rectangle" &&
+    shapeCountConnect.observationKind === "shape" &&
+    shapeCountConnect.observationValue === "RECTANGLE" &&
+    shapeCountConnect.skillSymbol === "△" &&
+    shapeCountConnect.sentence ===
+      "We found a rectangle for a geometry challenge!",
+);
+
+const identifyQuest = presentStudentQuest(
+  readyInput({
+    skillLabel: "Geometry",
+    skillId: "geometry",
+    skillAccent: "#ff8fd4",
+    valuesUsed: [],
+    computation: {
+      type: "shape_identify",
+      aspect: "plane",
+      label: "rectangle",
+    },
+    answer: { type: "choice", value: "rectangle", set: "plane" },
+  }),
+);
+const identifyConnect = visibleConnectContent(identifyQuest);
+
+check(
+  "shape_identify does not leak the correct answer onto Connect",
+  identifyQuest.groundedShape === null &&
+    identifyConnect.observationValue === "Soda can" &&
+    identifyConnect.sentence === "We can practice geometry!" &&
+    !identifyConnect.observationValue.toLowerCase().includes("rectangle"),
+);
+
+const measuredGeometry = presentStudentQuest(
+  readyInput({
+    skillLabel: "Geometry",
+    skillId: "geometry",
+    valuesUsed: [
+      {
+        label: "Width",
+        value: 12,
+        unit: "cm",
+        origin: "observed",
+      },
+    ],
+    computation: {
+      type: "geometry",
+      operation: "perimeter",
+      shape: "rectangle",
+      dimensions: [
+        {
+          label: "Width",
+          value: 12,
+          unit: "cm",
+          origin: "observed",
+        },
+      ],
+    },
+    answer: { type: "number", value: 48, unit: "cm" },
+  }),
+);
+const measuredConnect = visibleConnectContent(measuredGeometry);
+
+check(
+  "measurement observation still wins over a geometry shape name",
+  measuredConnect.observationKind === "measurement" &&
+    measuredConnect.observationValue === "12 CM" &&
+    measuredConnect.sentence === "We can use 12 cm in a geometry challenge!",
+);
+
+const missingObservation = presentStudentQuest(
+  readyInput({
+    valuesUsed: [
+      {
+        label: "Cans needed",
+        value: 11,
+        unit: "cans",
+        origin: "given_in_problem",
+      },
+    ],
+  }),
+);
+const missingConnect = visibleConnectContent(missingObservation);
+
+check(
+  "missing optional observation data fails gracefully",
+  missingConnect.observationKind === "object" &&
+    missingConnect.observationValue === "Soda can" &&
+    missingConnect.sentence === "We can practice division!" &&
+    !JSON.stringify(missingConnect).includes("11"),
 );
 
 check(

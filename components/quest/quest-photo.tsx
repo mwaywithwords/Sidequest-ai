@@ -7,11 +7,12 @@ import { cn } from "@/lib/cn";
 import { copy } from "@/lib/copy";
 import type { QuestPhoto } from "@/lib/quest-present";
 
-type PhotoSize = "hero" | "companion" | "remnant";
+type PhotoSize = "hero" | "companion" | "bridge" | "remnant";
 
 const SIZES: Record<PhotoSize, string> = {
   hero: "min-h-[16rem] max-h-[min(22rem,52dvh)] sm:min-h-[20rem] sm:max-h-[26rem]",
   companion: "min-h-[10rem] max-h-[16rem] sm:min-h-[13rem] sm:max-h-[18rem]",
+  bridge: "aspect-[4/3] w-[min(12rem,56vw)] max-h-[10.25rem]",
   remnant: "min-h-[4.75rem] w-24 sm:min-h-[5.5rem] sm:w-28",
 };
 

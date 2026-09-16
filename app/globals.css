@@ -427,6 +427,44 @@ html {
   color: var(--brand-ink);
 }
 
+.connect-heading {
+  font-size: 1.22rem;
+  letter-spacing: 0.1em;
+}
+
+.connect-reveal-kicker,
+.connect-reveal-practice {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: var(--color-muted);
+}
+
+.connect-reveal-observation {
+  min-width: 11.5rem;
+  animation: connect-enter 0.28s 0.1s cubic-bezier(0.2, 0.85, 0.25, 1.1) both;
+}
+
+.connect-reveal-kicker {
+  animation: connect-fade 0.22s 0.1s ease-out both;
+}
+
+.connect-reveal-arrow {
+  animation: connect-arrow 0.28s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.connect-reveal-practice {
+  animation: connect-fade 0.22s 0.3s ease-out both;
+}
+
+.connect-reveal-skill {
+  min-width: 11.5rem;
+  animation: connect-pop 0.32s 0.45s cubic-bezier(0.2, 0.85, 0.25, 1.18) both;
+}
+
+.connect-reveal-sentence {
+  animation: connect-fade 0.24s 0.6s ease-out both;
+}
+
 .game-title {
   font-family: var(--font-display), sans-serif;
   font-size: 1.55rem;
@@ -676,6 +714,48 @@ html {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes connect-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.45rem) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes connect-arrow {
+  from {
+    opacity: 0;
+    transform: translateY(-0.45rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes connect-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes connect-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -1479,6 +1559,17 @@ html[data-theme="dark"] .play-specks {
   }
 
   .hunt-surprise:active {
+    transform: none;
+  }
+
+  .connect-reveal-observation,
+  .connect-reveal-kicker,
+  .connect-reveal-arrow,
+  .connect-reveal-practice,
+  .connect-reveal-skill,
+  .connect-reveal-sentence {
+    animation: none !important;
+    opacity: 1;
     transform: none;
   }
 

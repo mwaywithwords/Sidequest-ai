@@ -7,7 +7,15 @@ import {
 } from "@/lib/math/expression";
 import { labelsForChoiceSet } from "@/lib/math/geometry-forms";
 import type { ChallengeProgress } from "@/lib/progress/outcome";
-import type { Grade, SkillId } from "@/lib/types";
+import {
+  connectObservationKind,
+  connectSentence,
+  connectSkillDisplay,
+  connectSkillMark,
+  presentationSafeShape,
+  type ConnectObservationKind,
+} from "@/lib/quest-connect";
+import { type Grade, type SkillId } from "@/lib/types";
 
 export type { StudentMathExpression };
 
@@ -51,6 +59,8 @@ export type StudentQuest = {
   imaginedSituation: boolean;
   worldContext: boolean;
   highlightedValues: GroundedValueView[];
+  skillSymbol: string;
+  groundedShape: string | null;
   question: string;
   mathExpression: StudentMathExpression;
   hint: string | null;
@@ -58,6 +68,21 @@ export type StudentQuest = {
   progress: ChallengeProgress;
   scanHref: string;
   setupHref: string;
+};
+
+/**
+ * Visible Connect bridge: the observed property (or object name when
+ * there is no grounded number) and the selected skill. Explanatory
+ * objectConnection / look-closely sentences stay off this object.
+ */
+export type VisibleConnectContent = {
+  observationLabel: string;
+  observationValue: string;
+  observationKind: ConnectObservationKind;
+  skillLabel: string;
+  skillSymbol: string;
+  skillDisplay: string;
+  sentence: string | null;
 };
 
 export type WorkingQuestView = {
@@ -176,6 +201,8 @@ export function presentStudentQuest(
         input.valuesUsed.some((value) => value.origin === "given_in_problem")),
     worldContext: inspired,
     highlightedValues,
+    skillSymbol: connectSkillMark(input.skillId),
+    groundedShape: presentationSafeShape(input.computation, input.answer),
     question: input.question,
     mathExpression: presentMathExpression(input.computation),
     hint: emptyToNull(input.hint1),
@@ -183,6 +210,66 @@ export function presentStudentQuest(
     progress: input.progress ?? { status: "open" },
     scanHref: `/scan?grade=${input.grade}&skill=${input.skillId}`,
     setupHref: `/setup?grade=${input.grade}`,
+  };
+}
+
+/**
+ * What Connect actually shows. Skill comes from the mission label already
+ * on the student payload. Object-connection prose is not included.
+ */
+export function visibleConnectContent(
+  quest: Pick<
+    StudentQuest,
+    | "objectName"
+    | "missionLabel"
+    | "highlightedValues"
+    | "worldContext"
+    | "skillSymbol"
+    | "groundedShape"
+  >,
+): VisibleConnectContent {
+  const skillLabel = quest.missionLabel.split("·")[1]?.trim() || "Math";
+  const property = quest.highlightedValues[0];
+  const shapeName = quest.groundedShape?.trim() || null;
+  const kind = connectObservationKind({
+    worldContext: quest.worldContext,
+    numericDisplay: property?.display ?? null,
+    numericLabel: property?.label ?? null,
+    shapeName,
+  });
+
+  let observationLabel: string;
+  let observationValue: string;
+
+  if (quest.worldContext) {
+    observationLabel = "Your object";
+    observationValue = quest.objectName;
+  } else if (property) {
+    observationLabel = property.label;
+    observationValue = property.display;
+  } else if (shapeName !== null) {
+    observationLabel = "Shape";
+    observationValue = shapeName.toUpperCase();
+  } else {
+    observationLabel = "Your find";
+    observationValue = quest.objectName;
+  }
+
+  const sentenceObservation =
+    kind === "shape" && shapeName !== null ? shapeName : observationValue;
+
+  return {
+    observationLabel,
+    observationValue,
+    observationKind: kind,
+    skillLabel,
+    skillSymbol: quest.skillSymbol,
+    skillDisplay: connectSkillDisplay(quest.skillSymbol, skillLabel),
+    sentence: connectSentence({
+      kind,
+      observation: sentenceObservation,
+      skillLabel,
+    }),
   };
 }
 
