@@ -229,6 +229,21 @@ check(
     supportImproving.targetDifficulty === 2,
 );
 
+const displayedScoreIgnored = profile({
+  grade: 4,
+  progress: progress({
+    totalAttempts: 5,
+    correctAttempts: 1,
+    masteryScore: 1,
+    currentLevel: 1,
+  }),
+  recentOutcomes: [false, false, false],
+});
+check(
+  "adaptation uses solve-rate counts, not displayed mastery_score",
+  displayedScoreIgnored.masteryBand === "support",
+);
+
 // --- developing band -------------------------------------------------------
 
 const developingLow = profile({

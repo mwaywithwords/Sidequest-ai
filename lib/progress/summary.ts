@@ -1,9 +1,12 @@
 import "server-only";
 
+import { progressXpTotal } from "@/lib/progress/reward-read";
 import { readProfileXpTotal } from "@/lib/progress/rewards";
 import { getProfileId } from "@/lib/profile";
+import { displayedSkillMastery } from "@/lib/progress/mastery-evidence";
 import {
   completedSidequests,
+  skillProgressFromAttempts,
   type SkillAttemptRow,
 } from "@/lib/progress/mastery";
 import {
@@ -22,6 +25,15 @@ import { parseGrade, parseSkillId } from "@/lib/types";
  * Ownership is the HttpOnly profile cookie. The browser Supabase client
  * is not used: RLS has no policies, so the only safe read is the secret
  * key behind this boundary, after the profile match.
+ *
+ * XP is summed from quest_rewards. A missing row is 0. A missing table
+ * or store failure is not treated as "no reward"; it is logged and the
+ * rest of Progress still renders at 0 XP rather than crashing.
+ *
+ * Skill-card mastery is recomputed on the server from attempts and
+ * challenge metadata. Stored skill_progress.mastery_score is not trusted
+ * for display, so a previous solve-rate of 100% after one Sidequest cannot
+ * linger.
  */
 export async function loadProgressSummary(): Promise<PresentedProgress> {
   const profileId = await getProfileId();
@@ -69,23 +81,6 @@ export async function loadProgressSummary(): Promise<PresentedProgress> {
     if (skillId !== null) skillCodeById.set(row.id, skillId);
   }
 
-  const { data: progressRows, error: progressError } =
-    currentSkillIds.length === 0
-      ? { data: [], error: null }
-      : await supabase
-          .from("skill_progress")
-          .select(
-            "skill_id, total_attempts, correct_attempts, mastery_score, current_level, last_practiced_at",
-          )
-          .eq("profile_id", profileId)
-          .in("skill_id", currentSkillIds);
-
-  if (progressError !== null) {
-    throw new Error(
-      `Could not load skill progress: ${progressError.message}`,
-    );
-  }
-
   const { data: attemptRows, error: attemptError } = await supabase
     .from("attempts")
     .select("challenge_id, is_correct, attempt_number, created_at")
@@ -95,7 +90,8 @@ export async function loadProgressSummary(): Promise<PresentedProgress> {
     throw new Error(`Could not load attempts: ${attemptError.message}`);
   }
 
-  const totalXp = await readProfileXpTotal(profileId);
+  const xpTotal = await readProfileXpTotal(profileId);
+  const totalXp = progressXpTotal(xpTotal);
 
   const { data: questRows, error: questError } = await supabase
     .from("quests")
@@ -139,21 +135,89 @@ export async function loadProgressSummary(): Promise<PresentedProgress> {
     }
   }
 
+  const skillChallengeFacts =
+    currentSkillIds.length === 0
+      ? []
+      : await (async () => {
+          const { data, error } = await supabase
+            .from("challenges")
+            .select("id, skill_id, difficulty, generation_metadata")
+            .in("skill_id", currentSkillIds);
+
+          if (error !== null) {
+            throw new Error(
+              `Could not load skill challenges: ${error.message}`,
+            );
+          }
+
+          return data ?? [];
+        })();
+
+  const attemptsByChallenge = new Map<string, SkillAttemptRow[]>();
+  for (const attempt of attempts) {
+    const current = attemptsByChallenge.get(attempt.challengeId) ?? [];
+    current.push(attempt);
+    attemptsByChallenge.set(attempt.challengeId, current);
+  }
+
+  const challengesBySkill = new Map<
+    string,
+    {
+      id: string;
+      difficulty: unknown;
+      generationMetadata: unknown;
+    }[]
+  >();
+
+  for (const row of skillChallengeFacts) {
+    const list = challengesBySkill.get(row.skill_id) ?? [];
+    list.push({
+      id: row.id,
+      difficulty: row.difficulty,
+      generationMetadata: row.generation_metadata,
+    });
+    challengesBySkill.set(row.skill_id, list);
+  }
+
   const skillProgress: SkillProgressRecord[] = [];
 
-  for (const row of progressRows ?? []) {
-    const skillCode = skillCodeById.get(row.skill_id);
-    if (skillCode === undefined || grade === null) continue;
+  if (grade !== null) {
+    for (const skillRow of gradeSkills ?? []) {
+      const skillCode = skillCodeById.get(skillRow.id);
+      if (skillCode === undefined) continue;
 
-    skillProgress.push({
-      skillCode,
-      gradeLevel: grade,
-      totalAttempts: row.total_attempts,
-      correctAttempts: row.correct_attempts,
-      masteryScore: Number(row.mastery_score),
-      currentLevel: row.current_level,
-      lastPracticedAt: row.last_practiced_at,
-    });
+      const facts = challengesBySkill.get(skillRow.id) ?? [];
+      const skillAttempts: SkillAttemptRow[] = [];
+      for (const fact of facts) {
+        const rows = attemptsByChallenge.get(fact.id);
+        if (rows !== undefined) skillAttempts.push(...rows);
+      }
+
+      const snapshot = skillProgressFromAttempts(skillAttempts);
+      if (snapshot.totalAttempts <= 0) continue;
+
+      const displayed = displayedSkillMastery({
+        attempts: skillAttempts,
+        challenges: facts,
+        grade,
+      });
+      const lastPracticedAt =
+        snapshot.totalAttempts > 0
+          ? skillAttempts.reduce((latest, row) => {
+              return row.createdAt > latest ? row.createdAt : latest;
+            }, skillAttempts[0]!.createdAt)
+          : null;
+
+      skillProgress.push({
+        skillCode,
+        gradeLevel: grade,
+        totalAttempts: snapshot.totalAttempts,
+        correctAttempts: snapshot.correctAttempts,
+        masteryScore: displayed.score,
+        currentLevel: snapshot.currentLevel,
+        lastPracticedAt,
+      });
+    }
   }
 
   const quests: DiscoveryQuest[] = (questRows ?? []).map((row) => ({

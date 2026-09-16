@@ -16,6 +16,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * A missing progress row is not a pipeline failure. Adaptation then
  * treats the student as having no history and uses the grade default.
+ *
+ * mastery_score on this row may be the displayed evidence score. Band
+ * selection uses correct_attempts / total_attempts, not that percentage.
  */
 
 export type AdaptationState = {

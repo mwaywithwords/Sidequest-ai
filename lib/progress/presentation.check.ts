@@ -216,6 +216,8 @@ check("0.624 becomes 62%", masteryPercent(0.624) === 62);
 check("0.625 becomes 63%", masteryPercent(0.625) === 63);
 check("1 becomes 100%", masteryPercent(1) === 100);
 check("0 becomes 0%", masteryPercent(0) === 0);
+check("evidence cap of 20% displays as 20%", masteryPercent(0.2) === 20);
+check("ungated 0.99 displays as 99%, not 100%", masteryPercent(0.99) === 99);
 
 const threeTries: SkillAttemptRow[] = [
   attempt({
@@ -338,6 +340,32 @@ check(
   "historical Sidequests without XP stay valid at 0 XP",
   grade3AdditionNowGrade5.totalXp === 0 &&
     grade3AdditionNowGrade5.hasProgress === true,
+);
+
+const noRewardRecords = presentProgress({
+  grade: 4,
+  skillProgress: [
+    record({
+      skillCode: "geometry",
+      totalAttempts: 1,
+      correctAttempts: 1,
+      masteryScore: 1,
+      currentLevel: 1,
+      lastPracticedAt: "2026-09-12T00:00:00.000Z",
+    }),
+  ],
+  completedSidequestCount: 1,
+  totalXp: 0,
+  quests: [
+    { status: "ready", identifiedObject: "Window pane", completed: true },
+  ],
+});
+check(
+  "My Progress renders without reward records",
+  noRewardRecords.hasProgress === true &&
+    noRewardRecords.totalXp === 0 &&
+    noRewardRecords.skills.find((skill) => skill.skillId === "geometry")
+      ?.practiced === true,
 );
 
 const leaked = presentProgress({

@@ -208,6 +208,39 @@ check(
     !("correctAnswer" in presented.progress),
 );
 
+const rewardedQuest = presentStudentQuest(
+  readyInput({
+    progress: {
+      status: "correct",
+      attemptNumber: 1,
+      xp: 10,
+      explanation: "Worked out.",
+      revealedAnswer: "11 cans",
+    },
+  }),
+);
+const unrewardedQuest = presentStudentQuest(
+  readyInput({
+    progress: {
+      status: "correct",
+      attemptNumber: 1,
+      xp: 0,
+      explanation: "Worked out.",
+      revealedAnswer: "11 cans",
+    },
+  }),
+);
+check(
+  "existing XP presentation keeps the stored amount",
+  rewardedQuest.progress.status === "correct" &&
+    rewardedQuest.progress.xp === 10,
+);
+check(
+  "a historical quest without a reward row still presents as correct",
+  unrewardedQuest.progress.status === "correct" &&
+    unrewardedQuest.progress.xp === 0,
+);
+
 check(
   "mission links are built on the server from grade and skill",
   presented.scanHref === "/scan?grade=5&skill=division" &&

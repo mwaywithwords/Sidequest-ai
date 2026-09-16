@@ -9,9 +9,10 @@ import { SKILL_IDS, type Grade, type SkillId } from "@/lib/types";
 /**
  * Student-facing progress summaries.
  *
- * These functions read stored skill_progress and completed Sidequest
- * history. They do not invent a second mastery formula, and they never
- * put database ids or answers into the object the page renders.
+ * These functions read stored completed-Sidequest counts and current_level,
+ * and a server-recomputed mastery evidence score. They do not invent a
+ * second mastery formula, and they never put database ids or answers into
+ * the object the page renders.
  */
 
 export const GROWING_MASTERY = 0.4;

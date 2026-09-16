@@ -8,6 +8,7 @@ import type { CorrectAnswer } from "@/lib/ai/schemas";
 import {
   clampLevel,
   completedSidequests,
+  independenceFromAttempts,
   levelFromHistory,
   masteryScore,
   shouldCountTowardProgress,
@@ -229,8 +230,12 @@ const firstSuccess: SkillAttemptRow[] = [
 const firstSuccessProgress = skillProgressFromAttempts(firstSuccess);
 check("first successful Sidequest is one completed attempt", firstSuccessProgress.totalAttempts === 1);
 check("first successful Sidequest is one correct", firstSuccessProgress.correctAttempts === 1);
-check("first successful mastery is 1", firstSuccessProgress.masteryScore === 1);
+check("first successful solve-rate is 1", firstSuccessProgress.masteryScore === 1);
 check("level stays at 1 before the sample threshold", firstSuccessProgress.currentLevel === 1);
+check(
+  "first-try correct has independence 1",
+  independenceFromAttempts(firstSuccess) === 1,
+);
 
 const firstReveal: SkillAttemptRow[] = [
   {
@@ -257,6 +262,10 @@ const firstRevealProgress = skillProgressFromAttempts(firstReveal);
 check("unsuccessful completed Sidequest still counts once", firstRevealProgress.totalAttempts === 1);
 check("unsuccessful completed Sidequest is not correct", firstRevealProgress.correctAttempts === 0);
 check("first unsuccessful mastery is 0", firstRevealProgress.masteryScore === 0);
+check(
+  "a solution reveal has independence 0",
+  independenceFromAttempts(firstReveal) === 0,
+);
 
 const threeTriesOneQuest: SkillAttemptRow[] = [
   ...firstReveal,
