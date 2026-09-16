@@ -1,5 +1,13 @@
 import "server-only";
 
+import {
+  classifyRewardStoreError,
+  existingRewardForGrade,
+  interpretRewardRead,
+  interpretXpTotal,
+  type RewardReadResult,
+  type XpTotalResult,
+} from "@/lib/progress/reward-read";
 import type { QuestReward } from "@/lib/progress/xp";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -13,7 +21,7 @@ const UNIQUE_VIOLATION = "23505";
 export async function readQuestReward(
   profileId: string,
   challengeId: string,
-): Promise<QuestReward | null> {
+): Promise<RewardReadResult> {
   const { data, error } = await createAdminClient()
     .from("quest_rewards")
     .select("xp, reason")
@@ -21,29 +29,28 @@ export async function readQuestReward(
     .eq("challenge_id", challengeId)
     .maybeSingle();
 
-  if (error !== null) {
-    console.error("[quest-rewards] could not read reward", error);
-    return null;
+  const result = interpretRewardRead({ data, error });
+  if (result.status === "unavailable") {
+    reportOptionalRewardFailure("read", result);
   }
 
-  return parseReward(data);
+  return result;
 }
 
-export async function readProfileXpTotal(profileId: string): Promise<number> {
+export async function readProfileXpTotal(
+  profileId: string,
+): Promise<XpTotalResult> {
   const { data, error } = await createAdminClient()
     .from("quest_rewards")
     .select("xp")
     .eq("profile_id", profileId);
 
-  if (error !== null) {
-    throw new Error(`Could not load XP: ${error.message}`);
+  const result = interpretXpTotal({ data, error });
+  if (result.status === "unavailable") {
+    reportOptionalRewardFailure("total", result);
   }
 
-  return (data ?? []).reduce((sum, row) => {
-    const xp = typeof row.xp === "number" ? row.xp : 0;
-    if (!Number.isFinite(xp) || xp < 0) return sum;
-    return sum + Math.floor(xp);
-  }, 0);
+  return result;
 }
 
 export async function persistQuestReward(input: {
@@ -66,25 +73,49 @@ export async function persistQuestReward(input: {
     );
 
   if (error !== null && error.code !== UNIQUE_VIOLATION) {
-    console.error("[quest-rewards] could not store reward", error);
+    reportStoreFailure(error);
+    const stored = await readQuestReward(input.profileId, input.challengeId);
+    return existingRewardForGrade(stored);
   }
 
   const stored = await readQuestReward(input.profileId, input.challengeId);
-  return stored ?? input.reward;
+  return existingRewardForGrade(stored) ?? input.reward;
 }
 
-function parseReward(row: { xp: unknown; reason: unknown } | null): QuestReward | null {
-  if (row === null) return null;
-  if (typeof row.xp !== "number" || !Number.isFinite(row.xp)) return null;
+function reportOptionalRewardFailure(
+  operation: "read" | "total",
+  result: Extract<RewardReadResult, { status: "unavailable" }>,
+): void {
+  const label =
+    result.failure === "schema"
+      ? "[quest-rewards] schema unavailable"
+      : "[quest-rewards] store unavailable";
 
-  if (
-    row.reason === "correct_attempt_1" ||
-    row.reason === "correct_attempt_2" ||
-    row.reason === "correct_attempt_3" ||
-    row.reason === "solution_revealed"
-  ) {
-    return { xp: Math.floor(row.xp), reason: row.reason };
+  // Optional presentation data. console.error is intercepted as the Next.js
+  // development overlay; a missing table is still a configuration error, not
+  // "this student has no reward."
+  console.warn(label, {
+    operation,
+    failure: result.failure,
+    code: result.code,
+    message: result.message,
+  });
+}
+
+function reportStoreFailure(error: {
+  code?: string;
+  message?: string;
+}): void {
+  const failure = classifyRewardStoreError(error);
+  if (failure === "schema") {
+    console.warn("[quest-rewards] schema unavailable", {
+      operation: "store",
+      failure,
+      code: error.code ?? null,
+      message: error.message ?? "Could not store quest reward",
+    });
+    return;
   }
 
-  return null;
+  console.error("[quest-rewards] could not store reward", error);
 }

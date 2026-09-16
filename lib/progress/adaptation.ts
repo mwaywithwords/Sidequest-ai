@@ -1,4 +1,8 @@
-import type { CompletedSidequest, SkillProgressSnapshot } from "@/lib/progress/mastery";
+import {
+  masteryScore,
+  type CompletedSidequest,
+  type SkillProgressSnapshot,
+} from "@/lib/progress/mastery";
 import type { Grade } from "@/lib/types";
 
 /**
@@ -134,9 +138,16 @@ export function getAdaptiveProfile(input: AdaptationInput): AdaptiveProfile {
   // Fewer than three completed Sidequests is not enough to call the
   // student "struggling" or "advanced". Keep the band on-level so one
   // lucky or unlucky quest cannot reclassify them.
+  // Displayed Progress mastery is a separate evidence score. Adaptation
+  // keeps using the solve-rate of completed Sidequests so the two systems
+  // cannot chase each other.
+  const solveRate = masteryScore(
+    input.progress.correctAttempts,
+    input.progress.totalAttempts,
+  );
   const masteryBand = coldStart
     ? "developing"
-    : masteryBandFromScore(input.progress.masteryScore);
+    : masteryBandFromScore(solveRate);
 
   const guidance = BAND_GUIDANCE[masteryBand];
 

@@ -10,10 +10,13 @@ import {
   type SkillAttemptRow,
   skillProgressFromAttempts,
 } from "@/lib/progress/mastery";
+import { existingRewardForGrade } from "@/lib/progress/reward-read";
 import {
   persistQuestReward,
   readQuestReward,
 } from "@/lib/progress/rewards";
+import { displayedSkillMastery } from "@/lib/progress/mastery-evidence";
+import { parseGrade } from "@/lib/types";
 import {
   type GradeView,
   type ChallengeProgress,
@@ -162,10 +165,11 @@ async function settleQuestXp(input: {
     return input.view;
   }
 
-  const existingReward = await readQuestReward(
+  const existingLookup = await readQuestReward(
     input.profileId,
     input.challengeId,
   );
+  const existingReward = existingRewardForGrade(existingLookup);
   const decision = xpDecisionForGrade({
     previousAttempts: input.previousAttempts,
     nextAttempts: input.nextAttempts,
@@ -269,16 +273,30 @@ async function loadGradeContext(
 async function syncSkillProgress(profileId: string, skillRowId: string) {
   const supabase = createAdminClient();
 
-  const { data: skillChallenges, error: skillError } = await supabase
-    .from("challenges")
-    .select("id")
-    .eq("skill_id", skillRowId);
+  const [{ data: skill, error: skillRowError }, { data: skillChallenges, error: skillError }] =
+    await Promise.all([
+      supabase
+        .from("skills")
+        .select("grade_level")
+        .eq("id", skillRowId)
+        .maybeSingle(),
+      supabase
+        .from("challenges")
+        .select("id, difficulty, generation_metadata")
+        .eq("skill_id", skillRowId),
+    ]);
+
+  if (skillRowError !== null) {
+    console.error("[quest-grade] could not load skill", skillRowError);
+    return;
+  }
 
   if (skillError !== null) {
     console.error("[quest-grade] could not load skill challenges", skillError);
     return;
   }
 
+  const grade = parseGrade(skill?.grade_level);
   const challengeIds = (skillChallenges ?? []).map((row) => row.id);
   if (challengeIds.length === 0) {
     await writeSkillProgress(profileId, skillRowId, skillProgressFromAttempts([]));
@@ -303,11 +321,24 @@ async function syncSkillProgress(profileId: string, skillRowId: string) {
     createdAt: row.created_at,
   }));
 
-  await writeSkillProgress(
-    profileId,
-    skillRowId,
-    skillProgressFromAttempts(history),
-  );
+  const counts = skillProgressFromAttempts(history);
+  const displayed =
+    grade === null
+      ? { score: counts.masteryScore }
+      : displayedSkillMastery({
+          attempts: history,
+          challenges: (skillChallenges ?? []).map((row) => ({
+            id: row.id,
+            difficulty: row.difficulty,
+            generationMetadata: row.generation_metadata,
+          })),
+          grade,
+        });
+
+  await writeSkillProgress(profileId, skillRowId, {
+    ...counts,
+    masteryScore: displayed.score,
+  });
 }
 
 async function writeSkillProgress(

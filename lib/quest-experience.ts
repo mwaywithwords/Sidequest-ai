@@ -16,6 +16,7 @@ import {
 } from "@/lib/detour";
 import { getProfileId, isUuid } from "@/lib/profile";
 import { progressFromAttempts } from "@/lib/progress/outcome";
+import { presentationAwardedXp } from "@/lib/progress/reward-read";
 import { readQuestReward } from "@/lib/progress/rewards";
 import {
   presentStudentQuest,
@@ -253,7 +254,7 @@ async function presentReadyQuest({
       hint2: row.hint_2,
       solution: row.solution,
       expected: answer.data,
-      awardedXp: reward?.xp ?? 0,
+      awardedXp: presentationAwardedXp(reward),
     }),
   });
 }

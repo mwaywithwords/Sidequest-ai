@@ -9,6 +9,10 @@ import {
  * total_attempts counts finished Sidequests, not raw submissions, so a
  * three-try problem is one learning event. Totals and level are derived
  * from attempt history so a retried request cannot increment them twice.
+ *
+ * `masteryScore` on the snapshot is the solve-rate used by adaptation and
+ * current_level. The Progress percentage is computed separately in
+ * mastery-evidence.ts so one lucky solve cannot display as 100%.
  */
 
 export const LEVEL_SAMPLE_THRESHOLD = 3;
@@ -28,6 +32,10 @@ export type CompletedSidequest = {
   challengeId: string;
   solved: boolean;
   completedAt: string;
+};
+
+export type CompletedMasteryEvent = CompletedSidequest & {
+  independence: number;
 };
 
 export type SkillProgressSnapshot = {
@@ -106,7 +114,66 @@ export function completedSidequests(
     completed.push({ challengeId, solved, completedAt });
   }
 
-  return completed.sort((left, right) =>
+  return sortCompleted(completed);
+}
+
+/**
+ * Completed Sidequests plus independence from the first correct try.
+ *
+ * Attempt 1 / 2 / 3 correct → 1 / 0.75 / 0.50. Never solved → 0.
+ */
+export function completedMasteryEvents(
+  attempts: readonly SkillAttemptRow[],
+): CompletedMasteryEvent[] {
+  const byChallenge = new Map<string, SkillAttemptRow[]>();
+
+  for (const attempt of attempts) {
+    const current = byChallenge.get(attempt.challengeId) ?? [];
+    current.push(attempt);
+    byChallenge.set(attempt.challengeId, current);
+  }
+
+  const completed: CompletedMasteryEvent[] = [];
+
+  for (const [challengeId, rows] of byChallenge) {
+    const stored = rows.map((row) => ({
+      attemptNumber: row.attemptNumber,
+      isCorrect: row.isCorrect,
+    }));
+
+    if (!isChallengeComplete(stored)) continue;
+
+    const solved = rows.some((row) => row.isCorrect);
+    const completedAt = rows.reduce((latest, row) => {
+      return row.createdAt > latest ? row.createdAt : latest;
+    }, rows[0]!.createdAt);
+
+    completed.push({
+      challengeId,
+      solved,
+      completedAt,
+      independence: independenceFromAttempts(rows),
+    });
+  }
+
+  return sortCompleted(completed);
+}
+
+export function independenceFromAttempts(
+  rows: readonly SkillAttemptRow[],
+): number {
+  const solved = [...rows]
+    .filter((row) => row.isCorrect)
+    .sort((left, right) => left.attemptNumber - right.attemptNumber)[0];
+
+  if (solved === undefined) return 0;
+  if (solved.attemptNumber <= 1) return 1;
+  if (solved.attemptNumber === 2) return 0.75;
+  return 0.5;
+}
+
+function sortCompleted<T extends CompletedSidequest>(rows: T[]): T[] {
+  return rows.sort((left, right) =>
     left.completedAt < right.completedAt
       ? -1
       : left.completedAt > right.completedAt
